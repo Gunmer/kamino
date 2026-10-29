@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@v5
+      - name: Install
+        run: uv sync --all-extras
+      - name: Lint
+        run: uv run ruff check .
+      - name: Format check
+        run: uv run ruff format --check .
+      - name: Tests
+        run: uv run pytest

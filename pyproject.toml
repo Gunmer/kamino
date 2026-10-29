@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kamino-cli"
+version = "0.1.0"
+description = "Respalda y restaura configuraciones de aplicaciones de macOS en un único archivo portable."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Cristiam" }]
+keywords = ["backup", "restore", "macos", "dotfiles", "config", "cli"]
+classifiers = [
+  "Environment :: Console",
+  "Operating System :: MacOS",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Archiving :: Backup",
+  "Topic :: Utilities",
+]
+dependencies = [
+  "typer>=0.12",
+  "questionary>=2.0",
+  "rich>=13.7",
+  "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "ruff>=0.5",
+  "mypy>=1.10",
+]
+
+[project.scripts]
+kamino = "kamino.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kamino"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.11"
+packages = ["kamino"]
