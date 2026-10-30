@@ -205,7 +205,7 @@ def test_blank_command_rejected() -> None:
         AppDefinition.model_validate(_definition(command="   "))
 
 
-def test_unreadable_user_dir_is_ignored(tmp_path) -> None:
+def test_unreadable_user_dir_raises(tmp_path) -> None:
     user_dir = tmp_path / "apps"
     user_dir.mkdir()
     user_dir.chmod(0o000)
@@ -216,7 +216,7 @@ def test_unreadable_user_dir_is_ignored(tmp_path) -> None:
             pass
         else:
             pytest.skip("el entorno permite listar directorios sin permiso")
-        catalog = load_catalog(user_dir=user_dir)
-        assert "git" in catalog
+        with pytest.raises(CatalogError):
+            load_catalog(user_dir=user_dir)
     finally:
         user_dir.chmod(0o755)

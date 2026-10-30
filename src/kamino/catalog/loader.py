@@ -64,12 +64,14 @@ def _load_embedded() -> dict[str, AppDefinition]:
 
 
 def _iter_toml_files(directory: Path) -> list[Path]:
-    if not directory.is_dir():
-        return []
     try:
         entries = list(directory.iterdir())
-    except OSError:
+    except (FileNotFoundError, NotADirectoryError):
         return []
+    except OSError as exc:
+        raise CatalogError(
+            f"no se pudo leer el catálogo del usuario {str(directory)!r}: {exc}"
+        ) from exc
     return sorted(path for path in entries if path.is_file() and path.suffix == ".toml")
 
 
