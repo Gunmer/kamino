@@ -48,8 +48,12 @@ def _default_user_dir() -> Path:
 
 def _load_embedded() -> dict[str, AppDefinition]:
     apps_dir = resource_files("kamino.catalog").joinpath("apps")
+    try:
+        entries = list(apps_dir.iterdir())
+    except OSError as exc:
+        raise CatalogError(f"no se pudo leer el catálogo embebido: {exc}") from exc
     catalog: dict[str, AppDefinition] = {}
-    for path in apps_dir.iterdir():
+    for path in entries:
         if not path.name.endswith(".toml"):
             continue
         definition = _load_definition(path)
@@ -62,7 +66,11 @@ def _load_embedded() -> dict[str, AppDefinition]:
 def _iter_toml_files(directory: Path) -> list[Path]:
     if not directory.is_dir():
         return []
-    return sorted(path for path in directory.iterdir() if path.is_file() and path.suffix == ".toml")
+    try:
+        entries = list(directory.iterdir())
+    except OSError:
+        return []
+    return sorted(path for path in entries if path.is_file() and path.suffix == ".toml")
 
 
 def _load_definition(path: Traversable | Path) -> AppDefinition:

@@ -193,3 +193,30 @@ def test_non_toml_files_ignored(tmp_path) -> None:
     (user_dir / "README.md").write_text("nada", encoding="utf-8")
     catalog = load_catalog(user_dir=user_dir)
     assert "git" in catalog
+
+
+def test_blank_bundle_id_rejected() -> None:
+    with pytest.raises(ValidationError):
+        AppDefinition.model_validate(_definition(bundle_id=""))
+
+
+def test_blank_command_rejected() -> None:
+    with pytest.raises(ValidationError):
+        AppDefinition.model_validate(_definition(command="   "))
+
+
+def test_unreadable_user_dir_is_ignored(tmp_path) -> None:
+    user_dir = tmp_path / "apps"
+    user_dir.mkdir()
+    user_dir.chmod(0o000)
+    try:
+        try:
+            next(user_dir.iterdir(), None)
+        except OSError:
+            pass
+        else:
+            pytest.skip("el entorno permite listar directorios sin permiso")
+        catalog = load_catalog(user_dir=user_dir)
+        assert "git" in catalog
+    finally:
+        user_dir.chmod(0o755)

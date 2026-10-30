@@ -1,11 +1,18 @@
 """Detección de apps instaladas y su versión.
 
-Mecanismos (diseño técnico §6): leer `Info.plist` por `CFBundleIdentifier` en
-`/Applications`, `~/Applications` y `/System/Applications` para apps con `.app`;
-`shutil.which` y `search_paths` para herramientas de terminal.
+API pública:
 
-La versión solo se detecta para apps con `.app` (desde `Info.plist`); para las
-herramientas de terminal se devuelve `None`, porque obtenerla exige ejecutarlas.
+- `is_installed(app)`: True si la app está instalada, por `bundle_id` o `command`.
+- `detect_version(app)`: versión de una app `.app` desde su `Info.plist`, o `None`.
+
+Mecanismos (diseño técnico §6): para apps con `.app` se lee `Info.plist` buscando
+`CFBundleIdentifier` en `/Applications`, `~/Applications` y `/System/Applications`;
+para herramientas de terminal se usa `shutil.which` sobre el PATH y `search_paths`.
+
+La detección es "best-effort": un `Info.plist` ilegible o corrupto, o un directorio
+sin permiso de lectura, se trata como "app no detectada", nunca como un error. La
+versión solo se obtiene para apps `.app`; para las de terminal se devuelve `None`,
+porque obtenerla exigiría ejecutarlas.
 """
 
 from __future__ import annotations
@@ -73,15 +80,27 @@ def _find_app_bundle(bundle_id: str, application_dirs: Sequence[Path]) -> Path |
 def _app_bundles(directory: Path) -> Iterator[Path]:
     if not directory.is_dir():
         return
-    yield from sorted(path for path in directory.glob("*.app") if path.is_dir())
+    try:
+        candidates = sorted(path for path in directory.glob("*.app") if path.is_dir())
+    except OSError:
+        return
+    yield from candidates
 
 
 def _plist_of(app_bundle: Path) -> dict[str, object] | None:
+    """Lee `Info.plist` de forma tolerante, devolviendo `None` ante cualquier fallo.
+
+    Los plists son de terceros: pueden ser binarios truncados o contener valores
+    que `plistlib` no soporta (fechas inválidas, etc.), que lanzan excepciones
+    variadas. La detección es "best-effort": cualquier fallo se descarta en
+    silencio a propósito y se trata como "no es esta app", porque el núcleo no
+    imprime ni pregunta (diseño técnico §1).
+    """
     info_plist = app_bundle / "Contents" / "Info.plist"
     try:
         with info_plist.open("rb") as handle:
             data = plistlib.load(handle)
-    except (OSError, plistlib.InvalidFileException):
+    except Exception:
         return None
     return data if isinstance(data, dict) else None
 

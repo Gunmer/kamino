@@ -57,9 +57,16 @@ class AppDefinition(BaseModel):
             _ensure_relative(path)
         return value
 
+    @field_validator("bundle_id", "command")
+    @classmethod
+    def _identifier_must_not_be_blank(cls, value: str | None) -> str | None:
+        if value is not None and not value.strip():
+            raise ValueError("no puede estar vacío")
+        return value
+
     @model_validator(mode="after")
     def _must_have_detection_mechanism(self) -> AppDefinition:
-        if not self.bundle_id and not self.command:
+        if self.bundle_id is None and self.command is None:
             raise ValueError("se requiere 'bundle_id' o 'command' para detectar la app")
         return self
 

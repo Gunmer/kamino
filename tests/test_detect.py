@@ -9,6 +9,8 @@ from __future__ import annotations
 import plistlib
 from pathlib import Path
 
+import pytest
+
 from kamino.catalog.models import AppDefinition
 from kamino.detect import detect_version, is_installed
 
@@ -156,3 +158,39 @@ def test_invalid_plist_ignored(tmp_path: Path) -> None:
     app = _definition(bundle_id="com.example.foo")
     assert is_installed(app, application_dirs=[apps_dir]) is False
     assert detect_version(app, application_dirs=[apps_dir]) is None
+
+
+def test_plist_with_invalid_value_does_not_crash(tmp_path: Path) -> None:
+    apps_dir = tmp_path / "Applications"
+    app_bundle = apps_dir / "Foo.app"
+    contents = app_bundle / "Contents"
+    contents.mkdir(parents=True)
+    (contents / "Info.plist").write_bytes(
+        b'<?xml version="1.0" encoding="UTF-8"?>'
+        b'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" '
+        b'"http://www.apple.com/DTDs/PropertyList-1.0.dtd">'
+        b'<plist version="1.0"><dict>'
+        b"<key>CFBundleIdentifier</key><string>com.example.foo</string>"
+        b"<key>d</key><date>not-a-real-date</date>"
+        b"</dict></plist>"
+    )
+    app = _definition(bundle_id="com.example.foo")
+    assert is_installed(app, application_dirs=[apps_dir]) is False
+    assert detect_version(app, application_dirs=[apps_dir]) is None
+
+
+def test_unreadable_application_dir_is_ignored(tmp_path: Path) -> None:
+    apps_dir = tmp_path / "Applications"
+    apps_dir.mkdir()
+    apps_dir.chmod(0o000)
+    try:
+        try:
+            next(apps_dir.iterdir(), None)
+        except OSError:
+            pass
+        else:
+            pytest.skip("el entorno permite listar directorios sin permiso")
+        app = _definition(bundle_id="com.example.foo")
+        assert is_installed(app, application_dirs=[apps_dir]) is False
+    finally:
+        apps_dir.chmod(0o755)
