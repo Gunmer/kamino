@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import io
+import os
 import tarfile
 from pathlib import Path
 
@@ -130,7 +131,7 @@ def test_write_preserves_symlink(tmp_path: Path) -> None:
             {
                 "id": "app",
                 "name": "app",
-                "files": [{"path": "link.toml", "sha256": _sha256(b""), "size": 0, "mode": "0644"}],
+                "files": [{"path": "link.toml", "link": "real.toml", "size": 0, "mode": "0644"}],
             }
         ]
     )
@@ -141,6 +142,81 @@ def test_write_preserves_symlink(tmp_path: Path) -> None:
         link_member = next(m for m in tar.getmembers() if m.name.endswith("link.toml"))
     assert link_member.issym()
     assert link_member.linkname == "real.toml"
+
+
+def _symlink_manifest(root: Path, link_target: str) -> Manifest:
+    root.mkdir(parents=True, exist_ok=True)
+    link = root / "link.toml"
+    if link.exists() or link.is_symlink():
+        link.unlink()
+    link.symlink_to(link_target)
+    return _manifest(
+        [
+            {
+                "id": "app",
+                "name": "app",
+                "files": [{"path": "link.toml", "link": link_target, "size": 0, "mode": "0644"}],
+            }
+        ]
+    )
+
+
+def test_verify_symlink_ok(tmp_path: Path) -> None:
+    source_root = tmp_path / "home"
+    manifest = _symlink_manifest(source_root, "real.toml")
+    (source_root / "real.toml").write_text("x=1\n")
+    output = tmp_path / "b.tar.gz"
+    write_archive(output, manifest, source_root=source_root)
+    verify_archive(output, manifest)
+
+
+def test_verify_symlink_target_mismatch(tmp_path: Path) -> None:
+    source_root = tmp_path / "home"
+    manifest = _symlink_manifest(source_root, "real.toml")
+    (source_root / "real.toml").write_text("x=1\n")
+    output = tmp_path / "b.tar.gz"
+    write_archive(output, manifest, source_root=source_root)
+    manifest.apps[0].files[0].link = "otro.toml"
+    with pytest.raises(IntegrityError):
+        verify_archive(output, manifest)
+
+
+def test_extract_symlink_ok(tmp_path: Path) -> None:
+    source_root = tmp_path / "home"
+    manifest = _symlink_manifest(source_root, "real.toml")
+    (source_root / "real.toml").write_text("x=1\n")
+    output = tmp_path / "b.tar.gz"
+    write_archive(output, manifest, source_root=source_root)
+    dest = tmp_path / "out"
+    extract_archive(output, dest)
+    link_path = dest / "apps" / "app" / "link.toml"
+    assert link_path.is_symlink()
+    assert os.readlink(link_path) == "real.toml"
+
+
+def test_write_rejects_symlink_target_mismatch(tmp_path: Path) -> None:
+    source_root = tmp_path / "home"
+    source_root.mkdir(parents=True, exist_ok=True)
+    (source_root / "link.toml").symlink_to("/etc/passwd")  # destino absoluto en disco
+    manifest = _manifest(
+        [
+            {
+                "id": "app",
+                "name": "app",
+                "files": [{"path": "link.toml", "link": "real.toml", "size": 0, "mode": "0644"}],
+            }
+        ]
+    )
+    output = tmp_path / "b.tar.gz"
+    with pytest.raises(ArchiveError):
+        write_archive(output, manifest, source_root=source_root)
+
+
+def test_file_entry_link_must_be_relative() -> None:
+    with pytest.raises(ValidationError):
+        FileEntry(path="link", link="../fuera")
+    with pytest.raises(ValidationError):
+        FileEntry(path="link", link="/etc/passwd")
 
 
 # --- lectura del manifiesto ---

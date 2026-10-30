@@ -220,3 +220,10 @@ def test_unreadable_user_dir_raises(tmp_path) -> None:
             load_catalog(user_dir=user_dir)
     finally:
         user_dir.chmod(0o755)
+
+
+def test_user_dir_is_file_raises(tmp_path) -> None:
+    user_file = tmp_path / "apps"
+    user_file.write_text("no es un directorio", encoding="utf-8")
+    with pytest.raises(CatalogError):
+        load_catalog(user_dir=user_file)

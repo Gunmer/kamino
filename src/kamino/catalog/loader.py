@@ -66,7 +66,7 @@ def _load_embedded() -> dict[str, AppDefinition]:
 def _iter_toml_files(directory: Path) -> list[Path]:
     try:
         entries = list(directory.iterdir())
-    except (FileNotFoundError, NotADirectoryError):
+    except FileNotFoundError:
         return []
     except OSError as exc:
         raise CatalogError(

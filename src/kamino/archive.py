@@ -14,7 +14,7 @@ import tarfile
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
 from kamino.errors import ArchiveError, IntegrityError, VersionError
 
@@ -24,16 +24,19 @@ APPS_DIR = "apps"
 
 
 class FileEntry(BaseModel):
-    """Un archivo del manifiesto: ruta relativa al home y su checksum."""
+    """Un archivo del manifiesto: regular (con `sha256`) o enlace (con `link`)."""
 
     path: str
-    sha256: str
-    size: int
+    sha256: str | None = None
+    size: int = 0
     mode: str = "0644"
+    link: str | None = None
 
     @field_validator("sha256")
     @classmethod
-    def _sha256_must_be_hex(cls, value: str) -> str:
+    def _sha256_must_be_hex(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
         if len(value) != 64 or any(c not in "0123456789abcdef" for c in value):
             raise ValueError("'sha256' debe ser 64 caracteres hexadecimales")
         return value
@@ -44,12 +47,27 @@ class FileEntry(BaseModel):
         _ensure_relative(value)
         return value
 
+    @field_validator("link")
+    @classmethod
+    def _link_must_be_relative(cls, value: str | None) -> str | None:
+        if value is not None:
+            _ensure_relative(value)
+        return value
+
     @field_validator("size")
     @classmethod
     def _size_must_be_non_negative(cls, value: int) -> int:
         if value < 0:
             raise ValueError("'size' no puede ser negativo")
         return value
+
+    @model_validator(mode="after")
+    def _exactly_one_kind(self) -> FileEntry:
+        if self.link is None and self.sha256 is None:
+            raise ValueError("se requiere 'sha256' (archivo regular) o 'link' (enlace simbólico)")
+        if self.link is not None and self.sha256 is not None:
+            raise ValueError("un archivo no puede ser regular y enlace a la vez")
+        return self
 
 
 class AppEntry(BaseModel):
@@ -103,10 +121,8 @@ def write_archive(
 
     Cada `FileEntry.path` se resuelve contra `source_root` (por defecto el home).
     El manifiesto se escribe primero para que pueda leerse sin recorrer todo el
-    archivo. Nunca sobrescribe por defecto.
+    archivo. Nunca sobrescribe por defecto (commit sin sobrescritura atómico).
     """
-    if output.exists() and not overwrite:
-        raise ArchiveError(f"el archivo de respaldo ya existe: {output}")
     root = source_root if source_root is not None else Path.home()
     output.parent.mkdir(parents=True, exist_ok=True)
 
@@ -116,11 +132,22 @@ def write_archive(
             _add_manifest(tar, manifest)
             for app in manifest.apps:
                 for file in app.files:
-                    _add_file(tar, root / file.path, f"{APPS_DIR}/{app.id}/{file.path}")
-        os.replace(tmp, output)
+                    _add_file(tar, root / file.path, f"{APPS_DIR}/{app.id}/{file.path}", file)
+        _commit(tmp, output, overwrite)
     except Exception:
         tmp.unlink(missing_ok=True)
         raise
+
+
+def _commit(tmp: Path, output: Path, overwrite: bool) -> None:
+    if overwrite:
+        os.replace(tmp, output)
+        return
+    try:
+        os.link(tmp, output)  # atómico: falla con FileExistsError si output ya existe
+    except FileExistsError as exc:
+        raise ArchiveError(f"el archivo de respaldo ya existe: {output}") from exc
+    tmp.unlink()
 
 
 def _add_manifest(tar: tarfile.TarFile, manifest: Manifest) -> None:
@@ -131,15 +158,24 @@ def _add_manifest(tar: tarfile.TarFile, manifest: Manifest) -> None:
     tar.addfile(info, io.BytesIO(data))
 
 
-def _add_file(tar: tarfile.TarFile, source: Path, arcname: str) -> None:
+def _add_file(tar: tarfile.TarFile, source: Path, arcname: str, entry: FileEntry) -> None:
     try:
         info = tar.gettarinfo(str(source), arcname=arcname)
     except OSError as exc:
         raise ArchiveError(f"no se pudo leer {source}: {exc}") from exc
     if info.isfile():
+        if entry.link is not None:
+            raise ArchiveError(f"{entry.path} es un archivo regular, no un enlace")
         with source.open("rb") as handle:
             tar.addfile(info, handle)
     elif info.issym():
+        if entry.link is None:
+            raise ArchiveError(f"{entry.path} es un enlace, no un archivo regular")
+        if info.linkname != entry.link:
+            raise ArchiveError(
+                f"el destino del enlace cambió para {entry.path}: "
+                f"{info.linkname!r} != {entry.link!r}"
+            )
         tar.addfile(info)
     else:
         raise ArchiveError(f"tipo de archivo no soportado para respaldar: {source}")
@@ -171,20 +207,29 @@ def _parse_manifest(raw: bytes) -> Manifest:
 
 
 def verify_archive(path: Path, manifest: Manifest) -> None:
-    """Verifica que cada archivo del manifiesto exista y coincida con su sha256."""
+    """Verifica que cada archivo del manifiesto exista y coincida (contenido o enlace)."""
     expected = {
-        f"{APPS_DIR}/{app.id}/{file.path}": file.sha256
-        for app in manifest.apps
-        for file in app.files
+        f"{APPS_DIR}/{app.id}/{file.path}": file for app in manifest.apps for file in app.files
     }
     with tarfile.open(path, "r:gz") as tar:
         for member in tar.getmembers():
-            if member.name == MANIFEST_NAME or not member.isfile():
+            if member.name == MANIFEST_NAME:
                 continue
             if member.name not in expected:
                 raise IntegrityError(f"archivo inesperado en el respaldo: {member.name}")
-            if _sha256_of(tar, member) != expected[member.name]:
-                raise IntegrityError(f"checksum no coincide para {member.name}")
+            entry = expected[member.name]
+            if member.isfile():
+                if entry.link is not None:
+                    raise IntegrityError(f"esperaba un enlace en {member.name}, no un archivo")
+                if entry.sha256 is None or _sha256_of(tar, member) != entry.sha256:
+                    raise IntegrityError(f"checksum no coincide para {member.name}")
+            elif member.issym():
+                if entry.link is None:
+                    raise IntegrityError(f"esperaba un archivo en {member.name}, no un enlace")
+                if member.linkname != entry.link:
+                    raise IntegrityError(f"destino de enlace no coincide para {member.name}")
+            else:
+                raise IntegrityError(f"tipo de miembro no soportado: {member.name}")
             del expected[member.name]
     if expected:
         raise IntegrityError(f"faltan archivos en el respaldo: {sorted(expected)}")
