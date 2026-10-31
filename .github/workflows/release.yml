@@ -30,7 +30,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install build deps
-        run: uv sync --extra build --dev --frozen
+        run: uv sync --extra build --dev
 
       - name: Build binary
         run: |
