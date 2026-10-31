@@ -6,8 +6,8 @@ corresponda a las apps que estén instaladas.
 
 ## Estado
 
-Esqueleto del proyecto (paso 1 del plan de implementación del diseño técnico). Los comandos
-`backup` y `restore` aún no están implementados.
+MVP v1 implementado: `backup` y `restore` funcionales con catálogo declarativo, detección de
+apps, archivado `tar.gz` con manifiesto y checksums, y CLI interactiva.
 
 ## Requisitos
 
@@ -28,6 +28,18 @@ python3.11 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/kamino --help
 ```
+
+## Distribución
+
+Instalación como herramienta con `uv` (diseño técnico §8):
+
+```bash
+uv tool install git+https://github.com/Gunmer/kamino
+```
+
+El paquete se publica como `kamino-cli` (el nombre `kamino` ya está ocupado en PyPI) y expone el
+comando `kamino`. El Homebrew tap y el binario autocontenido se publicarán tras la primera
+versión etiquetada.
 
 ## Uso
 
