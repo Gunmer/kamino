@@ -12,6 +12,19 @@ from kamino.errors import ArchiveError
 runner = CliRunner()
 
 
+class _FakeStdin:
+    def __init__(self, is_tty: bool):
+        self._is_tty = is_tty
+
+    def isatty(self) -> bool:
+        return self._is_tty
+
+
+class _FakeSys:
+    def __init__(self, is_tty: bool):
+        self.stdin = _FakeStdin(is_tty)
+
+
 def _fake_backup_result(*, skipped: tuple[str, ...] = ()) -> SimpleNamespace:
     return SimpleNamespace(
         plan=SimpleNamespace(operations=[], skipped=list(skipped)),
@@ -37,7 +50,7 @@ def test_backup_non_interactive(monkeypatch) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result: None)
+    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
     calls: dict = {}
 
     def fake_run_backup(**kwargs):
@@ -50,12 +63,23 @@ def test_backup_non_interactive(monkeypatch) -> None:
     assert calls["selected"] == ["git"]
 
 
-def test_backup_interactive_selects_all(monkeypatch) -> None:
+def test_backup_unknown_app_exits_3(monkeypatch) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "select_apps", lambda choices: [c[0] for c in choices])
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result: None)
+    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: _fake_backup_result())
+    result = runner.invoke(cli.app, ["backup", "--apps", "git,nope"])
+    assert result.exit_code == 3
+    assert "nope" in result.output
+
+
+def test_backup_non_tty_defaults_to_all(monkeypatch) -> None:
+    fake_app = SimpleNamespace(id="git", name="Git")
+    monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
+    monkeypatch.setattr(cli, "is_installed", lambda app: True)
+    monkeypatch.setattr(cli, "sys", _FakeSys(False))
+    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
     calls: dict = {}
 
     def fake_run_backup(**kwargs):
@@ -68,13 +92,23 @@ def test_backup_interactive_selects_all(monkeypatch) -> None:
     assert calls["selected"] == ["git"]
 
 
-def test_backup_exit_3_when_skipped(monkeypatch) -> None:
-    monkeypatch.setattr(cli, "load_catalog", lambda: {})
+def test_backup_interactive_selects_all(monkeypatch) -> None:
+    fake_app = SimpleNamespace(id="git", name="Git")
+    monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result: None)
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: _fake_backup_result(skipped=("x",)))
-    result = runner.invoke(cli.app, ["backup", "--apps", "git"])
-    assert result.exit_code == 3
+    monkeypatch.setattr(cli, "sys", _FakeSys(True))
+    monkeypatch.setattr(cli.ui, "select_apps", lambda choices: [c[0] for c in choices])
+    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    calls: dict = {}
+
+    def fake_run_backup(**kwargs):
+        calls.update(kwargs)
+        return _fake_backup_result()
+
+    monkeypatch.setattr(cli, "run_backup", fake_run_backup)
+    result = runner.invoke(cli.app, ["backup"])
+    assert result.exit_code == 0
+    assert calls["selected"] == ["git"]
 
 
 def test_backup_error_exit_1(monkeypatch) -> None:
@@ -91,7 +125,7 @@ def test_backup_error_exit_1(monkeypatch) -> None:
 
 
 def test_restore_yes(monkeypatch) -> None:
-    monkeypatch.setattr(cli.ui, "print_restore_summary", lambda result: None)
+    monkeypatch.setattr(cli.ui, "print_restore_summary", lambda result, **kw: None)
     calls: dict = {}
 
     def fake_run_restore(backup_file, **kwargs):
@@ -105,8 +139,15 @@ def test_restore_yes(monkeypatch) -> None:
     assert calls["selected"] is None
 
 
+def test_restore_requires_yes_without_tty(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "sys", _FakeSys(False))
+    result = runner.invoke(cli.app, ["restore", "backup.tar.gz"])
+    assert result.exit_code == 1
+    assert "--yes" in result.output
+
+
 def test_restore_exit_3_when_omitted(monkeypatch) -> None:
-    monkeypatch.setattr(cli.ui, "print_restore_summary", lambda result: None)
+    monkeypatch.setattr(cli.ui, "print_restore_summary", lambda result, **kw: None)
 
     def fake_run_restore(backup_file, **kwargs):
         return _fake_restore_result(omitted=("x",))
