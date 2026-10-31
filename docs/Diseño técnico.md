@@ -169,9 +169,11 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
 | --- | --- | --- |
 | `uv tool install git+https://github.com/<usuario>/<repo>` | `pyproject.toml` con un entry point de consola | v1 |
 | Homebrew tap | Fórmula que instala el paquete en un virtualenv; se actualiza al publicar una versión etiquetada | tras la primera versión etiquetada |
-| Binario autocontenido | PyInstaller (o Nuitka), uno por arquitectura (arm64 e Intel), publicado en GitHub Releases | tras la primera versión etiquetada |
+| Binario autocontenido | PyInstaller `onefile`, uno por arquitectura (arm64 e Intel), publicado en GitHub Releases | en cada merge a `main` |
 
-El binario sin firmar recibe la cuarentena de macOS: hay que documentar cómo quitarla (`xattr -d com.apple.quarantine`) o firmarlo y notarizarlo con una cuenta de desarrollador. Las tres vías salen del mismo proyecto; el tap y el binario dependen de tener versiones etiquetadas, por eso `uv` va primero.
+El binario sin firmar recibe la cuarentena de macOS: hay que documentar cómo quitarla (`xattr -d com.apple.quarantine`) o firmarlo y notarizarlo con una cuenta de desarrollador.
+
+El versionado y la publicación se automatizan con `python-semantic-release`: los títulos de los PRs siguen Conventional Commits (el CI los valida) y, al hacer merge a `main`, se calcula el bump semver, se actualiza `CHANGELOG.md`, se crea el tag `vX.Y.Z` y se publica la GitHub Release con los binarios adjuntos (workflow `.github/workflows/release.yml`). El tap depende de tener versiones etiquetadas, por eso `uv` va primero.
 
 El paquete se publica como `kamino-cli`, porque el nombre `kamino` ya está ocupado en PyPI, y expone el comando `kamino`. Por eso la instalación con `uv` usa la URL de GitHub y no el nombre del paquete.
 

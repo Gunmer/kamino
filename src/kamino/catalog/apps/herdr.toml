@@ -1,0 +1,12 @@
+# Definición de herdr (diseño técnico §4.1). Logs y estado de sesión se excluyen
+# porque no son configuración (§6: "Estado frente a configuración").
+
+id = "herdr"
+name = "herdr"
+command = "herdr"
+exclude = ["**/*.log", "**/session.json"]
+
+paths = [
+  ".config/herdr/config.toml",
+  ".config/herdr/plugins/config",
+]

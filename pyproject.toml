@@ -32,6 +32,10 @@ dev = [
   "pytest>=8.2",
   "ruff>=0.5",
   "mypy>=1.10",
+  "python-semantic-release>=9.12",
+]
+build = [
+  "pyinstaller>=6.10",
 ]
 
 [project.scripts]
@@ -55,3 +59,14 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.mypy]
 python_version = "3.11"
 packages = ["kamino"]
+
+[tool.semantic_release]
+version_toml = ["pyproject.toml:project.version"]
+version_variables = ["src/kamino/__init__.py:__version__"]
+allow_zero_version = true
+major_on_zero = false
+commit_message = "chore(release): {version} [skip ci]"
+
+[tool.semantic_release.branches.main]
+match = "(main|master)"
+prerelease = false
