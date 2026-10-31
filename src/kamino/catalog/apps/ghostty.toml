@@ -1,0 +1,10 @@
+id = "ghostty"
+name = "Ghostty"
+bundle_id = "com.mitchellh.ghostty"
+
+paths = [
+  ".config/ghostty/config",
+  "Library/Application Support/com.mitchellh.ghostty/config",
+]
+
+exclude = []
