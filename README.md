@@ -38,8 +38,26 @@ uv tool install git+https://github.com/Gunmer/kamino
 ```
 
 El paquete se publica como `kamino-cli` (el nombre `kamino` ya está ocupado en PyPI) y expone el
-comando `kamino`. El Homebrew tap y el binario autocontenido se publicarán tras la primera
-versión etiquetada.
+comando `kamino`.
+
+## Versionado y releases
+
+El versionado sigue [SemVer](https://semver.org/) y se automatiza con
+[python-semantic-release](https://python-semantic-release.readthedocs.io/):
+
+1. Los títulos de los PRs deben seguir Conventional Commits (`feat:`, `fix:`, `docs:`, …); el CI lo valida.
+2. Al hacer merge a `main`, se calcula el bump (major/minor/patch) desde los commits, se actualiza
+   `CHANGELOG.md`, se crea el tag `vX.Y.Z` y se publica una GitHub Release.
+3. La release incluye el binario autocontenido (PyInstaller `onefile`), uno por arquitectura:
+   `kamino-arm64` (Apple Silicon) y `kamino-x86_64` (Intel).
+
+Los binarios no están firmados, por lo que macOS les aplica cuarentena al descargarlos. Para usarlos:
+
+```bash
+xattr -d com.apple.quarantine ./kamino-arm64
+```
+
+El Homebrew tap se publicará tras la primera versión etiquetada.
 
 ## Uso
 
