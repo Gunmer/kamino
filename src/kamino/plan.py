@@ -130,7 +130,12 @@ def _walk(
     skipped: list[str],
 ) -> None:
     """Recorre un directorio en orden determinista sin seguir enlaces."""
-    for dirpath, dirnames, filenames in os.walk(source, followlinks=False):
+
+    def on_error(error: OSError) -> None:
+        failed = Path(error.filename) if error.filename else source
+        skipped.append(to_relative(failed, home=root).as_posix())
+
+    for dirpath, dirnames, filenames in os.walk(source, followlinks=False, onerror=on_error):
         dirnames.sort()
         filenames.sort()
         base = Path(dirpath)

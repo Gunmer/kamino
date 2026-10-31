@@ -166,8 +166,11 @@ def _add_file(tar: tarfile.TarFile, source: Path, arcname: str, entry: FileEntry
     if info.isfile():
         if entry.link is not None:
             raise ArchiveError(f"{entry.path} es un archivo regular, no un enlace")
-        with source.open("rb") as handle:
-            tar.addfile(info, handle)
+        content = source.read_bytes()
+        if entry.sha256 is None or hashlib.sha256(content).hexdigest() != entry.sha256:
+            raise ArchiveError(f"el archivo cambió durante el respaldo: {entry.path}")
+        info.size = len(content)
+        tar.addfile(info, io.BytesIO(content))
     elif info.issym():
         if entry.link is None:
             raise ArchiveError(f"{entry.path} es un enlace, no un archivo regular")

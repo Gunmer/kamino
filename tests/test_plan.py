@@ -383,3 +383,26 @@ def test_build_plan_rejects_catalog_path_outside_home(tmp_path: Path) -> None:
 
     with pytest.raises(PathError):
         build_plan([definition], home=tmp_path)
+
+
+def test_walk_unreadable_dir_recorded(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    app_dir = home / ".config" / "app"
+    app_dir.mkdir(parents=True)
+    (app_dir / "ok.txt").write_text("x")
+    secret = app_dir / "secret"
+    secret.mkdir()
+    secret.chmod(0o000)
+    app = _app(paths=[".config/app"])
+    try:
+        try:
+            next(secret.iterdir(), None)
+        except OSError:
+            pass
+        else:
+            pytest.skip("el entorno permite listar directorios sin permiso")
+        plan = build_plan([app], home=home)
+        assert ".config/app/secret" in plan.skipped
+        assert ".config/app/ok.txt" in [op.path for op in plan.operations]
+    finally:
+        secret.chmod(0o755)

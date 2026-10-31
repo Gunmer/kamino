@@ -273,15 +273,41 @@ def test_verify_ok(tmp_path: Path) -> None:
 
 
 def test_verify_checksum_mismatch(tmp_path: Path) -> None:
+    app = {
+        "id": "git",
+        "name": "git",
+        "files": [
+            {
+                "path": ".gitconfig",
+                "sha256": _sha256(b"contenido esperado"),
+                "size": 18,
+                "mode": "0644",
+            }
+        ],
+    }
+    manifest = _manifest([app])
+    output = tmp_path / "b.tar.gz"
+    with tarfile.open(output, "w:gz") as tar:
+        info = tarfile.TarInfo("manifest.json")
+        data = manifest.model_dump_json().encode()
+        info.size = len(data)
+        tar.addfile(info, io.BytesIO(data))
+        minfo = tarfile.TarInfo("apps/git/.gitconfig")
+        minfo.size = len(b"contenido real")
+        tar.addfile(minfo, io.BytesIO(b"contenido real"))
+
+    with pytest.raises(IntegrityError):
+        verify_archive(output, manifest)
+
+
+def test_write_archive_rejects_changed_file(tmp_path: Path) -> None:
     source_root = tmp_path / "home"
     app = _app_with_files(source_root, "git", {".gitconfig": b"contenido real"})
     app["files"][0]["sha256"] = _sha256(b"contenido distinto")
     manifest = _manifest([app])
     output = tmp_path / "b.tar.gz"
-    write_archive(output, manifest, source_root=source_root)
-
-    with pytest.raises(IntegrityError):
-        verify_archive(output, manifest)
+    with pytest.raises(ArchiveError):
+        write_archive(output, manifest, source_root=source_root)
 
 
 def test_verify_missing_file(tmp_path: Path) -> None:
