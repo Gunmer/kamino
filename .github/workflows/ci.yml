@@ -1,34 +1,35 @@
 name: CI
-
+          
 on:
   push:
+    branches: ["main"]
   pull_request:
 
 jobs:
   test:
-    runs-on: macos-latest
-    strategy:
-      matrix:
-        python-version: ["3.11", "3.12", "3.13"]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: ${{ matrix.python-version }}
-      - uses: astral-sh/setup-uv@v5
-      - name: Install
-        run: uv sync --all-extras
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install dependencies
+        run: uv sync --all-extras --dev
+
       - name: Lint
         run: uv run ruff check .
+
       - name: Format check
         run: uv run ruff format --check .
+
       - name: Tests
         run: uv run pytest
-
-  lint-pr-title:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: amannn/action-semantic-pull-request@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,99 +1,46 @@
 name: Release
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main]
+    tags:
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
-  version:
-    runs-on: ubuntu-latest
-    outputs:
-      released: ${{ steps.bump.outputs.released }}
-      tag: ${{ steps.bump.outputs.tag }}
-      version: ${{ steps.bump.outputs.version }}
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v5
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-      - name: Bump version, changelog and tag
-        id: bump
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          uv sync --extra dev
-          uv run semantic-release version --no-vcs-release
-          tag="$(git describe --tags --exact-match HEAD 2>/dev/null || true)"
-          if [ -n "$tag" ]; then
-            echo "released=true" >> "$GITHUB_OUTPUT"
-            echo "tag=$tag" >> "$GITHUB_OUTPUT"
-            echo "version=${tag#v}" >> "$GITHUB_OUTPUT"
-          else
-            echo "released=false" >> "$GITHUB_OUTPUT"
-          fi
 
-  build:
-    needs: version
-    if: needs.version.outputs.released == 'true'
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-13
-            arch: x86_64
-          - os: macos-15
-            arch: arm64
-    steps:
-      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          ref: ${{ needs.version.outputs.tag }}
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - uses: astral-sh/setup-uv@v5
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install build deps
+        run: uv sync --extra build --dev
+
       - name: Build binary
         run: |
-          uv sync --extra build
           uv run pyinstaller \
             --onefile \
-            --name "kamino-${{ matrix.arch }}" \
-            --collect-all pydantic \
-            --collect-all pydantic_core \
+            --name "kamino-arm64" \
             src/kamino/__main__.py
-      - name: Upload binary
+
+      - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: kamino-${{ matrix.arch }}
-          path: dist/kamino-${{ matrix.arch }}
+          name: kamino-arm64
+          path: dist/kamino-arm64
           if-no-files-found: error
-
-  github-release:
-    needs: [version, build]
-    if: needs.version.outputs.released == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.version.outputs.tag }}
-      - name: Download binaries
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.version.outputs.tag }}
-          generate_release_notes: true
-          files: dist/*/kamino-*
