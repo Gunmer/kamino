@@ -85,10 +85,14 @@ El Homebrew tap se publicará tras la primera versión etiquetada.
 ## Uso
 
 ```bash
+kamino                       # TUI: lista interactiva con los comandos disponibles
 kamino --help
 kamino backup --apps vscode,iterm2,git
 kamino restore kamino-<equipo>-<fecha>.tar.gz
 ```
+
+Al ejecutar `kamino` sin comandos (en una terminal interactiva) se muestra una lista con los
+comandos disponibles (`backup` y `restore`) para elegir uno. Sin terminal, se muestra la ayuda.
 
 ## Desarrollo
 
@@ -102,8 +106,8 @@ uv run ruff format .   # formato
 
 ```
 src/kamino/
-├── cli.py            # comandos backup y restore
-├── ui.py             # selección interactiva, tablas, progreso
+├── cli.py            # comandos backup y restore, y menú TUI sin argumentos
+├── ui.py             # selección interactiva, menú de comandos, tablas, progreso
 ├── backup.py         # caso de uso: plan y ejecución del respaldo
 ├── restore.py        # caso de uso: plan y ejecución de la restauración
 ├── plan.py           # Plan y Operation, compartidos

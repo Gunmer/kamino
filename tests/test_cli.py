@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from typer.testing import CliRunner
@@ -161,3 +162,40 @@ def test_version() -> None:
     result = runner.invoke(cli.app, ["--version"])
     assert result.exit_code == 0
     assert "kamino" in result.output
+
+
+def test_no_args_non_tty_shows_help(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "sys", _FakeSys(False))
+    result = runner.invoke(cli.app, [])
+    assert result.exit_code == 0
+    assert "backup" in result.output
+    assert "restore" in result.output
+
+
+def test_no_args_tty_menu_runs_backup(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "sys", _FakeSys(True))
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "backup")
+    called: list[str] = []
+    monkeypatch.setattr(cli, "backup", lambda: called.append("backup"))
+    result = runner.invoke(cli.app, [])
+    assert result.exit_code == 0
+    assert called == ["backup"]
+
+
+def test_no_args_tty_menu_runs_restore(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "sys", _FakeSys(True))
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "restore")
+    monkeypatch.setattr(cli.ui, "ask_path", lambda prompt: "backup.tar.gz")
+    called: list[Path] = []
+    monkeypatch.setattr(cli, "restore", lambda path: called.append(path))
+    result = runner.invoke(cli.app, [])
+    assert result.exit_code == 0
+    assert called == [Path("backup.tar.gz")]
+
+
+def test_no_args_tty_menu_cancel(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "sys", _FakeSys(True))
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: None)
+    result = runner.invoke(cli.app, [])
+    assert result.exit_code == 1
+    assert "cancelado" in result.output

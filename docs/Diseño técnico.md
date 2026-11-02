@@ -39,8 +39,8 @@ Estructura propuesta del paquete:
 
 ```
 src/kamino/
-├── cli.py            # comandos backup y restore
-├── ui.py             # selección interactiva, tablas, progreso
+├── cli.py            # comandos backup y restore, y menú TUI sin argumentos
+├── ui.py             # selección interactiva, menú de comandos, tablas, progreso
 ├── backup.py         # caso de uso: construir plan y ejecutar respaldo
 ├── restore.py        # caso de uso: construir plan y ejecutar restauración
 ├── plan.py           # Plan y Operation, compartidos por ambos
