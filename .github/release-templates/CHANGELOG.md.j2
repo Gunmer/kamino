@@ -1,0 +1,18 @@
+{% from '.changes.md.j2' import changes with context -%}
+{% set previous = ctx.prev_changelog_file | read_file -%}
+{% set marker = ctx.changelog_insertion_flag -%}
+{% set parts = previous.split(marker, 1) -%}
+{% set additions -%}
+{% for version, release in ctx.history.released.items() -%}
+{% if ('\n## ' ~ version.as_tag() ~ ' (') not in previous -%}
+{{ '\n\n## ' ~ version.as_tag() ~ ' (' ~ release.tagged_date.strftime('%Y-%m-%d') ~ ')\n\n' }}{{ changes(release).rstrip() }}
+{% endif -%}
+{% endfor -%}
+{% endset -%}
+{% if not additions -%}
+{{ previous }}
+{% elif parts | length == 2 -%}
+{{ parts[0] }}{{ marker }}{{ additions }}{{ parts[1] }}
+{% else -%}
+{{ '# Historial de cambios\n\n' ~ marker }}{{ additions }}{{ '\n\n' ~ previous }}
+{% endif -%}

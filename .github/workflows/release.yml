@@ -2,55 +2,67 @@ name: Release
 
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "v*"
+    inputs:
+      tag:
+        description: "Tag existente cuya publicación se debe completar (vX.Y.Z)"
+        required: true
+        type: string
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: ["main"]
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+  queue: max
 
 jobs:
-  build:
+  release:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository))
     runs-on: macos-15
     timeout-minutes: 30
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+      RELEASE_TAG: ${{ inputs.tag }}
 
     steps:
-      - name: Checkout
+      - name: Obtener main y su historial
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
-      - name: Set up Python
+      - name: Preparar Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      - name: Set up uv
+      - name: Preparar uv
         uses: astral-sh/setup-uv@v5
 
-      - name: Install build deps
-        run: uv sync --extra build --dev
+      - name: Instalar dependencias bloqueadas
+        run: uv sync --locked --all-extras
 
-      - name: Build binary
+      - name: Versionar, comprobar y publicar
+        if: github.event_name == 'workflow_run'
         run: |
-          uv run pyinstaller \
-            --onefile \
-            --add-data "src/kamino/catalog/apps:kamino/catalog/apps" \
-            --name "kamino-arm64" \
-            src/kamino/__main__.py
+          uv run --no-sync python scripts/release.py --sha "$RELEASE_SHA"
 
-      - name: Smoke-test embedded catalog
+      - name: Completar publicación de un tag existente
+        if: github.event_name == 'workflow_dispatch'
         run: |
-          mkdir -p "$RUNNER_TEMP/kamino-home"
-          set +e
-          HOME="$RUNNER_TEMP/kamino-home" dist/kamino-arm64 backup --dry-run --apps "__packaging_smoke__"
-          status=$?
-          set -e
-          test "$status" -eq 3
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: kamino-arm64
-          path: dist/kamino-arm64
-          if-no-files-found: error
+          uv run --no-sync python scripts/release.py --tag "$RELEASE_TAG"
