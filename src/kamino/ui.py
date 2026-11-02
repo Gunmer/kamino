@@ -20,10 +20,15 @@ if TYPE_CHECKING:
 _console = Console()
 
 
-def select_command(choices: Sequence[tuple[str, str, str]]) -> str | None:
-    """Selección simple de un comando; devuelve el id elegido o `None` al cancelar.
+#: Tripletas ``(id, title, description)`` para el menú de comandos.
+CommandChoice = tuple[str, str, str]
 
-    `choices` son tripletas `(id, título, descripción)`.
+
+def select_command(choices: Sequence[CommandChoice]) -> str | None:
+    """Selección simple de un comando.
+
+    :param choices: Tripletas ``(id, title, description)``.
+    :returns: El ``id`` elegido o ``None`` si se cancela.
     """
     options = [
         questionary.Choice(title=f"{title}: {description}", value=command_id)
