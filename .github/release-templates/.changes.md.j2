@@ -1,0 +1,19 @@
+{% macro changes(release) -%}
+{% set headings = {
+  'features': 'Funcionalidades', 'bug fixes': 'Correcciones',
+  'performance improvements': 'Rendimiento', 'documentation': 'Documentación',
+  'continuous integration': 'Integración continua', 'build system': 'Construcción',
+  'chores': 'Mantenimiento', 'refactoring': 'Refactorización',
+  'code style': 'Estilo de código', 'testing': 'Pruebas'
+} -%}
+{% for type, commits in release.elements | dictsort if type != 'unknown' -%}
+### {{ headings.get(type, 'Otros cambios') }}
+
+{% for commit in commits -%}
+- {{ commit.descriptions[0] }} ([`{{ commit.hexsha[:7] }}`]({{ commit.hexsha | commit_hash_url }}))
+{% if commit.bump.name == 'MAJOR' %}
+  **Cambio incompatible.**{% for description in commit.breaking_descriptions %} {{ description }}{% endfor %}
+{% endif -%}
+{% endfor %}
+{% endfor -%}
+{%- endmacro %}
