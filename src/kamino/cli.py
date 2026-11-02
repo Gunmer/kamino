@@ -25,7 +25,8 @@ from kamino.snapshot import SNAPSHOT_APP_ID
 app = typer.Typer(
     name="kamino",
     help="Respalda y restaura configuraciones de aplicaciones de macOS.",
-    no_args_is_help=True,
+    no_args_is_help=False,
+    invoke_without_command=True,
 )
 
 
@@ -37,16 +38,50 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
     version: Annotated[
         bool | None,
         typer.Option("--version", help="Muestra la versión y termina.", callback=_version_callback),
     ] = None,
 ) -> None:
     """kamino: respaldo y restauración de configuraciones de macOS."""
+    if ctx.invoked_subcommand is not None:
+        return
+    _handle_no_command(ctx)
 
 
 def _installed_apps(catalog: dict[str, AppDefinition]) -> list[AppDefinition]:
     return [app for app in catalog.values() if is_installed(app)]
+
+
+def _handle_no_command(ctx: typer.Context) -> None:
+    """Sin subcomando: TUI si hay terminal, ayuda si no."""
+    if not sys.stdin.isatty():
+        # Sin terminal no hay menú: mostrar la ayuda como antes.
+        typer.echo(ctx.get_help(), nl=False)
+        raise typer.Exit()
+    _run_menu(ctx)
+
+
+def _run_menu(ctx: typer.Context) -> None:
+    """TUI: lista de comandos disponibles cuando se ejecuta sin argumentos."""
+    command = ui.select_command(
+        [
+            ("backup", "Respaldo", "Crea un respaldo de las apps elegidas."),
+            ("restore", "Restauración", "Restaura desde un archivo de respaldo."),
+        ]
+    )
+    if command is None:
+        typer.echo("cancelado", err=True)
+        raise typer.Exit(code=1)
+    if command == "backup":
+        ctx.invoke(backup)
+        return
+    path = ui.ask_path("Archivo de respaldo (.tar.gz):")
+    if path is None or not path.strip():
+        typer.echo("cancelado", err=True)
+        raise typer.Exit(code=1)
+    ctx.invoke(restore, backup_file=Path(path.strip()))
 
 
 @app.command()

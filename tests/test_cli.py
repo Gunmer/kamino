@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 
 from typer.testing import CliRunner
 
@@ -161,3 +163,43 @@ def test_version() -> None:
     result = runner.invoke(cli.app, ["--version"])
     assert result.exit_code == 0
     assert "kamino" in result.output
+
+
+def test_no_args_non_tty_shows_help(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "sys", _FakeSys(False))
+    result = runner.invoke(cli.app, [])
+    assert result.exit_code == 0
+    assert "backup" in result.output
+    assert "restore" in result.output
+
+
+def test_no_args_tty_menu_dispatches_to_run_menu(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "sys", _FakeSys(True))
+    dispatched: list[str] = []
+    monkeypatch.setattr(cli, "_run_menu", lambda ctx: dispatched.append("run_menu"))
+    result = runner.invoke(cli.app, [])
+    assert result.exit_code == 0
+    assert dispatched == ["run_menu"]
+
+
+def test_run_menu_invokes_backup_via_ctx(monkeypatch) -> None:
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "backup")
+    ctx = MagicMock()
+    cli._run_menu(ctx)
+    ctx.invoke.assert_called_once_with(cli.backup)
+
+
+def test_run_menu_invokes_restore_via_ctx(monkeypatch) -> None:
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "restore")
+    monkeypatch.setattr(cli.ui, "ask_path", lambda prompt: "backup.tar.gz")
+    ctx = MagicMock()
+    cli._run_menu(ctx)
+    ctx.invoke.assert_called_once_with(cli.restore, backup_file=Path("backup.tar.gz"))
+
+
+def test_no_args_tty_menu_cancel(monkeypatch) -> None:
+    monkeypatch.setattr(cli, "sys", _FakeSys(True))
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: None)
+    result = runner.invoke(cli.app, [])
+    assert result.exit_code == 1
+    assert "cancelado" in result.output

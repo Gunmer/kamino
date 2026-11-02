@@ -20,6 +20,34 @@ if TYPE_CHECKING:
 _console = Console()
 
 
+#: Tripletas ``(id, title, description)`` para el menú de comandos.
+CommandChoice = tuple[str, str, str]
+
+
+def select_command(choices: Sequence[CommandChoice]) -> str | None:
+    """Selección simple de un comando.
+
+    :param choices: Tripletas ``(id, title, description)``.
+    :returns: El ``id`` elegido o ``None`` si se cancela.
+    """
+    options = [
+        questionary.Choice(title=f"{title}: {description}", value=command_id)
+        for command_id, title, description in choices
+    ]
+    try:
+        return questionary.select("¿Qué quieres hacer?", choices=options).ask()
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
+def ask_path(prompt: str) -> str | None:
+    """Pide una ruta de archivo; devuelve `None` si el usuario cancela."""
+    try:
+        return questionary.text(prompt).ask()
+    except (KeyboardInterrupt, EOFError):
+        return None
+
+
 def select_apps(choices: Sequence[tuple[str, str]]) -> list[str] | None:
     """Selección múltiple interactiva; devuelve `None` si el usuario cancela.
 

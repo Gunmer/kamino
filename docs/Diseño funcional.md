@@ -8,6 +8,11 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 
 ## 2. Funcionalidades principales (requeridas)
 
+### 2.0 Menú interactivo (TUI)
+
+- Al ejecutar `kamino` sin comandos, en una terminal interactiva, se muestra una lista con los comandos disponibles (`backup` y `restore`) para elegir uno.
+- Sin terminal, se muestra la ayuda como antes.
+
 ### 2.1 Respaldo (`backup`)
 
 - Detecta las aplicaciones soportadas que están instaladas en el Mac.

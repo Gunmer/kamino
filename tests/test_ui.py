@@ -17,6 +17,26 @@ class _FakeCheckbox:
         return self._result
 
 
+def test_select_command_returns_id(monkeypatch) -> None:
+    monkeypatch.setattr(ui.questionary, "select", lambda *a, **kw: _FakeCheckbox("backup"))
+    assert ui.select_command([("backup", "Respaldo", "desc")]) == "backup"
+
+
+def test_select_command_cancel_returns_none(monkeypatch) -> None:
+    monkeypatch.setattr(ui.questionary, "select", lambda *a, **kw: _FakeCheckbox(None))
+    assert ui.select_command([("backup", "Respaldo", "desc")]) is None
+
+
+def test_ask_path_returns_value(monkeypatch) -> None:
+    monkeypatch.setattr(ui.questionary, "text", lambda *a, **kw: _FakeCheckbox("x.tar.gz"))
+    assert ui.ask_path("Archivo:") == "x.tar.gz"
+
+
+def test_ask_path_cancel_returns_none(monkeypatch) -> None:
+    monkeypatch.setattr(ui.questionary, "text", lambda *a, **kw: _FakeCheckbox(None))
+    assert ui.ask_path("Archivo:") is None
+
+
 def test_select_apps_empty() -> None:
     assert ui.select_apps([]) == []
 
