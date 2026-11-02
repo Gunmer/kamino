@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.2.0 (2026-11-02)
+
+### Correcciones
+
+- address R3 review findings — dispatch via ctx.invoke, separate concerns, CommandChoice alias ([`5bdd257`](https://github.com/Gunmer/kamino/commit/5bdd257cadb67b5c99ce9156a638dbdaf08e336b))
+
+### Funcionalidades
+
+- show TUI command menu when run without arguments ([`e0d1c06`](https://github.com/Gunmer/kamino/commit/e0d1c06898651091818348d3b55b3e94bb9b2060))
+
+
 ## v0.1.1 (2026-11-02)
 
 ### Correcciones
