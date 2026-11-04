@@ -2,17 +2,25 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from rich.text import Text
 from typer.testing import CliRunner
 
 import kamino.cli as cli
 from kamino.errors import ArchiveError
 
 runner = CliRunner()
+
+
+def _assert_help_options_visible(output: str, options: list[str]) -> None:
+    plain_output = Text.from_ansi(output).plain
+    for option in options:
+        assert re.search(rf"(?<![\w-]){re.escape(option)}(?![\w-])", plain_output)
 
 
 class _FakeStdin:
@@ -324,9 +332,48 @@ def test_help_aliases(monkeypatch, args: list[str], expected_names: list[str]) -
     monkeypatch.setattr(cli, "run_restore", lambda *args, **kwargs: dispatched.append("restore"))
     result = runner.invoke(cli.app, args)
     assert result.exit_code == 0
-    assert "Usage:" in result.output
-    for name in expected_names:
-        assert name in result.output
+    assert "Usage:" in Text.from_ansi(result.output).plain
+    _assert_help_options_visible(result.output, expected_names)
+    assert dispatched == []
+
+
+@pytest.mark.parametrize(
+    ("command", "expected_options"),
+    [
+        ([], ["--help", "-h", "--version", "-V", "--install-completion", "--show-completion"]),
+        (
+            ["backup"],
+            [
+                "--help",
+                "-h",
+                "--apps",
+                "-a",
+                "--output",
+                "-o",
+                "--dry-run",
+                "-n",
+                "--verbose",
+                "-v",
+            ],
+        ),
+        (
+            ["restore"],
+            ["--help", "-h", "--dry-run", "-n", "--yes", "-y", "--verbose", "-v"],
+        ),
+    ],
+)
+def test_help_options_are_visible_with_ansi_color(
+    monkeypatch, command: list[str], expected_options: list[str]
+) -> None:
+    dispatched: list[str] = []
+    monkeypatch.setattr(cli, "_run_menu", lambda ctx: dispatched.append("run_menu"))
+    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: dispatched.append("backup"))
+    monkeypatch.setattr(cli, "run_restore", lambda *args, **kwargs: dispatched.append("restore"))
+    result = runner.invoke(cli.app, [*command, "-h"], env={"FORCE_COLOR": "1"})
+    assert result.exit_code == 0
+    assert "\x1b[" in result.output
+    assert "Usage:" in Text.from_ansi(result.output).plain
+    _assert_help_options_visible(result.output, expected_options)
     assert dispatched == []
 
 
@@ -335,8 +382,7 @@ def test_main_help_keeps_completion_option_names(monkeypatch) -> None:
     monkeypatch.setattr(cli, "_run_menu", lambda ctx: installed.append("run_menu"))
     result = runner.invoke(cli.app, ["-h"])
     assert result.exit_code == 0
-    assert "--install-completion" in result.output
-    assert "--show-completion" in result.output
+    _assert_help_options_visible(result.output, ["--install-completion", "--show-completion"])
     assert installed == []
 
 
