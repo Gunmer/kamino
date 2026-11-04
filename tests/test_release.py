@@ -46,9 +46,19 @@ def repository(tmp_path, monkeypatch):
         '[[package]]\nname = "kamino-cli"\nversion = "0.1.0"\nsource = { virtual = "." }\n',
         encoding="utf-8",
     )
-    shutil.copy(ROOT / "CHANGELOG.md", path)
+    (path / "CHANGELOG.md").write_text(
+        "# Historial de cambios\n\n"
+        "<!-- version list -->\n\n"
+        "## v0.1.0 (2026-10-31)\n\n"
+        "- Versión inicial\n",
+        encoding="utf-8",
+    )
     (path / "src/kamino").mkdir(parents=True)
-    shutil.copy(ROOT / "src/kamino/__init__.py", path / "src/kamino")
+    (path / "src/kamino/__init__.py").write_text(
+        '"""kamino: respaldo y restauración de configuraciones de aplicaciones en macOS."""\n\n'
+        '__version__ = "0.1.0"\n',
+        encoding="utf-8",
+    )
     (path / "scripts").mkdir()
     (path / "scripts/build_release.py").write_text("# Test fixture\n", encoding="utf-8")
     shutil.copytree(ROOT / ".github/release-templates", path / ".github/release-templates")
@@ -85,6 +95,44 @@ def semantic_release(*args, check=True):
     if check:
         assert result.returncode == 0, result.stdout + result.stderr
     return result
+
+
+def test_repository_base_is_coherent_and_independent_of_real_release_data(
+    tmp_path, monkeypatch, request
+):
+    real_root = tmp_path / "real-project"
+    real_root.mkdir()
+    shutil.copytree(ROOT / ".github/release-templates", real_root / ".github/release-templates")
+    shutil.copy(ROOT / "pyproject.toml", real_root / "pyproject.toml")
+    (real_root / "CHANGELOG.md").write_text(
+        "# Historial de cambios\n\n"
+        "<!-- version list -->\n\n"
+        "## v0.2.0 (2026-11-02)\n\n"
+        "- Entrada real\n\n"
+        "## v0.1.0 (2026-10-31)\n\n"
+        "- Versión inicial\n",
+        encoding="utf-8",
+    )
+    (real_root / "src/kamino").mkdir(parents=True)
+    (real_root / "src/kamino/__init__.py").write_text('__version__ = "0.2.0"\n', encoding="utf-8")
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", real_root)
+    request.getfixturevalue("repository")
+
+    changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+    metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+    lock = tomllib.loads(Path("uv.lock").read_text(encoding="utf-8"))
+    source = Path("src/kamino/__init__.py").read_text(encoding="utf-8")
+
+    assert git("tag", "--list") == "v0.1.0"
+    assert "## v0.1.0 (" in changelog
+    assert "## v0.2.0 (" not in changelog
+    assert metadata["project"]["version"] == "0.1.0"
+    assert '__version__ = "0.1.0"' in source
+    assert [p["version"] for p in lock["package"] if p["name"] == "kamino-cli"] == ["0.1.0"]
+    assert "## v0.2.0 (" in (real_root / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert '__version__ = "0.2.0"' in (real_root / "src/kamino/__init__.py").read_text(
+        encoding="utf-8"
+    )
 
 
 @pytest.mark.parametrize(
@@ -165,6 +213,9 @@ def test_release_keeps_versions_lock_history_and_notes_in_sync(repository):
     changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
     assert "### Funcionalidades" in changelog
     assert "**Cambio incompatible.** requiere migración" in changelog
+    assert "**Cambio incompatible.** requiere migración" in release.release_notes(
+        changelog, "v0.2.0"
+    )
     assert previous.split("<!-- version list -->")[1] in changelog
     assert changelog.count("## v0.2.0 (") == 1
     assert "v0.1.0" not in release.release_notes(changelog, "v0.2.0")
@@ -172,10 +223,12 @@ def test_release_keeps_versions_lock_history_and_notes_in_sync(repository):
     assert [p for p in lock["package"] if p["name"] != "kamino-cli"] == [
         p for p in original_lock["package"] if p["name"] != "kamino-cli"
     ]
+    tags = git("tag", "--list")
     head = git("rev-parse", "HEAD")
     semantic_release("version", "--no-push", "--no-vcs-release")
     semantic_release("changelog")
     assert git("rev-parse", "HEAD") == head
+    assert git("tag", "--list") == tags
     assert Path("CHANGELOG.md").read_text(encoding="utf-8") == changelog
     assert git("status", "--porcelain") == ""
 
