@@ -91,6 +91,34 @@ kamino backup --apps vscode,iterm2,git
 kamino restore kamino-<equipo>-<fecha>.tar.gz
 ```
 
+`-h` es alias de `--help` en el nivel principal y en `backup` y `restore`, y `-V` es alias de
+`--version`:
+
+```bash
+kamino -h
+kamino backup -h
+kamino restore -h
+kamino -V
+```
+
+En `backup`, `-a` equivale a `--apps`, `-o` a `--output`, `-n` a `--dry-run` y `-v` a `--verbose`:
+
+```bash
+kamino backup -a vscode,iterm2,git -o respaldo.tar.gz -v
+kamino backup -a vscode,iterm2,git -o respaldo.tar.gz -n   # simulación: no crea el archivo
+```
+
+En `restore`, `-n` equivale a `--dry-run`, `-y` a `--yes` y `-v` a `--verbose`; el archivo de
+respaldo sigue siendo un argumento posicional:
+
+```bash
+kamino restore respaldo.tar.gz -y -v
+kamino restore respaldo.tar.gz -n   # simulación: no pide confirmación ni escribe destinos
+```
+
+Sin terminal interactiva, una restauración real requiere `-y` o `--yes`; la simulación con `-n`
+no lo requiere.
+
 Al ejecutar `kamino` sin comandos (en una terminal interactiva) se muestra una lista con los
 comandos disponibles (`backup` y `restore`) para elegir uno. Sin terminal, se muestra la ayuda.
 

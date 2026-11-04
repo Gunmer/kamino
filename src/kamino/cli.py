@@ -27,6 +27,7 @@ app = typer.Typer(
     help="Respalda y restaura configuraciones de aplicaciones de macOS.",
     no_args_is_help=False,
     invoke_without_command=True,
+    context_settings={"help_option_names": ["-h", "--help"]},
 )
 
 
@@ -41,7 +42,12 @@ def main(
     ctx: typer.Context,
     version: Annotated[
         bool | None,
-        typer.Option("--version", help="Muestra la versión y termina.", callback=_version_callback),
+        typer.Option(
+            "--version",
+            "-V",
+            help="Muestra la versión y termina.",
+            callback=_version_callback,
+        ),
     ] = None,
 ) -> None:
     """kamino: respaldo y restauración de configuraciones de macOS."""
@@ -88,19 +94,23 @@ def _run_menu(ctx: typer.Context) -> None:
 def backup(
     apps: Annotated[
         str | None,
-        typer.Option("--apps", help="Apps a respaldar, separadas por comas (modo no interactivo)."),
+        typer.Option(
+            "--apps",
+            "-a",
+            help="Apps a respaldar, separadas por comas (modo no interactivo).",
+        ),
     ] = None,
     output: Annotated[
         str | None,
-        typer.Option("--output", help="Ruta del archivo de respaldo."),
+        typer.Option("--output", "-o", help="Ruta del archivo de respaldo."),
     ] = None,
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Simula sin escribir nada."),
+        typer.Option("--dry-run", "-n", help="Simula sin escribir nada."),
     ] = False,
     verbose: Annotated[
         bool,
-        typer.Option("--verbose", help="Salida detallada."),
+        typer.Option("--verbose", "-v", help="Salida detallada."),
     ] = False,
 ) -> None:
     """Crea un archivo de respaldo con las apps elegidas."""
@@ -145,15 +155,15 @@ def restore(
     ],
     dry_run: Annotated[
         bool,
-        typer.Option("--dry-run", help="Simula sin escribir nada."),
+        typer.Option("--dry-run", "-n", help="Simula sin escribir nada."),
     ] = False,
     yes: Annotated[
         bool,
-        typer.Option("--yes", help="Aplica todas las apps restaurables sin confirmar."),
+        typer.Option("--yes", "-y", help="Aplica todas las apps restaurables sin confirmar."),
     ] = False,
     verbose: Annotated[
         bool,
-        typer.Option("--verbose", help="Salida detallada."),
+        typer.Option("--verbose", "-v", help="Salida detallada."),
     ] = False,
 ) -> None:
     """Restaura desde un archivo, solo las apps instaladas."""
