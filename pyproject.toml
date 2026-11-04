@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "kamino-cli"
-version = "0.2.0"
+version = "0.3.0"
 description = "Respalda y restaura configuraciones de aplicaciones de macOS en un único archivo portable."
 readme = "README.md"
 requires-python = ">=3.11"

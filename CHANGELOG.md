@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-11-04)
+
+### Mantenimiento
+
+- add SDD agents ([`c644d87`](https://github.com/Gunmer/kamino/commit/c644d8751dcb8ceb1edf87b29dc048a84eb63476))
+- add sdd ([`89d1cb2`](https://github.com/Gunmer/kamino/commit/89d1cb2184a69d4ab2dbc74ffa6a2fe4a3f2dd9b))
+
+### Funcionalidades
+
+- add short option aliases ([`c58c02e`](https://github.com/Gunmer/kamino/commit/c58c02e9b7549b8b86a407cdcf00ff102bb390da))
+
+### Pruebas
+
+- handle ANSI output in help tests ([`cdc3839`](https://github.com/Gunmer/kamino/commit/cdc38397e91d02b971c01574af64430c124bc805))
+
+
 ## v0.2.0 (2026-11-02)
 
 ### Correcciones
