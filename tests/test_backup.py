@@ -18,6 +18,7 @@ import pytest
 from kamino import __version__
 from kamino.archive import FORMAT_VERSION, read_manifest, verify_archive
 from kamino.backup import BackupResult, run_backup
+from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
 from kamino.errors import ArchiveError
 from kamino.plan import Plan
@@ -29,7 +30,9 @@ def _app(
     name: str = "Foo",
     bundle_id: str | None = None,
     command: str | None = None,
+    install_marker: str | None = None,
     paths: list[str] | None = None,
+    optional_paths: list[str] | None = None,
     exclude: list[str] | None = None,
 ) -> AppDefinition:
     return AppDefinition.model_validate(
@@ -38,7 +41,9 @@ def _app(
             "name": name,
             "bundle_id": bundle_id,
             "command": command if command is not None else (None if bundle_id else app_id),
+            "install_marker": install_marker,
             "paths": paths if paths is not None else [".config/foo/config.toml"],
+            "optional_paths": optional_paths or [],
             "exclude": exclude or [],
         }
     )
@@ -465,3 +470,202 @@ def test_explicit_output_is_never_overwritten(tmp_path: Path) -> None:
     run_backup(**kwargs)
     with pytest.raises(ArchiveError):
         run_backup(**kwargs)
+
+
+# --- privacidad y marcadores ---
+
+
+def test_marker_uses_injected_home_and_not_real_home(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    _write_config(home, ".zshrc")
+    real_home = tmp_path / "real-home"
+    marker = real_home / ".oh-my-zsh" / "oh-my-zsh.sh"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(real_home))
+    app = _app(
+        app_id="oh-my-zsh",
+        command="zsh",
+        install_marker=".oh-my-zsh/oh-my-zsh.sh",
+        paths=[".zshrc"],
+    )
+
+    result = run_backup(
+        home=home,
+        output=tmp_path / "b.tar.gz",
+        catalog=_catalog(app),
+        application_dirs=[],
+        path=_fake_path(tmp_path, "zsh"),
+        metadata=_metadata(),
+    )
+
+    assert result.manifest.apps == []
+
+
+def test_known_credentials_are_excluded_before_reading(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_config(home, ".config/foo/config.toml", b"allowed = true\n")
+    _write_config(home, ".config/foo/.env", b"TOKEN=secreto\n")
+    _write_config(home, ".config/foo/auth.json", b'{"token": "secreto"}\n')
+    _write_config(home, ".config/foo/secrets.yaml", b"token: secreto\n")
+    app = _app(
+        paths=[".config/foo"],
+        exclude=["**/.env", "**/.env.*", "**/auth.json", "**/secrets.yaml"],
+    )
+
+    result = run_backup(
+        home=home,
+        output=tmp_path / "b.tar.gz",
+        catalog=_catalog(app),
+        application_dirs=[],
+        path=_fake_path(tmp_path, "foo"),
+        metadata=_metadata(),
+    )
+
+    assert [entry.path for entry in result.manifest.apps[0].files] == [".config/foo/config.toml"]
+    with tarfile.open(result.output, "r:gz") as tar:
+        names = {member.name for member in tar.getmembers()}
+    assert "apps/foo/.config/foo/.env" not in names
+    assert "apps/foo/.config/foo/auth.json" not in names
+    assert "apps/foo/.config/foo/secrets.yaml" not in names
+    assert "apps/foo/.config/foo/config.toml" in names
+
+
+NEW_TOOL_FILES = [
+    ("opencode", ".config/opencode/opencode.json"),
+    ("claude-code", ".claude/settings.json"),
+    ("codex", ".codex/config.toml"),
+    ("gemini-cli", ".gemini/settings.json"),
+    ("copilot-cli", ".copilot/settings.json"),
+    ("pi", ".pi/agent/settings.json"),
+    ("aider", ".aider.conf.yml"),
+    ("goose", ".config/goose/config.yaml"),
+    ("gentle-shell", ".gentle-shell/config.json"),
+    ("gentle-ai", ".gentle-ai/state.json"),
+    ("gga", ".config/gga/config"),
+    ("openspec", ".config/openspec/config.json"),
+    ("caveman", ".config/caveman/config.json"),
+    ("lazygit", "Library/Application Support/lazygit/config.yml"),
+    ("micro", ".config/micro/settings.json"),
+    ("navi", ".config/navi/config.yaml"),
+    ("glow", "Library/Preferences/glow/glow.yml"),
+    ("bat", ".config/bat/config"),
+    ("eza", ".config/eza/theme.yml"),
+    ("fd", ".config/fd/ignore"),
+    ("github-cli", ".config/gh/config.yml"),
+    ("herdr", ".config/herdr/config.toml"),
+]
+
+
+@pytest.mark.parametrize(("app_id", "rel"), NEW_TOOL_FILES)
+def test_new_definition_only_backs_up_when_installed_without_executing(
+    tmp_path: Path, app_id: str, rel: str
+) -> None:
+    catalog = load_catalog(user_dir=tmp_path / "no-user-catalog")
+    app = catalog[app_id]
+    home = tmp_path / "home"
+    _write_config(home, rel, b"permitido\n")
+    marker = tmp_path / "executed"
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    binary = bin_dir / app.command
+    binary.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
+    binary.chmod(0o755)
+
+    absent = run_backup(
+        home=home,
+        output=tmp_path / "absent.tar.gz",
+        catalog=catalog,
+        selected=[app_id],
+        application_dirs=[],
+        path=_empty_path(tmp_path),
+        metadata=_metadata(),
+    )
+    assert absent.manifest.apps == []
+
+    present = run_backup(
+        home=home,
+        output=tmp_path / f"{app_id}.tar.gz",
+        catalog=catalog,
+        selected=[app_id],
+        application_dirs=[],
+        path=str(bin_dir),
+        metadata=_metadata(),
+    )
+
+    assert [entry.id for entry in present.manifest.apps] == [app_id]
+    assert rel in [entry.path for entry in present.manifest.apps[0].files]
+    assert not marker.exists()
+
+
+def test_micro_does_not_include_editor_backups_or_buffers(tmp_path: Path) -> None:
+    catalog = load_catalog(user_dir=tmp_path / "no-user-catalog")
+    home = tmp_path / "home"
+    _write_config(home, ".config/micro/settings.json", b"{}\n")
+    _write_config(home, ".config/micro/backups/old.txt", b"backup\n")
+    _write_config(home, ".config/micro/buffers/buffer.txt", b"buffer\n")
+
+    result = run_backup(
+        home=home,
+        output=tmp_path / "micro.tar.gz",
+        catalog=catalog,
+        selected=["micro"],
+        application_dirs=[],
+        path=_fake_path(tmp_path, "micro"),
+        metadata=_metadata(),
+    )
+
+    assert [entry.path for entry in result.manifest.apps[0].files] == [
+        ".config/micro/settings.json"
+    ]
+
+
+def test_git_shared_config_is_optional(tmp_path: Path) -> None:
+    catalog = load_catalog(user_dir=tmp_path / "no-user-catalog")
+    home = tmp_path / "home"
+    _write_config(home, ".gitconfig", b"[user]\nname=Test\n")
+    _write_config(home, ".config/git/ignore", b"*.log\n")
+
+    absent = run_backup(
+        home=home,
+        output=tmp_path / "git-absent.tar.gz",
+        catalog=catalog,
+        selected=["git"],
+        application_dirs=[],
+        path=_fake_path(tmp_path, "git"),
+        metadata=_metadata(),
+    )
+    assert absent.plan.skipped == []
+    assert ".config/git/config" not in [entry.path for entry in absent.manifest.apps[0].files]
+
+    _write_config(home, ".config/git/config", b"[core]\n")
+    present = run_backup(
+        home=home,
+        output=tmp_path / "git-present.tar.gz",
+        catalog=catalog,
+        selected=["git"],
+        application_dirs=[],
+        path=_fake_path(tmp_path, "git"),
+        metadata=_metadata(),
+    )
+    assert ".config/git/config" in [entry.path for entry in present.manifest.apps[0].files]
+
+
+def test_allowed_config_with_embedded_secret_is_preserved(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    content = b'api_key = "secreto-incrustado"\n'
+    _write_config(home, ".config/foo/config.toml", content)
+    result = run_backup(
+        home=home,
+        output=tmp_path / "b.tar.gz",
+        catalog=_catalog(_app()),
+        application_dirs=[],
+        path=_fake_path(tmp_path, "foo"),
+        metadata=_metadata(),
+    )
+
+    with tarfile.open(result.output, "r:gz") as tar:
+        member = tar.extractfile("apps/foo/.config/foo/config.toml")
+        assert member is not None
+        assert member.read() == content

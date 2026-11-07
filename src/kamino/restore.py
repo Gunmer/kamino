@@ -21,15 +21,12 @@ Clasificación de cada archivo del manifiesto, comparando su destino con la entr
 from __future__ import annotations
 
 import hashlib
-import os
-import shutil
 import stat
 import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from uuid import uuid4
 
 from kamino.archive import (
     APPS_DIR,
@@ -37,13 +34,16 @@ from kamino.archive import (
     FileEntry,
     Manifest,
     extract_archive,
+    read_file_from_archive,
     read_manifest,
     verify_archive,
 )
 from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
 from kamino.detect import is_installed
-from kamino.paths import to_absolute
+from kamino.errors import PathError
+from kamino.ghostty import GHOSTTY_APP_ID, MAX_CONFIG_BYTES, absolute_references
+from kamino.paths import SafeHome, to_absolute, to_relative
 from kamino.snapshot import SNAPSHOT_APP_ID, create_snapshot
 
 
@@ -79,6 +79,7 @@ class RestorePlan:
     """
 
     entries: list[RestoreEntry] = field(default_factory=list)
+    notices: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -143,7 +144,15 @@ def run_restore(
         else load_catalog(user_dir=root / ".config" / "kamino" / "apps")
     )
     manifest = read_manifest(backup_file)  # valida format_version (§5.2.1)
-    plan, omitted = _build_plan(manifest, definitions, selected, root, application_dirs, path)
+    plan, omitted = _build_plan(
+        manifest,
+        definitions,
+        selected,
+        root,
+        application_dirs,
+        path,
+        backup_file=backup_file,
+    )
 
     if dry_run:
         return RestoreResult(
@@ -157,18 +166,20 @@ def run_restore(
         )
 
     verify_archive(backup_file, manifest)  # aborta antes de tocar nada (§5.2.6)
+    root.mkdir(parents=True, exist_ok=True)
     changing = [
         entry
         for entry in plan.entries
         if entry.status in (RestoreStatus.NEW, RestoreStatus.DIFFERENT)
     ]
+    _validate_destinations(changing, root)
     with tempfile.TemporaryDirectory(prefix="kamino-restore-") as tmp:
         staging = Path(tmp)
         extract_archive(backup_file, staging)  # staging verificado (§5.2.6)
         snapshot = create_snapshot(
             [entry.destination for entry in changing], home=root, snapshots_dir=snapshots_dir
         )
-        restored = _apply(staging, changing)
+        restored = _apply(staging, changing, home=root)
     return RestoreResult(
         plan=plan,
         manifest=manifest,
@@ -187,38 +198,48 @@ def _build_plan(
     root: Path,
     application_dirs: Sequence[Path] | None,
     path: str | None,
+    *,
+    backup_file: Path,
 ) -> tuple[RestorePlan, list[str]]:
     """Cruza apps instaladas y selección, y clasifica cada archivo (§5.2.2-4).
 
     Devuelve el plan y las rutas omitidas en orden del manifiesto: archivos de
     apps no instaladas, destinos idénticos y destinos de tipo no soportado.
+    Un destino con un enlace intermedio inseguro aborta antes de crear
+    instantáneas o escribir nada.
     """
     entries: list[RestoreEntry] = []
     omitted: list[str] = []
-    for app in manifest.apps:
-        if not _is_app_installed(app, definitions, application_dirs, path):
-            omitted.extend(file.path for file in app.files)
-            continue
-        if selected is not None and app.id not in selected:
-            continue  # instalada pero no seleccionada: se ignora
-        for file in app.files:
-            destination = to_absolute(file.path, home=root)
-            status = _classify(destination, file)
-            entries.append(
-                RestoreEntry(
-                    app_id=app.id,
-                    path=file.path,
-                    destination=destination,
-                    size=file.size,
-                    sha256=file.sha256,
-                    mode=file.mode,
-                    link=file.link,
-                    status=status,
+    safe = SafeHome(root) if root.exists() else None
+    try:
+        for app in manifest.apps:
+            if not _is_app_installed(app, definitions, application_dirs, path, root):
+                omitted.extend(file.path for file in app.files)
+                continue
+            if selected is not None and app.id not in selected:
+                continue  # instalada pero no seleccionada: se ignora
+            for file in app.files:
+                destination = to_absolute(file.path, home=root)
+                status = RestoreStatus.NEW if safe is None else _classify(safe, file.path, file)
+                entries.append(
+                    RestoreEntry(
+                        app_id=app.id,
+                        path=file.path,
+                        destination=destination,
+                        size=file.size,
+                        sha256=file.sha256,
+                        mode=file.mode,
+                        link=file.link,
+                        status=status,
+                    )
                 )
-            )
-            if status in (RestoreStatus.IDENTICAL, RestoreStatus.UNSUPPORTED):
-                omitted.append(file.path)
-    return RestorePlan(entries=entries), list(dict.fromkeys(omitted))
+                if status in (RestoreStatus.IDENTICAL, RestoreStatus.UNSUPPORTED):
+                    omitted.append(file.path)
+    finally:
+        if safe is not None:
+            safe.close()
+    notices = _ghostty_portability_notices(manifest, backup_file, root)
+    return RestorePlan(entries=entries, notices=notices), list(dict.fromkeys(omitted))
 
 
 def _is_app_installed(
@@ -226,6 +247,7 @@ def _is_app_installed(
     definitions: dict[str, AppDefinition],
     application_dirs: Sequence[Path] | None,
     path: str | None,
+    home: Path,
 ) -> bool:
     """Indica si la app del manifiesto está instalada en esta máquina.
 
@@ -238,87 +260,98 @@ def _is_app_installed(
         return True
     definition = definitions.get(app.id)
     return definition is not None and is_installed(
-        definition, application_dirs=application_dirs, path=path
+        definition, home=home, application_dirs=application_dirs, path=path
     )
 
 
-def _classify(destination: Path, entry: FileEntry) -> RestoreStatus:
+def _classify(safe: SafeHome, rel: str, entry: FileEntry) -> RestoreStatus:
     """Compara el destino actual con la entrada del manifiesto y lo clasifica.
 
-    Los enlaces se comparan sin seguirlos (`os.lstat` y `os.readlink`): un
-    destino regular donde el manifiesto declara un enlace (o viceversa) es
-    `DIFFERENT`, y un destino que ni es regular ni es enlace es `UNSUPPORTED`.
+    Los enlaces se comparan sin seguirlos (`lstat` y `readlink`): un destino
+    regular donde el manifiesto declara un enlace (o viceversa) es `DIFFERENT`,
+    y un destino que ni es regular ni es enlace es `UNSUPPORTED`. Un enlace
+    intermedio inseguro se rechaza con `PathError`.
     """
     try:
-        info = os.lstat(destination)
+        info = safe.lstat(rel)
     except FileNotFoundError:
         return RestoreStatus.NEW
     if stat.S_ISLNK(info.st_mode):
         if entry.link is None:
             return RestoreStatus.DIFFERENT  # se espera un archivo regular
         return (
-            RestoreStatus.IDENTICAL
-            if os.readlink(destination) == entry.link
-            else RestoreStatus.DIFFERENT
+            RestoreStatus.IDENTICAL if safe.readlink(rel) == entry.link else RestoreStatus.DIFFERENT
         )
     if stat.S_ISREG(info.st_mode):
         if entry.link is not None:
             return RestoreStatus.DIFFERENT  # se espera un enlace simbólico
-        if entry.sha256 is not None and _sha256_of(destination) == entry.sha256:
+        if entry.sha256 is not None and _sha256_of(safe.read_bytes(rel)) == entry.sha256:
             return RestoreStatus.IDENTICAL
         return RestoreStatus.DIFFERENT
     return RestoreStatus.UNSUPPORTED
 
 
-def _apply(staging: Path, entries: Sequence[RestoreEntry]) -> list[str]:
+def _validate_destinations(entries: Sequence[RestoreEntry], home: Path) -> None:
+    """Rechaza enlaces intermedios antes de crear la instantánea previa."""
+    with SafeHome(home) as safe:
+        for entry in entries:
+            try:
+                safe.lstat(entry.path)
+            except FileNotFoundError:
+                continue
+
+
+def _apply(staging: Path, entries: Sequence[RestoreEntry], *, home: Path) -> list[str]:
     """Escribe cada destino en su ruta final con reemplazo atómico (§5.2.8).
 
-    Los archivos regulares conservan su modo con `os.chmod` y los enlaces
-    simbólicos se recrean. Si dos apps del manifiesto comparten la misma ruta,
-    solo se escribe una vez.
+    Los archivos regulares conservan su modo y los enlaces simbólicos se
+    recrean. Los padres se crean y los destinos se reemplazan mediante
+    descriptores relativos al home, de modo que un enlace intermedio aparecido
+    después de planificar se rechaza sin escribir fuera del home.
     """
     restored: list[str] = []
-    done: set[Path] = set()
-    for entry in entries:
-        if entry.destination in done:
-            continue
-        done.add(entry.destination)
-        source = staging / APPS_DIR / entry.app_id / entry.path
-        entry.destination.parent.mkdir(parents=True, exist_ok=True)
-        if entry.link is not None:
-            _replace_link(entry.destination, entry.link)
-        else:
-            _replace_file(entry.destination, source, entry.mode)
-        restored.append(entry.path)
+    done: set[str] = set()
+    with SafeHome(home) as safe:
+        for entry in entries:
+            if entry.path in done:
+                continue
+            done.add(entry.path)
+            source = staging / APPS_DIR / entry.app_id / entry.path
+            if entry.link is not None:
+                safe.replace_with_symlink(entry.path, entry.link)
+            else:
+                safe.write_file(entry.path, source.read_bytes(), mode=int(entry.mode, 8))
+            restored.append(entry.path)
     return restored
 
 
-def _replace_file(destination: Path, source: Path, mode: str) -> None:
-    """Copia el archivo extraído en un temporal del destino y lo renombra (§6)."""
-    tmp = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
-    try:
-        shutil.copyfile(source, tmp)
-        os.chmod(tmp, int(mode, 8))
-        os.replace(tmp, destination)
-    except Exception:
-        tmp.unlink(missing_ok=True)
-        raise
+def _ghostty_portability_notices(manifest: Manifest, backup_file: Path, home: Path) -> list[str]:
+    """Avisa de rutas absolutas de Ghostty que no apuntan al home de destino."""
+    notices: list[str] = []
+    for app in manifest.apps:
+        if app.id != GHOSTTY_APP_ID:
+            continue
+        for file in app.files:
+            if file.link is not None:
+                continue
+            content = read_file_from_archive(backup_file, app.id, file.path, limit=MAX_CONFIG_BYTES)
+            if content is None:
+                continue
+            try:
+                text = content.decode("utf-8", errors="replace")
+            except Exception:
+                continue
+            for reference in absolute_references(text):
+                try:
+                    to_relative(Path(reference), home=home)
+                except PathError:
+                    notices.append(
+                        "aviso: Ghostty conserva una ruta absoluta que puede "
+                        "requerir ajuste manual tras la restauración"
+                    )
+                    break
+    return list(dict.fromkeys(notices))
 
 
-def _replace_link(destination: Path, link: str) -> None:
-    """Recrea el enlace simbólico en un temporal del destino y lo renombra (§6)."""
-    tmp = destination.with_name(f".{destination.name}.{uuid4().hex}.tmp")
-    try:
-        os.symlink(link, tmp)
-        os.replace(tmp, destination)
-    except Exception:
-        tmp.unlink(missing_ok=True)
-        raise
-
-
-def _sha256_of(source: Path) -> str:
-    digest = hashlib.sha256()
-    with source.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(65536), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
+def _sha256_of(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()

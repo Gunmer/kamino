@@ -1,14 +1,7 @@
-# Definición de ejemplo del catálogo (catálogo inicial: Git, Ghostty, herdr y yazi).
-# Añadir soporte para una app = añadir un archivo TOML en este directorio, sin tocar código.
-
 id = "git"
 name = "Git"
 command = "git"
 search_paths = ["/opt/homebrew/bin", "/usr/local/bin"]
-
-paths = [
-  ".gitconfig",
-  ".config/git/ignore",
-]
-
-exclude = []
+paths = [".gitconfig", ".config/git/ignore"]
+optional_paths = [".config/git/config"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

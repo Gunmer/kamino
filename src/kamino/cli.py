@@ -114,6 +114,7 @@ def backup(
     ] = False,
 ) -> None:
     """Crea un archivo de respaldo con las apps elegidas."""
+    ui.print_privacy_warning()
     try:
         catalog = load_catalog()
         installed = _installed_apps(catalog)

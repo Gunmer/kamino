@@ -1,0 +1,5 @@
+id = "goose"
+name = "Goose"
+command = "goose"
+optional_paths = [".config/goose/config.yaml", ".config/goose/permission.yaml", ".config/goose/prompts"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

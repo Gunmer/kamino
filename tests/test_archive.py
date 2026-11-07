@@ -21,7 +21,9 @@ from kamino.archive import (
     verify_archive,
     write_archive,
 )
+from kamino.catalog.models import AppDefinition
 from kamino.errors import ArchiveError, IntegrityError, VersionError
+from kamino.plan import build_plan
 
 
 def _sha256(data: bytes) -> str:
@@ -411,6 +413,105 @@ def test_file_entry_rejects_absolute_path() -> None:
 def test_file_entry_rejects_dotdot_path() -> None:
     with pytest.raises(ValidationError):
         FileEntry(path="../.ssh", sha256=_sha256(b"x"), size=1, mode="0644")
+
+
+def test_write_archive_rejects_intermediate_symlink_without_reading(tmp_path: Path) -> None:
+    source_root = tmp_path / "home"
+    external = tmp_path / "external"
+    source_root.mkdir()
+    external.mkdir()
+    (external / "config.toml").write_text("secreto\n", encoding="utf-8")
+    (source_root / ".config").symlink_to(external)
+    manifest = _manifest(
+        [
+            {
+                "id": "app",
+                "name": "app",
+                "files": [
+                    {
+                        "path": ".config/config.toml",
+                        "sha256": _sha256(b"secreto\n"),
+                        "size": 8,
+                        "mode": "0644",
+                    }
+                ],
+            }
+        ]
+    )
+    output = tmp_path / "b.tar.gz"
+
+    with pytest.raises(ArchiveError):
+        write_archive(output, manifest, source_root=source_root)
+
+    assert not output.exists()
+
+
+def test_write_archive_preserves_allowed_config_with_embedded_secret(tmp_path: Path) -> None:
+    source_root = tmp_path / "home"
+    content = b'api_key = "secreto-incrustado"\n'
+    manifest = _manifest([_app_with_files(source_root, "app", {"config.toml": content})])
+    output = tmp_path / "b.tar.gz"
+
+    write_archive(output, manifest, source_root=source_root)
+
+    with tarfile.open(output, "r:gz") as tar:
+        member = tar.extractfile("apps/app/config.toml")
+        assert member is not None
+        assert member.read() == content
+
+
+def test_read_file_from_archive_is_bounded(tmp_path: Path) -> None:
+    from kamino.archive import read_file_from_archive
+
+    source_root = tmp_path / "home"
+    manifest = _manifest([_app_with_files(source_root, "app", {"config.toml": b"1234"})])
+    output = tmp_path / "b.tar.gz"
+    write_archive(output, manifest, source_root=source_root)
+
+    assert read_file_from_archive(output, "app", "config.toml", limit=4) == b"1234"
+    assert read_file_from_archive(output, "app", "config.toml", limit=3) is None
+    assert read_file_from_archive(output, "app", "falta", limit=4) is None
+
+
+def test_deduplicated_plan_writes_one_verifiable_member(tmp_path: Path) -> None:
+    source_root = tmp_path / "home"
+    (source_root / ".config" / "app").mkdir(parents=True)
+    content = b"config\n"
+    (source_root / ".config" / "app" / "config.toml").write_bytes(content)
+    app = AppDefinition.model_validate(
+        {
+            "id": "app",
+            "name": "app",
+            "command": "app",
+            "paths": [".config/app", ".config/app/config.toml"],
+        }
+    )
+    plan = build_plan([app], home=source_root)
+    (operation,) = plan.operations
+    manifest = _manifest(
+        [
+            {
+                "id": "app",
+                "name": "app",
+                "files": [
+                    {
+                        "path": operation.path,
+                        "sha256": operation.sha256,
+                        "size": operation.size,
+                        "mode": operation.mode,
+                    }
+                ],
+            }
+        ]
+    )
+    output = tmp_path / "b.tar.gz"
+
+    write_archive(output, manifest, source_root=source_root)
+    verify_archive(output, manifest)
+
+    with tarfile.open(output, "r:gz") as tar:
+        names = [member.name for member in tar.getmembers()]
+    assert names.count("apps/app/.config/app/config.toml") == 1
 
 
 def test_app_entry_and_manifest_models() -> None:

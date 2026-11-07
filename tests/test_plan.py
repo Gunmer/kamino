@@ -16,9 +16,10 @@ from pathlib import Path
 
 import pytest
 
+from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
 from kamino.errors import PathError
-from kamino.plan import Operation, Plan, build_plan, is_excluded
+from kamino.plan import SENSITIVE_PATTERNS, Operation, Plan, build_plan, is_excluded
 
 
 def _app(
@@ -383,6 +384,410 @@ def test_build_plan_rejects_catalog_path_outside_home(tmp_path: Path) -> None:
 
     with pytest.raises(PathError):
         build_plan([definition], home=tmp_path)
+
+
+# --- rutas opcionales, patrones y deduplicación ---
+
+
+def _definition(**overrides: object) -> AppDefinition:
+    data: dict[str, object] = {
+        "id": "foo",
+        "name": "foo",
+        "command": "foo",
+        "paths": [],
+    }
+    data.update(overrides)
+    return AppDefinition.model_validate(data)
+
+
+def test_missing_optional_path_is_not_skipped(tmp_path: Path) -> None:
+    (tmp_path / "config.toml").write_text("x", encoding="utf-8")
+    app = _definition(paths=["config.toml"], optional_paths=["themes"])
+
+    plan = build_plan([app], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == ["config.toml"]
+    assert plan.skipped == []
+
+
+def test_missing_required_path_is_still_skipped_with_optional_paths(tmp_path: Path) -> None:
+    app = _definition(paths=["falta.toml"], optional_paths=["themes"])
+
+    plan = build_plan([app], home=tmp_path)
+
+    assert plan.operations == []
+    assert plan.skipped == ["falta.toml"]
+
+
+def test_optional_pattern_is_expanded_without_following_symlinks(tmp_path: Path) -> None:
+    (tmp_path / ".codex").mkdir()
+    (tmp_path / ".codex" / "uno.config.toml").write_text("a", encoding="utf-8")
+    (tmp_path / ".codex" / "dos.config.toml").write_text("b", encoding="utf-8")
+    (tmp_path / ".codex" / "otro.toml").write_text("c", encoding="utf-8")
+    app = _definition(optional_patterns=[".codex/*.config.toml"])
+
+    plan = build_plan([app], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == [
+        ".codex/dos.config.toml",
+        ".codex/uno.config.toml",
+    ]
+    assert plan.skipped == []
+
+
+def test_optional_pattern_parent_symlink_is_skipped(tmp_path: Path) -> None:
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "uno.config.toml").write_text("a", encoding="utf-8")
+    (tmp_path / ".codex").symlink_to(external)
+    app = _definition(optional_patterns=[".codex/*.config.toml"])
+
+    plan = build_plan([app], home=tmp_path)
+
+    assert plan.operations == []
+    assert plan.skipped == [".codex"]
+
+
+def test_duplicate_paths_are_deduplicated_per_app(tmp_path: Path) -> None:
+    (tmp_path / "config.toml").write_text("x", encoding="utf-8")
+    app = _definition(
+        paths=["config.toml"],
+        optional_paths=["config.toml", "./config.toml"],
+    )
+
+    plan = build_plan([app], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == ["config.toml"]
+
+
+def test_two_apps_keep_their_own_entry_for_the_same_path(tmp_path: Path) -> None:
+    (tmp_path / "config.toml").write_text("x", encoding="utf-8")
+    plan = build_plan(
+        [
+            _definition(id="alpha", command="alpha", paths=["config.toml"]),
+            _definition(id="beta", command="beta", paths=["config.toml"]),
+        ],
+        home=tmp_path,
+    )
+
+    assert [(operation.app_id, operation.path) for operation in plan.operations] == [
+        ("alpha", "config.toml"),
+        ("beta", "config.toml"),
+    ]
+
+
+def test_intermediate_symlink_path_is_skipped_and_not_read(tmp_path: Path) -> None:
+    external = tmp_path / "external"
+    external.mkdir()
+    (external / "config.toml").write_text("secreto", encoding="utf-8")
+    (tmp_path / ".config").symlink_to(external)
+    app = _definition(paths=[".config/config.toml"])
+
+    plan = build_plan([app], home=tmp_path)
+
+    assert plan.operations == []
+    assert plan.skipped == [".config/config.toml"]
+
+
+# --- referencias de Ghostty ---
+
+
+def _ghostty(**overrides: object) -> AppDefinition:
+    data: dict[str, object] = {
+        "id": "ghostty",
+        "name": "Ghostty",
+        "bundle_id": "com.mitchellh.ghostty",
+        "paths": [".config/ghostty/config"],
+    }
+    data.update(overrides)
+    return AppDefinition.model_validate(data)
+
+
+def test_ghostty_follows_nested_relative_config_file(tmp_path: Path) -> None:
+    (tmp_path / ".config" / "ghostty" / "sub").mkdir(parents=True)
+    (tmp_path / ".config" / "ghostty" / "config").write_text(
+        "config-file = sub/uno.conf\n", encoding="utf-8"
+    )
+    (tmp_path / ".config" / "ghostty" / "sub" / "uno.conf").write_text(
+        "config-file = dos.conf\n", encoding="utf-8"
+    )
+    (tmp_path / ".config" / "ghostty" / "sub" / "dos.conf").write_text(
+        "font-size = 13\n", encoding="utf-8"
+    )
+
+    plan = build_plan([_ghostty()], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == [
+        ".config/ghostty/config",
+        ".config/ghostty/sub/uno.conf",
+        ".config/ghostty/sub/dos.conf",
+    ]
+
+
+def test_ghostty_optional_missing_reference_is_not_skipped(tmp_path: Path) -> None:
+    (tmp_path / ".config" / "ghostty").mkdir(parents=True)
+    (tmp_path / ".config" / "ghostty" / "config").write_text(
+        "config-file = ?no-existe.conf\n", encoding="utf-8"
+    )
+
+    plan = build_plan([_ghostty()], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
+    assert plan.skipped == []
+
+
+def test_ghostty_cycle_is_reported_once_and_cut(tmp_path: Path) -> None:
+    (tmp_path / ".config" / "ghostty").mkdir(parents=True)
+    (tmp_path / ".config" / "ghostty" / "config").write_text(
+        "config-file = a.conf\n", encoding="utf-8"
+    )
+    (tmp_path / ".config" / "ghostty" / "a.conf").write_text(
+        "config-file = config\n", encoding="utf-8"
+    )
+
+    plan = build_plan([_ghostty()], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == [
+        ".config/ghostty/config",
+        ".config/ghostty/a.conf",
+    ]
+    assert any("circular" in notice for notice in plan.notices)
+
+
+def test_ghostty_theme_by_name_light_and_dark(tmp_path: Path) -> None:
+    themes = tmp_path / ".config" / "ghostty" / "themes"
+    themes.mkdir(parents=True)
+    (tmp_path / ".config" / "ghostty" / "config").write_text(
+        "theme = light:claro,dark:oscuro\n", encoding="utf-8"
+    )
+    (themes / "claro").write_text("background = #fff\n", encoding="utf-8")
+    (themes / "oscuro").write_text("background = #000\n", encoding="utf-8")
+
+    plan = build_plan([_ghostty()], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == [
+        ".config/ghostty/config",
+        ".config/ghostty/themes/claro",
+        ".config/ghostty/themes/oscuro",
+    ]
+
+
+def test_ghostty_builtin_theme_is_not_an_omission(tmp_path: Path) -> None:
+    (tmp_path / ".config" / "ghostty").mkdir(parents=True)
+    (tmp_path / ".config" / "ghostty" / "config").write_text(
+        "theme = builtin-name\n", encoding="utf-8"
+    )
+
+    plan = build_plan([_ghostty()], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
+    assert plan.skipped == []
+
+
+def test_ghostty_external_reference_is_not_read_or_included(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    (home / ".config" / "ghostty").mkdir(parents=True)
+    external = tmp_path / "external.conf"
+    external.write_text("secret = x\n", encoding="utf-8")
+    (home / ".config" / "ghostty" / "config").write_text(
+        f"config-file = {external}\n", encoding="utf-8"
+    )
+
+    plan = build_plan([_ghostty()], home=home)
+
+    assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
+    assert str(external) in plan.skipped
+    assert any("fuera del home" in notice for notice in plan.notices)
+
+
+def test_ghostty_sensitive_reference_is_reported_without_reading(tmp_path: Path) -> None:
+    (tmp_path / ".config" / "ghostty").mkdir(parents=True)
+    (tmp_path / ".config" / "ghostty" / ".env").write_text("TOKEN=x\n", encoding="utf-8")
+    (tmp_path / ".config" / "ghostty" / "config").write_text(
+        "config-file = .env\n", encoding="utf-8"
+    )
+
+    plan = build_plan([_ghostty()], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
+    assert ".config/ghostty/.env" in plan.skipped
+    assert any("excluida por seguridad" in notice for notice in plan.notices)
+
+
+def test_ghostty_depth_limit_is_reported(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("kamino.plan.MAX_GHOSTTY_DEPTH", 1)
+    (tmp_path / ".config" / "ghostty").mkdir(parents=True)
+    (tmp_path / ".config" / "ghostty" / "config").write_text(
+        "config-file = a.conf\n", encoding="utf-8"
+    )
+    (tmp_path / ".config" / "ghostty" / "a.conf").write_text(
+        "config-file = b.conf\n", encoding="utf-8"
+    )
+    (tmp_path / ".config" / "ghostty" / "b.conf").write_text("font-size = 14\n", encoding="utf-8")
+
+    plan = build_plan([_ghostty()], home=tmp_path)
+
+    assert any("profundidad" in notice for notice in plan.notices)
+
+
+def test_ghostty_reference_already_declared_is_deduplicated(tmp_path: Path) -> None:
+    (tmp_path / ".config" / "ghostty").mkdir(parents=True)
+    (tmp_path / ".config" / "ghostty" / "config").write_text(
+        "config-file = extra.conf\n", encoding="utf-8"
+    )
+    (tmp_path / ".config" / "ghostty" / "extra.conf").write_text("x = 1\n", encoding="utf-8")
+
+    app = _ghostty(optional_paths=[".config/ghostty/extra.conf"])
+    plan = build_plan([app], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations].count(
+        ".config/ghostty/extra.conf"
+    ) == 1
+
+
+def test_sensitive_names_are_excluded_before_reading(tmp_path: Path) -> None:
+    root = tmp_path / ".config" / "foo"
+    (root / ".ssh").mkdir(parents=True)
+    (root / ".aws").mkdir()
+    for name in (".env", ".env.local", ".ssh/config", ".aws/credentials", "hosts.yml"):
+        (root / name).write_text("secreto\n", encoding="utf-8")
+    (root / "config.toml").write_text("allowed = true\n", encoding="utf-8")
+    app = _definition(paths=[".config/foo"], exclude=list(SENSITIVE_PATTERNS))
+
+    plan = build_plan([app], home=tmp_path)
+
+    assert [operation.path for operation in plan.operations] == [".config/foo/config.toml"]
+
+
+def test_ghostty_four_global_variants_and_xdg(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    for base in (".config/ghostty", "Library/Application Support/com.mitchellh.ghostty"):
+        for name in ("config", "config.ghostty"):
+            target = home / base / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text("font-size = 14\n", encoding="utf-8")
+    xdg = home / "xdg"
+    for name in ("config", "config.ghostty"):
+        target = xdg / "ghostty" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("font-size = 15\n", encoding="utf-8")
+    (xdg / "ghostty" / "themes").mkdir()
+    (xdg / "ghostty" / "themes" / "mi-tema").write_text("background = #fff\n")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    ghostty = load_catalog(user_dir=tmp_path / "no-user-catalog")["ghostty"]
+
+    plan = build_plan([ghostty], home=home)
+
+    paths = {operation.path for operation in plan.operations}
+    assert ".config/ghostty/config" in paths
+    assert ".config/ghostty/config.ghostty" in paths
+    assert "Library/Application Support/com.mitchellh.ghostty/config" in paths
+    assert "Library/Application Support/com.mitchellh.ghostty/config.ghostty" in paths
+    assert "xdg/ghostty/config" in paths
+    assert "xdg/ghostty/config.ghostty" in paths
+    assert "xdg/ghostty/themes/mi-tema" in paths
+
+
+def test_ghostty_historical_required_paths_keep_omission_semantics(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    target = home / ".config" / "ghostty" / "config.ghostty"
+    target.parent.mkdir(parents=True)
+    target.write_text("font-size = 14\n", encoding="utf-8")
+    ghostty = load_catalog(user_dir=tmp_path / "no-user-catalog")["ghostty"]
+
+    plan = build_plan([ghostty], home=home)
+
+    assert [operation.path for operation in plan.operations] == [".config/ghostty/config.ghostty"]
+    assert ".config/ghostty/config" in plan.skipped
+    assert "Library/Application Support/com.mitchellh.ghostty/config" in plan.skipped
+
+
+def test_ghostty_reference_with_intermediate_symlink_is_not_read(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    external = tmp_path / "external"
+    home.mkdir()
+    external.mkdir()
+    (external / "secreto.conf").write_text("secret = x\n", encoding="utf-8")
+    (home / ".config" / "ghostty").mkdir(parents=True)
+    (home / ".config" / "ghostty" / "config").write_text(
+        "config-file = sub/secreto.conf\n", encoding="utf-8"
+    )
+    (home / ".config" / "ghostty" / "sub").symlink_to(external)
+
+    plan = build_plan([_ghostty()], home=home)
+
+    assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
+    assert ".config/ghostty/sub/secreto.conf" in plan.skipped
+
+
+def test_herdr_env_path_inside_home_is_included(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".config" / "herdr").mkdir(parents=True)
+    (home / ".config" / "herdr" / "config.toml").write_text("[theme]\n")
+    (home / ".config" / "herdr" / "plugins" / "config").mkdir(parents=True)
+    custom = home / "custom" / "herdr.toml"
+    custom.parent.mkdir()
+    custom.write_text("[keys]\n")
+    monkeypatch.setenv("HERDR_CONFIG_PATH", str(custom))
+    app = _definition(
+        id="herdr",
+        command="herdr",
+        paths=[".config/herdr/config.toml", ".config/herdr/plugins/config"],
+        env_paths=["HERDR_CONFIG_PATH"],
+    )
+
+    plan = build_plan([app], home=home)
+
+    assert "custom/herdr.toml" in [operation.path for operation in plan.operations]
+
+
+def test_herdr_external_env_path_is_reported_without_reading(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".config" / "herdr").mkdir(parents=True)
+    (home / ".config" / "herdr" / "config.toml").write_text("[theme]\n")
+    (home / ".config" / "herdr" / "plugins" / "config").mkdir(parents=True)
+    external = tmp_path / "external.toml"
+    external.write_text("[keys]\n")
+    monkeypatch.setenv("HERDR_CONFIG_PATH", str(external))
+    app = _definition(
+        id="herdr",
+        command="herdr",
+        paths=[".config/herdr/config.toml", ".config/herdr/plugins/config"],
+        env_paths=["HERDR_CONFIG_PATH"],
+    )
+
+    plan = build_plan([app], home=home)
+
+    assert "custom" not in " ".join(operation.path for operation in plan.operations)
+    assert "HERDR_CONFIG_PATH fuera del home" in plan.skipped
+
+
+def test_herdr_xdg_path_inside_and_outside_home(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".config" / "herdr").mkdir(parents=True)
+    (home / ".config" / "herdr" / "config.toml").write_text("[theme]\n")
+    (home / ".config" / "herdr" / "plugins" / "config").mkdir(parents=True)
+    xdg = home / "xdg"
+    target = xdg / "herdr" / "config.toml"
+    target.parent.mkdir(parents=True)
+    target.write_text("[theme]\n")
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(xdg))
+    app = _definition(
+        id="herdr",
+        command="herdr",
+        paths=[".config/herdr/config.toml", ".config/herdr/plugins/config"],
+        xdg_paths=["herdr/config.toml"],
+    )
+
+    plan = build_plan([app], home=home)
+    assert "xdg/herdr/config.toml" in [operation.path for operation in plan.operations]
+
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "external-xdg"))
+    plan = build_plan([app], home=home)
+    assert "XDG_CONFIG_HOME fuera del home" in plan.skipped
 
 
 def test_walk_unreadable_dir_recorded(tmp_path: Path) -> None:

@@ -187,6 +187,28 @@ def test_overlapping_paths_are_deduplicated(tmp_path: Path) -> None:
     assert [entry.path for entry in app.files] == ["dir/a.toml"]
 
 
+def test_intermediate_symlink_is_not_read_or_snapshotted(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    external = tmp_path / "external"
+    home.mkdir()
+    external.mkdir()
+    (external / "secreto.txt").write_text("secreto\n", encoding="utf-8")
+    (home / ".config").symlink_to(external)
+    snapshots = tmp_path / "snapshots"
+
+    snapshot = create_snapshot(
+        [home / ".config" / "secreto.txt"],
+        home=home,
+        snapshots_dir=snapshots,
+        timestamp=TIMESTAMP,
+    )
+
+    assert snapshot is not None
+    manifest = read_manifest(snapshot)
+    (app,) = manifest.apps
+    assert app.files == []
+
+
 # --- validación de entradas ---
 
 

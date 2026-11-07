@@ -1,0 +1,6 @@
+id = "gentle-shell"
+name = "Gentle Shell"
+command = "gentle-shell"
+command_aliases = ["gentle", "gsh"]
+optional_paths = [".gentle-shell/config.json", ".gentle-shell/agent", ".pi/gentle-ai"]
+exclude = ["**/node_modules", "**/node_modules/**", "**/bin", "**/bin/**", "**/lib", "**/lib/**", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

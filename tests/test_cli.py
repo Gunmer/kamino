@@ -192,6 +192,72 @@ def test_backup_interactive_selects_all(monkeypatch) -> None:
     assert calls["selected"] == ["git"]
 
 
+@pytest.mark.parametrize("is_tty", [False, True])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_backup_prints_privacy_warning_without_confirmation(
+    monkeypatch, is_tty: bool, dry_run: bool
+) -> None:
+    fake_app = SimpleNamespace(id="git", name="Git")
+    monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
+    monkeypatch.setattr(cli, "is_installed", lambda app: True)
+    monkeypatch.setattr(cli, "sys", _FakeSys(is_tty))
+    monkeypatch.setattr(cli.ui, "select_apps", lambda choices: [c[0] for c in choices])
+    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: _fake_backup_result())
+    args = ["backup", "--apps", "git"]
+    if dry_run:
+        args.append("--dry-run")
+
+    result = runner.invoke(cli.app, args)
+
+    assert result.exit_code == 0
+    plain = Text.from_ansi(result.output).plain.lower()
+    assert "no está cifrado" in plain
+    assert "secretos" in plain
+
+
+def test_user_catalog_definition_takes_precedence_in_cli(tmp_path, monkeypatch) -> None:
+    apps_dir = tmp_path / ".config" / "kamino" / "apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "git.toml").write_text(
+        'id = "git"\nname = "Git personalizado"\ncommand = "git"\n'
+        'paths = [".gitconfig-personal"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(cli, "is_installed", lambda app: True)
+    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    calls: dict = {}
+
+    def fake_run_backup(**kwargs):
+        calls.update(kwargs)
+        return _fake_backup_result()
+
+    monkeypatch.setattr(cli, "run_backup", fake_run_backup)
+    result = runner.invoke(cli.app, ["backup", "--apps", "git"])
+
+    assert result.exit_code == 0
+    assert calls["catalog"]["git"].name == "Git personalizado"
+    assert calls["catalog"]["git"].paths == [".gitconfig-personal"]
+
+
+def test_user_catalog_path_confinement_is_enforced_in_cli(tmp_path, monkeypatch) -> None:
+    apps_dir = tmp_path / ".config" / "kamino" / "apps"
+    apps_dir.mkdir(parents=True)
+    (apps_dir / "git.toml").write_text(
+        'id = "git"\nname = "Git personalizado"\ncommand = "git"\npaths = ["/etc/passwd"]\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("HOME", str(tmp_path))
+    called: list[str] = []
+    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: called.append("backup"))
+    result = runner.invoke(cli.app, ["backup", "--apps", "git"])
+
+    assert result.exit_code == 1
+    assert called == []
+    assert "ruta absoluta" in result.output
+
+
 def test_backup_error_exit_1(monkeypatch) -> None:
     monkeypatch.setattr(cli, "load_catalog", lambda: {})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)

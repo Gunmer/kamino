@@ -1,12 +1,7 @@
-# Definición de herdr (diseño técnico §4.1). Logs y estado de sesión se excluyen
-# porque no son configuración (§6: "Estado frente a configuración").
-
 id = "herdr"
 name = "herdr"
 command = "herdr"
-exclude = ["**/*.log", "**/session.json"]
-
-paths = [
-  ".config/herdr/config.toml",
-  ".config/herdr/plugins/config",
-]
+paths = [".config/herdr/config.toml", ".config/herdr/plugins/config"]
+env_paths = ["HERDR_CONFIG_PATH"]
+xdg_paths = ["herdr/config.toml"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

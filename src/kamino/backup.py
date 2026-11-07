@@ -77,9 +77,9 @@ def run_backup(
         else load_catalog(user_dir=root / ".config" / "kamino" / "apps")
     )
 
-    apps = _select_installed(definitions, selected, application_dirs, path)
+    apps = _select_installed(definitions, selected, application_dirs, path, root)
     plan = build_plan(apps, home=root)
-    manifest = _build_manifest(apps, plan, application_dirs, metadata)
+    manifest = _build_manifest(apps, plan, application_dirs, metadata, root)
 
     if dry_run:
         return BackupResult(plan=plan, manifest=manifest, output=None, dry_run=True)
@@ -94,6 +94,7 @@ def _select_installed(
     selected: list[str] | None,
     application_dirs: Sequence[Path] | None,
     path: str | None,
+    home: Path,
 ) -> list[AppDefinition]:
     """Cruza el catálogo con la selección y las apps instaladas, por orden de id."""
     wanted = set(selected) if selected is not None else None
@@ -102,7 +103,7 @@ def _select_installed(
         app = definitions[app_id]
         if wanted is not None and app.id not in wanted:
             continue
-        if is_installed(app, application_dirs=application_dirs, path=path):
+        if is_installed(app, home=home, application_dirs=application_dirs, path=path):
             apps.append(app)
     return apps
 
@@ -112,6 +113,7 @@ def _build_manifest(
     plan: Plan,
     application_dirs: Sequence[Path] | None,
     metadata: dict[str, str] | None,
+    home: Path,
 ) -> Manifest:
     """Monta el manifiesto del respaldo (§4.2) a partir del plan ya calculado."""
     meta = metadata or {}
@@ -132,7 +134,7 @@ def _build_manifest(
             id=app.id,
             name=app.name,
             bundle_id=app.bundle_id,
-            version=detect_version(app, application_dirs=application_dirs),
+            version=detect_version(app, home=home, application_dirs=application_dirs),
             files=files_by_app.get(app.id, []),
         )
         for app in apps

@@ -1,0 +1,5 @@
+id = "copilot-cli"
+name = "Copilot CLI"
+command = "copilot"
+optional_paths = [".copilot/settings.json", ".copilot/instructions.md", ".copilot/agents", ".copilot/skills", ".copilot/mcp.json"]
+exclude = ["**/config.json", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

@@ -1,0 +1,6 @@
+id = "codex"
+name = "Codex"
+command = "codex"
+optional_paths = [".codex/config.toml", ".codex/AGENTS.md", ".codex/themes", ".agents/skills"]
+optional_patterns = [".codex/*.config.toml"]
+exclude = ["**/rollouts", "**/rollouts/**", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

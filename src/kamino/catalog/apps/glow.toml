@@ -1,0 +1,5 @@
+id = "glow"
+name = "Glow"
+command = "glow"
+optional_paths = ["Library/Preferences/glow/glow.yml", "Library/Preferences/glow/glow.yaml", ".config/glow/glow.yml", ".config/glow/glow.yaml"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]
