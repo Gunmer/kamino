@@ -1,15 +1,5 @@
-# Configuración de yazi. Los plugins NO se respaldan: son paquetes clonados
-# que se reinstalan con el gestor de yazi (misma lógica que las extensiones de
-# editores, fuera del alcance de la v1 — diseño funcional §3.12).
-
 id = "yazi"
 name = "yazi"
 command = "yazi"
-
-paths = [
-  ".config/yazi/yazi.toml",
-  ".config/yazi/keymap.toml",
-  ".config/yazi/theme.toml",
-]
-
-exclude = []
+paths = [".config/yazi/yazi.toml", ".config/yazi/keymap.toml", ".config/yazi/theme.toml"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

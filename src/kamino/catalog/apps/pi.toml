@@ -1,0 +1,5 @@
+id = "pi"
+name = "Pi"
+command = "pi"
+optional_paths = [".pi/agent/settings.json", ".pi/agent/keybindings.json", ".pi/agent/themes", ".pi/agent/AGENTS.md", ".pi/agent/prompts", ".pi/agent/skills", ".pi/agent/mcp.json"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

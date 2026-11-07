@@ -6,6 +6,9 @@ catálogo embebido con el directorio del usuario (§6).
 
 from __future__ import annotations
 
+from importlib.resources import files
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -77,6 +80,47 @@ def test_empty_paths_rejected() -> None:
         AppDefinition.model_validate(_definition(paths=[]))
 
 
+def test_definition_with_only_optional_paths_is_valid() -> None:
+    definition = AppDefinition.model_validate(_definition(paths=[], optional_paths=[".config/foo"]))
+    assert definition.paths == []
+    assert definition.optional_paths == [".config/foo"]
+
+
+def test_definition_with_only_optional_patterns_is_valid() -> None:
+    definition = AppDefinition.model_validate(
+        _definition(paths=[], optional_patterns=[".codex/*.config.toml"])
+    )
+    assert definition.optional_patterns == [".codex/*.config.toml"]
+
+
+@pytest.mark.parametrize(
+    "pattern",
+    ["*.toml", "**/*.toml", "/tmp/*.toml", "../*.toml", ".codex/sub/*/*.toml", ".codex/fixed.toml"],
+)
+def test_unsafe_or_unbounded_pattern_rejected(pattern: str) -> None:
+    with pytest.raises(ValidationError):
+        AppDefinition.model_validate(_definition(paths=[], optional_patterns=[pattern]))
+
+
+def test_install_marker_must_be_relative() -> None:
+    definition = AppDefinition.model_validate(_definition(install_marker=".oh-my-zsh/oh-my-zsh.sh"))
+    assert definition.install_marker == ".oh-my-zsh/oh-my-zsh.sh"
+    with pytest.raises(ValidationError):
+        AppDefinition.model_validate(_definition(install_marker="../fuera"))
+
+
+def test_command_aliases_and_env_paths_are_validated() -> None:
+    definition = AppDefinition.model_validate(
+        _definition(command_aliases=["cave"], env_paths=["HERDR_CONFIG_PATH"])
+    )
+    assert definition.command_aliases == ["cave"]
+    assert definition.env_paths == ["HERDR_CONFIG_PATH"]
+    with pytest.raises(ValidationError):
+        AppDefinition.model_validate(_definition(command_aliases=[" "]))
+    with pytest.raises(ValidationError):
+        AppDefinition.model_validate(_definition(env_paths=["no-valido"]))
+
+
 def test_absolute_path_rejected() -> None:
     with pytest.raises(ValidationError):
         AppDefinition.model_validate(_definition(paths=["/Users/alguien/.config/foo"]))
@@ -111,6 +155,66 @@ def test_embedded_catalog_has_example(tmp_path, monkeypatch) -> None:
     catalog = load_catalog()
     assert "git" in catalog
     assert catalog["git"].command == "git"
+
+
+def test_embedded_catalog_has_all_new_tools(tmp_path) -> None:
+    catalog = load_catalog(user_dir=tmp_path / "no-existe")
+    assert {
+        "opencode",
+        "claude-code",
+        "codex",
+        "gemini-cli",
+        "copilot-cli",
+        "pi",
+        "aider",
+        "goose",
+        "gentle-shell",
+        "gentle-ai",
+        "gga",
+        "openspec",
+        "caveman",
+        "lazygit",
+        "micro",
+        "navi",
+        "glow",
+        "bat",
+        "eza",
+        "fd",
+        "github-cli",
+        "oh-my-zsh",
+    } <= set(catalog)
+
+
+def test_oh_my_zsh_requires_zsh_and_marker() -> None:
+    from kamino.catalog import AppDefinition
+
+    definition = AppDefinition.model_validate(
+        {
+            "id": "oh-my-zsh",
+            "name": "Oh My Zsh",
+            "command": "zsh",
+            "install_marker": ".oh-my-zsh/oh-my-zsh.sh",
+            "optional_paths": [".zshrc"],
+        }
+    )
+    assert definition.install_marker == ".oh-my-zsh/oh-my-zsh.sh"
+
+
+def test_caveman_has_a_single_entry_with_alias() -> None:
+    catalog = load_catalog(user_dir=Path("/no-existe"))
+    caveman = catalog["caveman"]
+    assert caveman.command == "caveman"
+    assert "cave" in caveman.command_aliases
+
+
+def test_package_includes_every_embedded_definition() -> None:
+    names = {
+        path.name
+        for path in files("kamino.catalog").joinpath("apps").iterdir()
+        if path.name.endswith(".toml")
+    }
+    catalog = load_catalog(user_dir=Path("/no-existe"))
+    assert {f"{app_id}.toml" for app_id in catalog} <= names
 
 
 def test_default_user_catalog_from_home(tmp_path, monkeypatch) -> None:

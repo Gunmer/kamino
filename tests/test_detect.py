@@ -19,6 +19,8 @@ def _definition(
     *,
     bundle_id: str | None = None,
     command: str | None = None,
+    command_aliases: list[str] | None = None,
+    install_marker: str | None = None,
     search_paths: list[str] | None = None,
 ) -> AppDefinition:
     return AppDefinition.model_validate(
@@ -27,6 +29,8 @@ def _definition(
             "name": "Foo",
             "bundle_id": bundle_id,
             "command": command,
+            "command_aliases": command_aliases or [],
+            "install_marker": install_marker,
             "search_paths": search_paths or [],
             "paths": [".config/foo/config.toml"],
         }
@@ -177,6 +181,67 @@ def test_plist_with_invalid_value_does_not_crash(tmp_path: Path) -> None:
     app = _definition(bundle_id="com.example.foo")
     assert is_installed(app, application_dirs=[apps_dir]) is False
     assert detect_version(app, application_dirs=[apps_dir]) is None
+
+
+# --- marcador de instalación y alias ---
+
+
+def test_marker_required_alongside_command(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    home = tmp_path / "home"
+    bin_dir.mkdir()
+    home.mkdir()
+    _make_executable(bin_dir, "zsh")
+    app = _definition(command="zsh", install_marker=".oh-my-zsh/oh-my-zsh.sh")
+
+    assert is_installed(app, home=home, path=str(bin_dir)) is False
+
+    marker = home / ".oh-my-zsh" / "oh-my-zsh.sh"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("", encoding="utf-8")
+    assert is_installed(app, home=home, path=str(bin_dir)) is True
+
+
+def test_marker_in_intermediate_symlink_is_not_installed(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    home = tmp_path / "home"
+    external = tmp_path / "external"
+    bin_dir.mkdir()
+    home.mkdir()
+    external.mkdir()
+    _make_executable(bin_dir, "zsh")
+    (external / "oh-my-zsh.sh").write_text("", encoding="utf-8")
+    (home / ".oh-my-zsh").symlink_to(external)
+    app = _definition(command="zsh", install_marker=".oh-my-zsh/oh-my-zsh.sh")
+
+    assert is_installed(app, home=home, path=str(bin_dir)) is False
+
+
+def test_command_alias_is_detected_without_executing(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    binary = _make_executable(bin_dir, "cave")
+    binary.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+    binary.chmod(0o755)
+    app = _definition(command="caveman", command_aliases=["cave"])
+
+    assert is_installed(app, path=str(bin_dir)) is True
+
+
+def test_marker_uses_injected_home_not_real_home(tmp_path: Path, monkeypatch) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _make_executable(bin_dir, "zsh")
+    real_home = tmp_path / "real-home"
+    real_home.mkdir()
+    marker = real_home / ".oh-my-zsh" / "oh-my-zsh.sh"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(real_home))
+    app = _definition(command="zsh", install_marker=".oh-my-zsh/oh-my-zsh.sh")
+
+    assert is_installed(app, home=tmp_path / "fake-home", path=str(bin_dir)) is False
+    assert is_installed(app, home=real_home, path=str(bin_dir)) is True
 
 
 def test_unreadable_application_dir_is_ignored(tmp_path: Path) -> None:

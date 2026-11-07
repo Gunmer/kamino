@@ -13,16 +13,18 @@ import hashlib
 import io
 import os
 import re
+import shutil
 import stat
 import tarfile
 from pathlib import Path
 
 import pytest
 
+from kamino import restore as restore_module
 from kamino.archive import FORMAT_VERSION, MANIFEST_NAME, Manifest, read_manifest, write_archive
 from kamino.backup import run_backup
 from kamino.catalog.models import AppDefinition
-from kamino.errors import IntegrityError, VersionError
+from kamino.errors import IntegrityError, PathError, VersionError
 from kamino.restore import RestoreResult, RestoreStatus, run_restore
 
 
@@ -493,3 +495,150 @@ def test_snapshot_can_undo_restore(tmp_path: Path) -> None:
 
     assert (home / "cfg.toml").read_bytes() == b"local\n"
     assert second.restored == ["cfg.toml"]
+
+
+# --- confinamiento y compatibilidad ---
+
+
+def test_intermediate_symlink_destination_is_rejected_before_snapshot(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    external = tmp_path / "external"
+    home.mkdir()
+    external.mkdir()
+    (home / ".config").symlink_to(external)
+    backup, catalog = _backup(
+        tmp_path,
+        apps={"foo": [".config/foo/config.toml"]},
+        files={".config/foo/config.toml": b"nuevo\n"},
+    )
+
+    with pytest.raises(PathError):
+        _run(tmp_path, backup, home, catalog)
+
+    assert not (external / "foo" / "config.toml").exists()
+    assert not (tmp_path / "snapshots").exists()
+
+
+def test_directory_replaced_by_symlink_during_restore_is_rejected(
+    tmp_path: Path, monkeypatch
+) -> None:
+    home = tmp_path / "home"
+    external = tmp_path / "external"
+    home.mkdir()
+    external.mkdir()
+    _write_file(home, ".config/foo/config.toml", b"viejo\n")
+    backup, catalog = _backup(
+        tmp_path,
+        apps={"foo": [".config/foo/config.toml"]},
+        files={".config/foo/config.toml": b"nuevo\n"},
+    )
+    original = restore_module.create_snapshot
+
+    def swap_after_snapshot(paths, **kwargs):
+        snapshot = original(paths, **kwargs)
+        shutil.rmtree(home / ".config")
+        (home / ".config").symlink_to(external)
+        return snapshot
+
+    monkeypatch.setattr(restore_module, "create_snapshot", swap_after_snapshot)
+
+    with pytest.raises(PathError):
+        _run(tmp_path, backup, home, catalog)
+
+    assert not (external / "foo" / "config.toml").exists()
+
+
+def test_old_format_backup_snapshots_now_excluded_destination(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, ".config/foo/.env", b"TOKEN=actual\n")
+    backup, catalog = _backup(
+        tmp_path,
+        apps={"foo": [".config/foo/.env"]},
+        files={".config/foo/.env": b"TOKEN=nuevo\n"},
+    )
+
+    result = _run(tmp_path, backup, home, catalog)
+
+    assert (home / ".config/foo/.env").read_bytes() == b"TOKEN=nuevo\n"
+    assert result.snapshot is not None
+    snapshot_manifest = read_manifest(result.snapshot)
+    (app,) = snapshot_manifest.apps
+    by_path = {entry.path: entry for entry in app.files}
+    assert by_path[".config/foo/.env"].sha256 == hashlib.sha256(b"TOKEN=actual\n").hexdigest()
+
+
+def test_restore_marker_uses_injected_home_not_real_home(tmp_path: Path, monkeypatch) -> None:
+    app = AppDefinition.model_validate(
+        {
+            "id": "oh-my-zsh",
+            "name": "Oh My Zsh",
+            "command": "zsh",
+            "install_marker": ".oh-my-zsh/oh-my-zsh.sh",
+            "paths": [".zshrc"],
+        }
+    )
+    catalog = {"oh-my-zsh": app}
+    source = tmp_path / "source"
+    _write_file(source, ".oh-my-zsh/oh-my-zsh.sh", b"")
+    _write_file(source, ".zshrc", b"export ZSH=1\n")
+    backup = tmp_path / "backup.tar.gz"
+    run_backup(
+        home=source,
+        output=backup,
+        catalog=catalog,
+        application_dirs=[],
+        path=_fake_path(tmp_path / "source-path", "zsh"),
+        metadata=_metadata(),
+    )
+    target = tmp_path / "target"
+    target.mkdir()
+    real_home = tmp_path / "real-home"
+    _write_file(real_home, ".oh-my-zsh/oh-my-zsh.sh", b"")
+    monkeypatch.setenv("HOME", str(real_home))
+    bin_path = _fake_path(tmp_path / "target-path", "zsh")
+
+    omitted = run_restore(
+        backup,
+        home=target,
+        catalog=catalog,
+        application_dirs=[],
+        path=bin_path,
+        snapshots_dir=tmp_path / "snapshots",
+    )
+    assert omitted.omitted == [".zshrc"]
+    assert not (target / ".zshrc").exists()
+
+    _write_file(target, ".oh-my-zsh/oh-my-zsh.sh", b"")
+    restored = run_restore(
+        backup,
+        home=target,
+        catalog=catalog,
+        application_dirs=[],
+        path=bin_path,
+        snapshots_dir=tmp_path / "snapshots",
+    )
+    assert restored.restored == [".zshrc"]
+
+
+def test_ghostty_absolute_reference_warns_on_restore_and_dry_run(tmp_path: Path) -> None:
+    reference = "/Users/otro/.config/ghostty/extra.conf"
+    backup, catalog = _backup(
+        tmp_path,
+        apps={"ghostty": [".config/ghostty/config"]},
+        files={".config/ghostty/config": f"config-file = {reference}\n".encode()},
+    )
+    home = tmp_path / "home"
+    home.mkdir()
+
+    dry = _run(tmp_path, backup, home, catalog, installed=("ghostty",), dry_run=True)
+
+    assert dry.plan.notices
+    assert reference not in " ".join(dry.plan.notices)
+    assert not (home / ".config").exists()
+
+    result = _run(tmp_path, backup, home, catalog, installed=("ghostty",))
+
+    assert result.plan.notices
+    assert (home / ".config/ghostty/config").read_bytes() == (
+        f"config-file = {reference}\n".encode()
+    )

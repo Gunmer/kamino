@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from kamino.errors import PathError
-from kamino.paths import to_absolute, to_relative
+from kamino.paths import SafeHome, to_absolute, to_relative
 
 # --- to_absolute ---
 
@@ -103,3 +103,76 @@ def test_to_relative_rejects_parent_escape_disguised(tmp_path: Path) -> None:
 def test_to_relative_normalizes_inner_dotdot(tmp_path: Path) -> None:
     """`home/a/../b` sigue dentro del home y se normaliza a `b`."""
     assert to_relative(tmp_path / "a" / ".." / "b", home=tmp_path) == Path("b")
+
+
+# --- acceso seguro anclado al home ---
+
+
+def test_safe_home_reads_normal_file(tmp_path: Path) -> None:
+    (tmp_path / ".config" / "foo").mkdir(parents=True)
+    (tmp_path / ".config" / "foo" / "config.toml").write_text("a = 1\n", encoding="utf-8")
+
+    with SafeHome(tmp_path) as safe:
+        assert safe.read_bytes(".config/foo/config.toml") == b"a = 1\n"
+
+
+def test_safe_home_normalizes_dot_components(tmp_path: Path) -> None:
+    (tmp_path / "a").mkdir()
+    (tmp_path / "a" / "b.txt").write_text("b", encoding="utf-8")
+
+    with SafeHome(tmp_path) as safe:
+        assert safe.read_bytes("./a/./b.txt") == b"b"
+
+
+@pytest.mark.parametrize("path", ["", "/etc/passwd", "../fuera.txt", "a/../../fuera.txt", "~/x"])
+def test_safe_home_rejects_escaping_paths(tmp_path: Path, path: str) -> None:
+    with SafeHome(tmp_path) as safe, pytest.raises(PathError):
+        safe.read_bytes(path)
+
+
+def test_safe_home_rejects_intermediate_symlink_without_reading(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    external = tmp_path / "external"
+    home.mkdir()
+    external.mkdir()
+    (external / "secret.txt").write_text("secreto", encoding="utf-8")
+    (home / ".config").symlink_to(external)
+
+    with SafeHome(home) as safe:
+        with pytest.raises(PathError):
+            safe.read_bytes(".config/secret.txt")
+        with pytest.raises(PathError):
+            safe.lstat(".config/secret.txt")
+
+
+def test_safe_home_preserves_final_symlink_without_following(tmp_path: Path) -> None:
+    (tmp_path / "real.txt").write_text("contenido", encoding="utf-8")
+    (tmp_path / "enlace.txt").symlink_to("real.txt")
+
+    with SafeHome(tmp_path) as safe:
+        assert safe.lstat("enlace.txt").st_mode & 0o170000 == 0o120000
+        assert safe.readlink("enlace.txt") == "real.txt"
+        with pytest.raises(PathError):
+            safe.read_bytes("enlace.txt")
+
+
+def test_safe_home_rejects_intermediate_symlink_on_write(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    external = tmp_path / "external"
+    home.mkdir()
+    external.mkdir()
+    (home / ".config").symlink_to(external)
+
+    with SafeHome(home) as safe, pytest.raises(PathError):
+        safe.write_file(".config/nuevo.txt", b"contenido")
+
+    assert not (external / "nuevo.txt").exists()
+
+
+def test_safe_home_write_replaces_atomically_and_preserves_mode(tmp_path: Path) -> None:
+    with SafeHome(tmp_path) as safe:
+        safe.write_file(".config/foo/config.toml", b"nuevo", mode=0o600)
+
+    target = tmp_path / ".config" / "foo" / "config.toml"
+    assert target.read_bytes() == b"nuevo"
+    assert target.stat().st_mode & 0o777 == 0o600

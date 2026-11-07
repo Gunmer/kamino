@@ -2,12 +2,14 @@
 
 API pública:
 
-- `is_installed(app)`: True si la app está instalada, por `bundle_id` o `command`.
+- `is_installed(app, home=...)`: True si la app está instalada, por `bundle_id`
+  o por `command`, y su marcador opcional existe dentro del home.
 - `detect_version(app)`: versión de una app `.app` desde su `Info.plist`, o `None`.
 
 Mecanismos (diseño técnico §6): para apps con `.app` se lee `Info.plist` buscando
 `CFBundleIdentifier` en `/Applications`, `~/Applications` y `/System/Applications`;
 para herramientas de terminal se usa `shutil.which` sobre el PATH y `search_paths`.
+Los comandos se localizan, nunca se ejecutan.
 
 La detección es "best-effort": un `Info.plist` ilegible o corrupto, o un directorio
 sin permiso de lectura, se trata como "app no detectada", nunca como un error. La
@@ -20,29 +22,37 @@ from __future__ import annotations
 import os
 import plistlib
 import shutil
+import stat
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 from kamino.catalog.models import AppDefinition
+from kamino.errors import PathError
+from kamino.paths import SafeHome
 
 
 def is_installed(
     app: AppDefinition,
     *,
+    home: Path | None = None,
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
 ) -> bool:
     """Indica si la app está instalada, por `bundle_id` o por `command`.
 
-    `application_dirs` y `path` se inyectan en las pruebas para no tocar las
-    carpetas reales; por defecto usan las ubicaciones estándar y el PATH.
+    `home` se usa para validar `install_marker` sin tocar el HOME real. Las
+    pruebas inyectan también `application_dirs` y `path`.
     """
+    if app.install_marker is not None and not _marker_exists(app.install_marker, home):
+        return False
     has_bundle = (
         app.bundle_id is not None
-        and _find_app_bundle(app.bundle_id, _application_dirs(application_dirs)) is not None
+        and _find_app_bundle(app.bundle_id, _application_dirs(application_dirs, home)) is not None
     )
-    has_command = (
-        app.command is not None and _find_command(app.command, app.search_paths, path) is not None
+    commands = [app.command, *app.command_aliases]
+    has_command = any(
+        command is not None and _find_command(command, app.search_paths, path) is not None
+        for command in commands
     )
     return has_bundle or has_command
 
@@ -50,23 +60,36 @@ def is_installed(
 def detect_version(
     app: AppDefinition,
     *,
+    home: Path | None = None,
     application_dirs: Sequence[Path] | None = None,
 ) -> str | None:
     """Devuelve la versión de una app `.app`, o `None` si no aplica o no aparece."""
     if not app.bundle_id:
         return None
-    bundle = _find_app_bundle(app.bundle_id, _application_dirs(application_dirs))
+    bundle = _find_app_bundle(app.bundle_id, _application_dirs(application_dirs, home))
     return _read_version(bundle) if bundle is not None else None
 
 
-def _application_dirs(application_dirs: Sequence[Path] | None) -> Sequence[Path]:
+def _application_dirs(application_dirs: Sequence[Path] | None, home: Path | None) -> Sequence[Path]:
     if application_dirs is not None:
         return application_dirs
+    root = home if home is not None else Path.home()
     return (
         Path("/Applications"),
-        Path.home() / "Applications",
+        root / "Applications",
         Path("/System/Applications"),
     )
+
+
+def _marker_exists(marker: str, home: Path | None) -> bool:
+    """Comprueba un marcador relativo al home sin seguir enlaces intermedios."""
+    root = home if home is not None else Path.home()
+    try:
+        with SafeHome(root) as safe:
+            info = safe.lstat(marker)
+    except (FileNotFoundError, NotADirectoryError, PathError, OSError):
+        return False
+    return stat.S_ISREG(info.st_mode)
 
 
 def _find_app_bundle(bundle_id: str, application_dirs: Sequence[Path]) -> Path | None:

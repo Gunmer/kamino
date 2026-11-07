@@ -19,9 +19,21 @@ if TYPE_CHECKING:
 
 _console = Console()
 
+#: Texto del aviso previo al respaldo. No se interpola ningún valor de archivo.
+PRIVACY_WARNING = (
+    "aviso: el archivo de respaldo no está cifrado y las configuraciones incluidas "
+    "pueden contener secretos. Los archivos de credenciales conocidos se excluyen, "
+    "pero los ajustes permitidos se conservan íntegros."
+)
+
 
 #: Tripletas ``(id, title, description)`` para el menú de comandos.
 CommandChoice = tuple[str, str, str]
+
+
+def print_privacy_warning() -> None:
+    """Muestra el aviso de contenido sensible antes de respaldar."""
+    _console.print(f"[yellow]{PRIVACY_WARNING}[/yellow]")
 
 
 def select_command(choices: Sequence[CommandChoice]) -> str | None:
@@ -74,6 +86,8 @@ def print_backup_summary(result: BackupResult, *, verbose: bool = False) -> None
             _console.print(f"  + {op.path}")
         for skipped in result.plan.skipped:
             _console.print(f"  ~ {skipped} (omitido)")
+        for notice in getattr(result.plan, "notices", []):
+            _console.print(f"  ! {notice}")
         return
     table = Table(title="Respaldo completado")
     table.add_column("App", style="bold")
@@ -88,6 +102,8 @@ def print_backup_summary(result: BackupResult, *, verbose: bool = False) -> None
             _console.print(f"  + {op.path}")
         for skipped in result.plan.skipped:
             _console.print(f"  ~ {skipped} (omitido)")
+        for notice in getattr(result.plan, "notices", []):
+            _console.print(f"  ! {notice}")
 
 
 def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> None:
@@ -96,11 +112,15 @@ def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> No
         _console.print("[bold]Plan de restauración (dry-run)[/bold]")
         for entry in result.plan.entries:
             _console.print(f"  [{entry.status}] {entry.path}")
+        for notice in getattr(result.plan, "notices", []):
+            _console.print(f"  ! {notice}")
         return
     _console.print(f"Restauradas: {len(result.restored)}")
     _console.print(f"Omitidas: {len(result.omitted)}")
     if result.snapshot is not None:
         _console.print(f"Snapshot: {result.snapshot}")
+    for notice in getattr(result.plan, "notices", []):
+        _console.print(f"[yellow]! {notice}[/yellow]")
     if verbose:
         _console.print("[bold]Detalle[/bold]")
         for path in result.restored:

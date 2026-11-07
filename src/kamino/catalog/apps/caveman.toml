@@ -1,0 +1,6 @@
+id = "caveman"
+name = "Caveman"
+command = "caveman"
+command_aliases = ["cave"]
+optional_paths = [".config/caveman/config.json", ".caveman-cloud/config.json", ".caveman/caveman.yaml"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

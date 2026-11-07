@@ -75,8 +75,15 @@ paths = [
 - `bundle_id`: sirve para detectar si la app está instalada.
 - `command`: alternativa a `bundle_id` para herramientas de terminal sin `.app` (por ejemplo `git`, `yazi` o `herdr`); se detectan con `shutil.which`.
 - `search_paths`: rutas adicionales donde buscar el binario de `command` si no está en el PATH (por ejemplo `/opt/homebrew/bin`). Opcional.
-- `paths`: rutas relativas al home, archivos o carpetas. Las rutas fuera del home no se admiten en la v1.
-- `exclude`: patrones glob que se descartan al expandir `paths`.
+- `command_aliases`: nombres alternativos del ejecutable, como `cave` para Caveman. Opcional.
+- `install_marker`: archivo relativo al home que también debe existir para considerar instalada la app, como `.oh-my-zsh/oh-my-zsh.sh`. Opcional.
+- `paths`: rutas obligatorias relativas al home, archivos o carpetas. Su ausencia se informa como omisión. Las rutas fuera del home no se admiten.
+- `optional_paths`: rutas que solo se incluyen si existen; su ausencia no es una omisión. Opcional.
+- `optional_patterns`: patrones con un directorio fijo y comodines solo en el último componente, como `.codex/*.config.toml`. Opcional.
+- `env_paths`: variables de entorno con una ruta absoluta que debe quedar dentro del home, como `HERDR_CONFIG_PATH`. Opcional.
+- `xdg_paths`: rutas relativas a `XDG_CONFIG_HOME`, admitidas solo si ese directorio está dentro del home. Opcional.
+- `exclude`: patrones glob que se descartan al expandir las rutas.
+- Una definición necesita al menos una ruta obligatoria, opcional o un patrón.
 
 ### 4.2 Manifiesto (`manifest.json`)
 
@@ -154,12 +161,17 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
 - **Snapshots.** Se guardan en `~/Library/Application Support/kamino/snapshots/<fecha>.tar.gz` con el mismo formato que un respaldo, así el futuro `undo` es simplemente un `restore` del snapshot.
 - **Catálogo.** Viene embebido en el paquete y se complementa con un directorio del usuario (`~/.config/kamino/apps/`), donde se pueden añadir o sobrescribir definiciones sin tocar el código.
 - **Códigos de salida.** 0 éxito, 1 error, 2 uso incorrecto, 3 éxito con elementos omitidos.
+- **Límite del HOME.** `SafeHome` abre el home una vez y recorre sus descendientes con `dir_fd` y `O_NOFOLLOW`. La validación léxica de `to_absolute`/`to_relative` sigue siendo la primera barrera; el acceso con descriptores impide que un enlace intermedio redirija una lectura o escritura fuera del home. Si la plataforma no ofrece estas primitivas, se aborta en lugar de degradar a `resolve()` seguido de una apertura insegura.
+- **Enlaces finales.** Se conserva la regla existente: un enlace final se guarda como enlace, nunca se sigue y solo se admite si su destino es relativo y no contiene `..`. `SafeHome.read_bytes` rechaza el componente final si es un enlace; `lstat` y `readlink` permiten representarlo en el manifiesto.
+- **Cambios concurrentes.** La planificación calcula el checksum con el mismo acceso seguro que usa el empaquetado, que reabre cada ruta y compara el contenido con el manifiesto. Si una ruta cambia a un enlace o a otro tipo entre el plan y la escritura, el respaldo falla en vez de incluir datos externos. En restauración se valida cada destino antes de la instantánea y se vuelve a abrir cada padre durante la aplicación; si la jerarquía cambia, se detiene sin escribir fuera del home.
+- **Referencias de Ghostty.** El descubrimiento es específico de `ghostty` y se limita a `config-file` y a la selección de temas. Resuelve cada candidato con el acceso seguro, aplica las exclusiones antes de leer, mantiene límites de tamaño, profundidad y cantidad, y deduplica por `(app_id, ruta relativa)`.
+- **Exclusiones y aviso.** Los respaldos nuevos excluyen credenciales independientes conocidas, historiales, sesiones, cachés y registros. El aviso de que el archivo no está cifrado se muestra siempre antes de respaldar y no modifica los bytes de los ajustes. Las exclusiones no se aplican a la restauración de respaldos antiguos ni a la instantánea previa.
 
 ## 7. Pruebas
 
 - **Unitarias:** carga del catálogo (definiciones válidas e inválidas), expansión de rutas y exclusiones, normalización de rutas y manifiesto.
 - **Integración:** ciclo completo respaldo y restauración entre dos HOME falsos distintos, con apps "instaladas" simuladas mediante un `Info.plist` falso, comprobando que solo se restauran las instaladas.
-- **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado.
+- **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado. `tests/test_paths.py` cubre el rechazo de enlaces intermedios y la conservación de enlaces finales; `tests/test_restore.py` cubre el rechazo antes de la instantánea y la sustitución de un directorio durante la aplicación.
 - **Aislamiento:** una fixture que reemplaza `HOME` y hace fallar la prueba si alguna ruta resuelve fuera de `tmp_path`, para no tocar nunca el home real.
 - **CI:** GitHub Actions con runner de macOS para ejecutar `pytest`.
 

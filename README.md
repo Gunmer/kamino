@@ -11,8 +11,55 @@ apps, archivado `tar.gz` con manifiesto y checksums, y CLI interactiva.
 
 ## Requisitos
 
-- Python 3.11 o superior (mínimo 3.11.4 por `tarfile` con `filter="data"`).
-- macOS.
+- **Instalación con el binario:** macOS con Apple Silicon (`arm64`) y `curl`. El binario es
+  autocontenido y no requiere instalar Python.
+- **Instalación desde el código fuente o desarrollo:** macOS y Python 3.11.4 o superior (`tarfile`
+  usa `filter="data"`).
+
+## Instalación con script
+
+Descarga el instalador, revisa su contenido y ejecútalo:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Gunmer/kamino/main/scripts/install.sh -o kamino-install.sh
+less kamino-install.sh
+sh kamino-install.sh
+```
+
+También puedes ejecutarlo directamente, sin guardarlo. Esta opción ejecuta el script remoto sin
+revisión previa:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Gunmer/kamino/main/scripts/install.sh | sh
+```
+
+Si ya descargaste el repositorio, puedes ejecutar el instalador incluido:
+
+```bash
+sh scripts/install.sh
+```
+
+El instalador comprueba que el sistema sea macOS con Apple Silicon, descarga el binario
+`kamino-arm64` de la última release publicada y lo instala en `~/.local/bin/kamino`, sin usar
+`sudo`. Si necesita crear `~/.local/bin` o reemplazar una instalación existente, pide confirmación;
+si no hay una terminal disponible para responder, detiene la instalación. También marca el binario
+como ejecutable e intenta quitar el atributo de cuarentena de macOS.
+
+Comprueba la instalación ejecutando:
+
+```bash
+~/.local/bin/kamino --help
+```
+
+Si quieres invocar el comando como `kamino`, añade `~/.local/bin` al `PATH` de la sesión actual:
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+kamino --help
+```
+
+Para conservarlo en nuevas terminales, añade esa línea al archivo de inicio de tu shell (por
+ejemplo, `~/.zshrc` si usas zsh).
 
 ## Instalación (desarrollo)
 
@@ -74,11 +121,14 @@ versión y completa la release sin incrementar la versión, duplicar el changelo
 assets ya subidos. Si GitHub dejó un asset vacío por una subida fallida, lo elimina antes de
 reintentar. No permite publicar tags ajenos a un commit de release integrado en `main`.
 
-Los binarios no están firmados, por lo que macOS les aplica cuarentena al descargarlos. Para usarlos:
+Los binarios descargados manualmente no están firmados y macOS puede aplicarles cuarentena. Para
+quitarla manualmente:
 
 ```bash
 xattr -d com.apple.quarantine ./kamino-arm64
 ```
+
+El instalador intenta quitar ese atributo automáticamente.
 
 El Homebrew tap se publicará tras la primera versión etiquetada.
 
@@ -122,6 +172,89 @@ no lo requiere.
 Al ejecutar `kamino` sin comandos (en una terminal interactiva) se muestra una lista con los
 comandos disponibles (`backup` y `restore`) para elegir uno. Sin terminal, se muestra la ayuda.
 
+## Privacidad y aviso previo
+
+- Los respaldos (`tar.gz`) y las instantáneas **no están cifrados**. Trátalos como datos
+  sensibles y guárdalos en una ubicación protegida.
+- Antes de `backup`, incluso sin terminal interactiva y con `--dry-run`, la CLI muestra un aviso
+  en español: los ajustes incluidos pueden contener secretos incrustados. No se pide confirmación
+  adicional ni se imprimen valores.
+- Los respaldos nuevos excluyen archivos de credenciales conocidos (`.env`, `.env.*`, `auth.json`,
+  `.credentials.json`, `secrets.yaml`, `secrets.yml` y `hosts.yml` de GitHub CLI), historiales,
+  sesiones, cachés, registros y metadatos `.git`. El filtro se aplica antes de leer el contenido.
+- Los archivos de configuración permitidos se conservan byte a byte, aunque contengan claves
+  incrustadas: Kamino no redacta ni modifica ajustes.
+- Las exclusiones rigen la creación de respaldos nuevos. Al restaurar un respaldo anterior, sus
+  archivos se aplican igual y la instantánea previa conserva completos los destinos que cambian,
+  aunque ahora estén excluidos.
+
+## Catálogo de aplicaciones
+
+Cada herramienta tiene un id que se usa con `--apps`. La detección solo comprueba el ejecutable o
+el identificador de la aplicación; nunca ejecuta la herramienta.
+
+| Grupo | Ids |
+| --- | --- |
+| Agentes y asistentes | `opencode`, `claude-code`, `codex`, `gemini-cli`, `copilot-cli`, `pi`, `aider`, `goose`, `gentle-shell`, `gentle-ai`, `gga`, `openspec`, `caveman` |
+| Terminales y utilidades | `lazygit`, `micro`, `navi`, `glow`, `bat`, `eza`, `fd`, `github-cli`, `git`, `herdr`, `yazi`, `ghostty`, `oh-my-zsh` |
+
+Ejemplo:
+
+```bash
+kamino backup --apps opencode,claude-code,herdr,ghostty,oh-my-zsh -o respaldo.tar.gz
+kamino restore respaldo.tar.gz --yes
+```
+
+Límites del catálogo:
+
+- Solo se cubren las ubicaciones globales documentadas de cada herramienta. Kamino no descubre
+  archivos de configuración de repositorios ni de proyectos.
+- Una definición propia en `~/.config/kamino/apps/` sustituye por completo a la integrada con el
+  mismo id. Sus rutas deben ser relativas al HOME; si una ruta es absoluta o contiene `..`, el
+  catálogo se rechaza. Las definiciones del usuario no pueden desactivar el confinamiento.
+- Las ubicaciones alternativas se admiten solo cuando están documentadas y dentro del HOME. Herdr
+  admite `HERDR_CONFIG_PATH` y XDG; Ghostty admite su directorio XDG. Otras variables o rutas
+  elegidas por scripts requieren una definición personalizada.
+- No se copian binarios, instalaciones de plugins, bases de datos de sesiones o memoria, ni
+  índices como los de Engram o CodeGraph. Tampoco se crean entradas para herramientas cuyos ajustes
+  dependen de variables del shell (`fzf`, `rg`, `zoxide`).
+- Un directorio de configuración puede mezclar ajustes y estado. Solo se incluyen las rutas
+  declaradas y se excluyen credenciales, historiales, sesiones, cachés y registros.
+
+### Oh My Zsh
+
+La entrada `oh-my-zsh` requiere `zsh` **y** `~/.oh-my-zsh/oh-my-zsh.sh`. Incluye `.zshrc`,
+`.zprofile`, `.zshenv` y `.oh-my-zsh/custom` (ajustes y temas personales). Se excluyen
+`.oh-my-zsh/custom/plugins` y los metadatos `.git`; los plugins deben reinstalarse por separado en
+el equipo de destino. Kamino no evalúa código de shell: si `ZSH` o `ZSH_CUSTOM` se definen en
+`.zshrc` o apuntan fuera del HOME, esas rutas no se descubren; usa una definición personalizada con
+rutas dentro del HOME.
+
+### Herdr
+
+Se conserva `.config/herdr/config.toml`, incluidos `[theme]`, `[theme.custom]`, `[keys]` y
+`[[keys.command]]`, y la configuración permitida de plugins. También se incluye
+`HERDR_CONFIG_PATH` y la variante XDG cuando apuntan dentro del HOME; un valor externo se informa
+sin leerse. Los `.env` y credenciales de plugins se excluyen, y no se copian los programas de los
+plugins.
+
+### Ghostty
+
+- Se contemplan `config` y `config.ghostty` en `~/.config/ghostty/` y en
+  `~/Library/Application Support/com.mitchellh.ghostty/`, además de la variante XDG cuando
+  `XDG_CONFIG_HOME` queda dentro del HOME.
+- Se incluyen los temas personalizados dentro del HOME y los archivos referenciados por
+  `config-file`. Las referencias pueden ser relativas al archivo que las declara, absolutas dentro
+  del HOME, opcionales con `?`, repetidas o anidadas. Los ciclos y los límites se informan sin
+  ejecutar instrucciones.
+- Los temas integrados de Ghostty no se copian. Las referencias a credenciales conocidas o a rutas
+  fuera del HOME se omiten antes de leer su contenido.
+- Los atajos globales viven en las configuraciones incluidas. Si un ajuste conserva una ruta
+  absoluta de otro HOME, la restauración avisa sin reescribir el archivo: puede requerir un ajuste
+  manual.
+- Tras restaurar en otro equipo puede ser necesario volver a conceder permisos de accesibilidad de
+  macOS a Ghostty para los atajos globales.
+
 ## Desarrollo
 
 ```bash
@@ -145,7 +278,8 @@ src/kamino/
 │   └── apps/*.toml   # una definición por app
 ├── detect.py         # ¿está instalada? ¿qué versión?
 ├── archive.py        # tar.gz, manifiesto, checksums
-├── paths.py          # normalización relativa al home
+├── ghostty.py        # lectura acotada de config-file y temas de Ghostty
+├── paths.py          # normalización y acceso seguro relativo al home
 ├── snapshot.py       # copia previa a restaurar
 └── errors.py         # excepciones propias
 ```

@@ -10,13 +10,15 @@ from __future__ import annotations
 import hashlib
 import io
 import os
+import stat
 import tarfile
 from pathlib import Path, PurePosixPath
 from uuid import uuid4
 
 from pydantic import BaseModel, Field, ValidationError, field_validator, model_validator
 
-from kamino.errors import ArchiveError, IntegrityError, VersionError
+from kamino.errors import ArchiveError, IntegrityError, PathError, VersionError
+from kamino.paths import SafeHome
 
 FORMAT_VERSION = 1
 MANIFEST_NAME = "manifest.json"
@@ -128,11 +130,11 @@ def write_archive(
 
     tmp = output.with_name(f".{output.name}.{uuid4().hex}.tmp")
     try:
-        with tarfile.open(tmp, "w:gz") as tar:
+        with SafeHome(root) as safe, tarfile.open(tmp, "w:gz") as tar:
             _add_manifest(tar, manifest)
             for app in manifest.apps:
                 for file in app.files:
-                    _add_file(tar, root / file.path, f"{APPS_DIR}/{app.id}/{file.path}", file)
+                    _add_file(tar, safe, file.path, f"{APPS_DIR}/{app.id}/{file.path}", file)
         _commit(tmp, output, overwrite)
     except Exception:
         tmp.unlink(missing_ok=True)
@@ -158,30 +160,53 @@ def _add_manifest(tar: tarfile.TarFile, manifest: Manifest) -> None:
     tar.addfile(info, io.BytesIO(data))
 
 
-def _add_file(tar: tarfile.TarFile, source: Path, arcname: str, entry: FileEntry) -> None:
+def _add_file(
+    tar: tarfile.TarFile, safe: SafeHome, rel: str, arcname: str, entry: FileEntry
+) -> None:
+    """Añade un archivo reabriéndolo de forma segura, sin seguir enlaces intermedios."""
     try:
-        info = tar.gettarinfo(str(source), arcname=arcname)
-    except OSError as exc:
-        raise ArchiveError(f"no se pudo leer {source}: {exc}") from exc
-    if info.isfile():
+        info = safe.lstat(rel)
+    except (FileNotFoundError, PathError, OSError) as exc:
+        raise ArchiveError(f"no se pudo leer {rel}: {exc}") from exc
+    if stat.S_ISREG(info.st_mode):
         if entry.link is not None:
             raise ArchiveError(f"{entry.path} es un archivo regular, no un enlace")
-        content = source.read_bytes()
+        try:
+            content = safe.read_bytes(rel)
+        except (PathError, OSError) as exc:
+            raise ArchiveError(f"no se pudo leer {rel}: {exc}") from exc
         if entry.sha256 is None or hashlib.sha256(content).hexdigest() != entry.sha256:
             raise ArchiveError(f"el archivo cambió durante el respaldo: {entry.path}")
-        info.size = len(content)
-        tar.addfile(info, io.BytesIO(content))
-    elif info.issym():
+        tar.addfile(_tar_info(arcname, info, size=len(content)), io.BytesIO(content))
+    elif stat.S_ISLNK(info.st_mode):
         if entry.link is None:
             raise ArchiveError(f"{entry.path} es un enlace, no un archivo regular")
-        if info.linkname != entry.link:
+        try:
+            target = safe.readlink(rel)
+        except (PathError, OSError) as exc:
+            raise ArchiveError(f"no se pudo leer el enlace {rel}: {exc}") from exc
+        if target != entry.link:
             raise ArchiveError(
-                f"el destino del enlace cambió para {entry.path}: "
-                f"{info.linkname!r} != {entry.link!r}"
+                f"el destino del enlace cambió para {entry.path}: {target!r} != {entry.link!r}"
             )
-        tar.addfile(info)
+        tar_info = _tar_info(arcname, info)
+        tar_info.type = tarfile.SYMTYPE
+        tar_info.linkname = target
+        tar_info.size = 0
+        tar.addfile(tar_info)
     else:
-        raise ArchiveError(f"tipo de archivo no soportado para respaldar: {source}")
+        raise ArchiveError(f"tipo de archivo no soportado para respaldar: {rel}")
+
+
+def _tar_info(arcname: str, info: os.stat_result, *, size: int = 0) -> tarfile.TarInfo:
+    """Crea un `TarInfo` a partir de un `lstat` ya validado."""
+    tar_info = tarfile.TarInfo(arcname)
+    tar_info.mode = stat.S_IMODE(info.st_mode)
+    tar_info.uid = info.st_uid
+    tar_info.gid = info.st_gid
+    tar_info.mtime = int(info.st_mtime)
+    tar_info.size = size
+    return tar_info
 
 
 def read_manifest(path: Path) -> Manifest:
@@ -195,6 +220,27 @@ def read_manifest(path: Path) -> Manifest:
                 raise ArchiveError(f"no se pudo leer {MANIFEST_NAME}")
             return _parse_manifest(handle.read())
     raise ArchiveError(f"falta {MANIFEST_NAME} en el archivo de respaldo")
+
+
+def read_file_from_archive(path: Path, app_id: str, rel: str, *, limit: int) -> bytes | None:
+    """Lee de forma acotada un archivo regular del respaldo, sin extraerlo.
+
+    Devuelve `None` si el miembro no existe, no es un archivo regular o supera
+    `limit`. Se usa para avisos de portabilidad de Ghostty durante la
+    planificación de la restauración.
+    """
+    name = f"{APPS_DIR}/{app_id}/{rel}"
+    with tarfile.open(path, "r:gz") as tar:
+        try:
+            member = tar.getmember(name)
+        except KeyError:
+            return None
+        if not member.isfile() or member.size > limit:
+            return None
+        handle = tar.extractfile(member)
+        if handle is None:
+            return None
+        return handle.read(limit + 1)
 
 
 def _parse_manifest(raw: bytes) -> Manifest:
