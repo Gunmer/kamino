@@ -112,7 +112,9 @@ def _write(home: Path, rel: str, content: bytes | str = b"config\n") -> None:
     path.write_bytes(content if isinstance(content, bytes) else content.encode())
 
 
-def test_agent_herdr_zsh_and_ghostty_cycle(tmp_path: Path) -> None:
+def test_agent_herdr_zsh_and_ghostty_cycle(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.delenv("HERDR_CONFIG_PATH", raising=False)
     catalog = load_catalog(user_dir=tmp_path / "no-user-catalog")
     origin = tmp_path / "origin"
     target = tmp_path / "target"
