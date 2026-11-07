@@ -2,6 +2,18 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-11-07)
+
+### Funcionalidades
+
+- add macOS Apple Silicon installer ([`b0e5c16`](https://github.com/Gunmer/kamino/commit/b0e5c16ee35d7a94f99ce0cc3410bcd2dd39ce13))
+- expand app coverage and harden backups ([`fbfe042`](https://github.com/Gunmer/kamino/commit/fbfe042a364445f96c4a82f9d1140719e182e6f3))
+
+### Pruebas
+
+- isolate inherited config paths ([`a296987`](https://github.com/Gunmer/kamino/commit/a296987ff522ff1eb4d6fe02ae190a0bef14a8e4))
+
+
 ## v0.3.0 (2026-11-04)
 
 ### Mantenimiento
