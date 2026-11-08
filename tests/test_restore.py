@@ -30,7 +30,7 @@ from kamino.conflicts import (
     ConflictKind,
     FileAction,
     FileDecision,
-    HunkDecision,
+    RowDecision,
     apply_all,
     compose,
     omit_all,
@@ -38,6 +38,7 @@ from kamino.conflicts import (
 )
 from kamino.errors import (
     ConcurrentChangeError,
+    ConflictError,
     DecisionRequiredError,
     IntegrityError,
     InvalidMergeError,
@@ -730,7 +731,7 @@ def test_apply_omit_keeps_local_without_snapshot(tmp_path: Path) -> None:
         session.close()
 
 
-def test_apply_review_mixes_blocks_and_classifies_merged(tmp_path: Path) -> None:
+def test_apply_review_mixes_lines_and_classifies_merged(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_file(home, "cfg.conf", "".join(f"line {index}\n" for index in range(20)).encode())
     backup, catalog, local, backup_text = _two_hunk_backup(tmp_path)
@@ -741,14 +742,14 @@ def test_apply_review_mixes_blocks_and_classifies_merged(tmp_path: Path) -> None
         decisions = ConflictDecisions(
             {
                 conflict.path: FileDecision(
-                    FileAction.REVIEW, (HunkDecision.BACKUP, HunkDecision.LOCAL)
+                    FileAction.REVIEW, (RowDecision.BACKUP, RowDecision.LOCAL)
                 )
             }
         )
         result = session.apply(decisions)
 
         written = (home / "cfg.conf").read_text()
-        expected = compose(local, backup_text, (HunkDecision.BACKUP, HunkDecision.LOCAL))
+        expected = compose(local, backup_text, (RowDecision.BACKUP, RowDecision.LOCAL))
         assert written == expected
         assert "LINE ONE" in written
         assert "line 18" in written
@@ -756,6 +757,59 @@ def test_apply_review_mixes_blocks_and_classifies_merged(tmp_path: Path) -> None
         assert result.restored == []
         assert result.omitted == []
         assert result.snapshot is not None
+    finally:
+        session.close()
+
+
+def test_apply_review_mixes_lines_inside_one_block(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    local = "a\nb\nc\n"
+    backup_text = "a\nB\nC\n"
+    target = _write_file(home, "cfg.conf", local.encode())
+    backup, catalog = _backup(
+        tmp_path, apps={"foo": ["cfg.conf"]}, files={"cfg.conf": backup_text.encode()}
+    )
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        conflict = plan.conflicts[0]
+        result = session.apply(
+            ConflictDecisions(
+                {
+                    conflict.path: FileDecision(
+                        FileAction.REVIEW, (RowDecision.BACKUP, RowDecision.LOCAL)
+                    )
+                }
+            )
+        )
+
+        assert target.read_text() == "a\nB\nc\n"
+        assert result.merged == ["cfg.conf"]
+        assert result.restored == []
+        assert result.omitted == []
+    finally:
+        session.close()
+
+
+def test_review_rejects_a_decision_list_of_the_wrong_length(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    local = "a\nb\nc\n"
+    target = _write_file(home, "cfg.conf", local.encode())
+    backup, catalog = _backup(
+        tmp_path, apps={"foo": ["cfg.conf"]}, files={"cfg.conf": b"a\nB\nC\n"}
+    )
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        conflict = plan.conflicts[0]
+        decisions = ConflictDecisions(
+            {conflict.path: FileDecision(FileAction.REVIEW, (RowDecision.BACKUP,))}
+        )
+        with pytest.raises(ConflictError, match="no cubre todas las líneas"):
+            session.apply(decisions)
+
+        assert target.read_text() == local
+        assert not (tmp_path / "snapshots").exists()
     finally:
         session.close()
 
@@ -772,7 +826,7 @@ def test_review_all_local_writes_nothing_and_keeps_mode(tmp_path: Path) -> None:
         plan = session.plan()
         conflict = plan.conflicts[0]
         result = session.apply(
-            ConflictDecisions({conflict.path: review_all(conflict, HunkDecision.LOCAL)})
+            ConflictDecisions({conflict.path: review_all(conflict, RowDecision.LOCAL)})
         )
 
         assert target.read_text() == "".join(f"line {index}\n" for index in range(20))
@@ -836,7 +890,7 @@ def test_core_revalidates_merge_before_writing(tmp_path: Path, monkeypatch) -> N
         plan = session.plan()
         conflict = plan.conflicts[0]
         decisions = ConflictDecisions(
-            {conflict.path: FileDecision(FileAction.REVIEW, (HunkDecision.BACKUP,))}
+            {conflict.path: FileDecision(FileAction.REVIEW, (RowDecision.BACKUP,))}
         )
         with pytest.raises(InvalidMergeError):
             session.apply(decisions)

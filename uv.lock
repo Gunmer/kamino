@@ -363,6 +363,7 @@ name = "kamino-cli"
 version = "0.4.0"
 source = { editable = "." }
 dependencies = [
+    { name = "certifi" },
     { name = "pydantic" },
     { name = "questionary" },
     { name = "rich" },
@@ -383,6 +384,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "certifi", specifier = ">=2024.2.2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pyinstaller", marker = "extra == 'build'", specifier = ">=6.10" },

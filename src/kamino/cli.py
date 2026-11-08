@@ -21,6 +21,7 @@ from kamino.detect import is_installed
 from kamino.errors import KaminoError
 from kamino.restore import RestoreSession, prepare_restore
 from kamino.tui.app import run_restore_tui
+from kamino.update import run_update
 
 app = typer.Typer(
     name="kamino",
@@ -75,6 +76,7 @@ def _run_menu(ctx: typer.Context) -> None:
         [
             ("backup", "Respaldo", "Crea un respaldo de las apps elegidas."),
             ("restore", "Restauración", "Restaura desde un archivo de respaldo."),
+            ("update", "Actualización", "Actualiza a la última versión publicada."),
         ]
     )
     if command is None:
@@ -82,6 +84,9 @@ def _run_menu(ctx: typer.Context) -> None:
         raise typer.Exit(code=1)
     if command == "backup":
         ctx.invoke(backup)
+        return
+    if command == "update":
+        ctx.invoke(update)
         return
     path = ui.ask_path("Archivo de respaldo (.tar.gz):")
     if path is None or not path.strip():
@@ -207,6 +212,18 @@ def restore(
     except KaminoError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None
+
+
+@app.command()
+def update() -> None:
+    """Actualiza kamino a la última versión publicada."""
+    ui.print_update_start()
+    try:
+        result = run_update(__version__)
+    except KaminoError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from None
+    ui.print_update_result(result)
 
 
 def _parse_apps(value: str | None) -> list[str] | None:

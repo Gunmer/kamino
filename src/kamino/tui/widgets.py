@@ -4,7 +4,15 @@ from __future__ import annotations
 
 from rich.text import Text
 
-from kamino.conflicts import Conflict, ConflictKind, Hunk, HunkDecision
+from kamino.conflicts import (
+    Conflict,
+    ConflictKind,
+    Hunk,
+    HunkRow,
+    RowDecision,
+    RowKind,
+    row_count,
+)
 
 
 def format_size(size: int) -> str:
@@ -17,12 +25,6 @@ def format_size(size: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{size} B"
-
-
-def decision_label(decision: HunkDecision | None) -> str:
-    if decision is HunkDecision.LOCAL:
-        return "local"
-    return "respaldo"
 
 
 def conflict_kind_label(conflict: Conflict) -> str:
@@ -38,28 +40,77 @@ def conflict_detail(conflict: Conflict) -> str:
     if conflict.kind is ConflictKind.SYMLINK:
         return f"{conflict.local_link} → {conflict.backup_link}"
     if conflict.kind is ConflictKind.TEXT:
-        return f"{len(conflict.hunks)} bloques"
+        lines = row_count(conflict)
+        return f"{len(conflict.hunks)} bloques · {lines} {'línea' if lines == 1 else 'líneas'}"
     return f"{format_size(conflict.local_size)} / {format_size(conflict.backup_size)}"
 
 
-def hunk_text(hunk: Hunk, decision: HunkDecision) -> Text:
-    """Render one hunk with both sides and the current decision."""
-    local_last = max(hunk.local_start, hunk.local_end - 1)
-    backup_last = max(hunk.backup_start, hunk.backup_end - 1)
+def _display(line: str | None) -> str:
+    return (line or "").rstrip("\r\n")
+
+
+def hunk_header(hunk: Hunk) -> Text:
+    """Render a non-decidable block header."""
+    local_range = _range(hunk.local_start, hunk.local_end)
+    backup_range = _range(hunk.backup_start, hunk.backup_end)
+    changed = sum(1 for row in hunk.rows if row.kind is not RowKind.EQUAL)
     text = Text()
     text.append(f"Bloque {hunk.index}", style="bold")
     text.append(
-        f" · local {hunk.local_start}-{local_last} · respaldo {hunk.backup_start}-{backup_last}"
-        f" · decisión: {decision_label(decision)}\n",
-        style="cyan" if decision is HunkDecision.BACKUP else "yellow",
+        f" · local {local_range} · respaldo {backup_range} · {changed} "
+        f"{'línea' if changed == 1 else 'líneas'}",
+        style="cyan",
     )
-    for line in hunk.local_lines:
-        style = "red" if decision is HunkDecision.LOCAL else "dim red"
-        text.append(f"- {line.rstrip()}\n", style=style)
-    for line in hunk.backup_lines:
-        style = "green" if decision is HunkDecision.BACKUP else "dim green"
-        text.append(f"+ {line.rstrip()}\n", style=style)
     return text
+
+
+def _range(start: int, end: int) -> str:
+    if end <= start:
+        return "-"
+    return f"{start}-{end - 1}"
+
+
+def context_text(row: HunkRow) -> Text:
+    """Render a non-decidable context line."""
+    return Text(f"  {_display(row.local)}", style="dim")
+
+
+def row_text(row: HunkRow, decision: RowDecision) -> Text:
+    """Render a decidable row with the chosen side highlighted."""
+    local_selected = decision is RowDecision.LOCAL
+    text = Text()
+    if row.kind is RowKind.REPLACE:
+        _append_pair(text, row.local, row.backup, local_selected)
+    elif row.kind is RowKind.LOCAL_ONLY:
+        _append_single(text, "-", row.local, local_selected, "local", "red")
+    else:
+        _append_single(text, "+", row.backup, not local_selected, "respaldo", "green")
+    return text
+
+
+def _append_pair(text: Text, local: str | None, backup: str | None, local_selected: bool) -> None:
+    if local_selected:
+        text.append(f"* - {_display(local)}  [local]", style="bold red")
+        text.append("\n")
+        text.append(f"  + {_display(backup)}", style="dim green")
+    else:
+        text.append(f"  - {_display(local)}", style="dim red")
+        text.append("\n")
+        text.append(f"* + {_display(backup)}  [respaldo]", style="bold green")
+
+
+def _append_single(
+    text: Text,
+    prefix: str,
+    line: str | None,
+    chosen: bool,
+    label: str,
+    color: str,
+) -> None:
+    if chosen:
+        text.append(f"* {prefix} {_display(line)}  [{label}]", style=f"bold {color}")
+    else:
+        text.append(f"  {prefix} {_display(line)}  [omitir]", style=f"dim {color}")
 
 
 def conflict_warning() -> Text:

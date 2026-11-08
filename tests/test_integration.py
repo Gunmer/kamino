@@ -15,7 +15,7 @@ import kamino.cli as cli
 from kamino.backup import run_backup
 from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
-from kamino.conflicts import ConflictDecisions, FileAction, FileDecision, HunkDecision
+from kamino.conflicts import ConflictDecisions, FileAction, FileDecision, RowDecision
 from kamino.restore import prepare_restore, run_restore
 
 runner = CliRunner()
@@ -265,7 +265,7 @@ def test_conflict_mix_snapshot_and_undo(tmp_path: Path) -> None:
             ConflictDecisions(
                 {
                     conflict.path: FileDecision(
-                        FileAction.REVIEW, (HunkDecision.BACKUP, HunkDecision.LOCAL)
+                        FileAction.REVIEW, (RowDecision.BACKUP, RowDecision.LOCAL)
                     )
                 }
             )

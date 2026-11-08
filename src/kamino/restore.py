@@ -47,11 +47,12 @@ from kamino.conflicts import (
     ConflictDecisions,
     FileAction,
     FileDecision,
-    HunkDecision,
     LocalFile,
+    RowDecision,
     apply_all,
     build_conflict,
     compose,
+    row_count,
     validate_merge,
 )
 from kamino.detect import is_installed
@@ -476,10 +477,10 @@ class RestoreSession:
                 True,
             )
         if conflict.local_text is None or conflict.backup_text is None:
-            raise ConflictError(f"{entry.path} no admite revisión por bloques")
-        if len(decision.hunks) != len(conflict.hunks):
-            raise ConflictError(f"la decisión de {entry.path} no cubre todos los bloques")
-        merged = compose(conflict.local_text, conflict.backup_text, decision.hunks)
+            raise ConflictError(f"{entry.path} no admite revisión por líneas")
+        if len(decision.rows) != row_count(conflict):
+            raise ConflictError(f"la decisión de {entry.path} no cubre todas las líneas")
+        merged = compose(conflict.local_text, conflict.backup_text, decision.rows)
         if merged == conflict.local_text:
             return _ResolvedFile(
                 entry.path,
@@ -493,7 +494,7 @@ class RestoreSession:
                 backup_text=conflict.backup_text,
                 merged_text=merged,
             )
-        all_backup = all(item is HunkDecision.BACKUP for item in decision.hunks)
+        all_backup = all(item is RowDecision.BACKUP for item in decision.rows)
         category = ResultCategory.RESTORED if all_backup else ResultCategory.MERGED
         return _ResolvedFile(
             entry.path,

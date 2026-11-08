@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 
 from rich.console import Console
@@ -144,3 +145,61 @@ def test_print_restore_summary_dry_run_with_diffs(monkeypatch) -> None:
     assert "binario" in text
     assert "enlace local -> a" in text
     assert "Omitidas: 1" in text
+
+
+def test_print_update_start(monkeypatch) -> None:
+    console = Console(record=True)
+    monkeypatch.setattr(ui, "_console", console)
+
+    ui.print_update_start()
+
+    assert "Comprobando la última versión" in console.export_text()
+
+
+def test_print_update_result_updated(monkeypatch) -> None:
+    console = Console(record=True)
+    monkeypatch.setattr(ui, "_console", console)
+    result = SimpleNamespace(
+        current_version="0.4.0",
+        latest_version="0.5.0",
+        target=Path("/tmp/kamino"),
+        updated=True,
+    )
+
+    ui.print_update_result(result)
+
+    text = console.export_text()
+    assert "0.4.0 -> 0.5.0" in text
+    assert "/tmp/kamino" in text
+
+
+def test_print_update_result_up_to_date(monkeypatch) -> None:
+    console = Console(record=True)
+    monkeypatch.setattr(ui, "_console", console)
+    result = SimpleNamespace(
+        current_version="0.5.0",
+        latest_version="0.5.0",
+        target=Path("/tmp/kamino"),
+        updated=False,
+    )
+
+    ui.print_update_result(result)
+
+    assert "ya es la última versión" in console.export_text()
+
+
+def test_print_update_result_local_is_newer(monkeypatch) -> None:
+    console = Console(record=True)
+    monkeypatch.setattr(ui, "_console", console)
+    result = SimpleNamespace(
+        current_version="0.6.0",
+        latest_version="0.5.0",
+        target=Path("/tmp/kamino"),
+        updated=False,
+    )
+
+    ui.print_update_result(result)
+
+    text = console.export_text()
+    assert "más reciente" in text
+    assert "0.5.0" in text

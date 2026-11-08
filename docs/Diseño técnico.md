@@ -44,11 +44,11 @@ src/kamino/
 ├── ui.py             # selección interactiva, menú de comandos, tablas, progreso
 ├── backup.py         # caso de uso: construir plan y ejecutar respaldo
 ├── restore.py        # caso de uso: sesión, plan y ejecución de restauración
-├── conflicts.py      # diff por bloques, composición y validación de mezclas
+├── conflicts.py      # diff por líneas, composición y validación de mezclas
 ├── tui/
 │   ├── app.py        # KaminoRestoreApp, estado y entrada run_restore_tui
 │   ├── screens.py    # apps, conflictos, detalle, confirmación, resumen y ayuda
-│   ├── widgets.py    # tabla, visor de bloques y avisos
+│   ├── widgets.py    # tabla, visor de líneas y avisos
 │   └── styles.tcss   # estilos de la aplicación
 ├── plan.py           # Plan y Operation, compartidos por ambos
 ├── catalog/
@@ -151,14 +151,14 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
    `--apps` proporciona la selección y omite esa pantalla.
 4. Construir el plan: el destino de cada archivo es `Path.home()` más su ruta relativa, clasificado
    como nuevo, idéntico (se omite, incluida una diferencia solo de CRLF), distinto o no soportado.
-   Para cada archivo distinto se construye un conflicto: bloques de texto para revisar, o archivo
+   Para cada archivo distinto se construye un conflicto: filas de texto para revisar, o archivo
    entero si es binario, grande o un enlace con enlace.
 5. Verificar el `tar.gz` completo antes de extraerlo, extraerlo a un directorio temporal y leer el
    contenido de cada conflicto. Con `--dry-run` no se verifica ni se extrae: se lee el contenido
    directamente del archivo y se imprimen los diffs; no se abre la TUI, ni se crea snapshot, ni se
    escribe nada.
 6. Revisar los conflictos en la TUI: tabla con solo los conflictos y los conteos, detalle por
-   bloques y validación de la mezcla al volver. Ningún conflicto puede quedar sin decisión. La
+   líneas y validación de la mezcla al volver. Ningún conflicto puede quedar sin decisión. La
    confirmación final exige una acción explícita; volver o cancelar no escribe ni crea snapshot.
 7. Aplicar en este orden: exigir cobertura de decisiones, revalidar las mezclas, re-verificar los
    destinos que se van a escribir, crear el snapshot de esos destinos y escribir con reemplazo
@@ -172,7 +172,7 @@ todos los conflictos aplicando el respaldo y conserva la vía no interactiva.
 Pantallas y atajos de la TUI:
 
 ```text
-Selección de apps -> Tabla de conflictos -> Detalle por bloques (por archivo)
+Selección de apps -> Tabla de conflictos -> Detalle por líneas (por archivo)
                   -> Confirmación -> Resumen
 ```
 
@@ -181,14 +181,36 @@ Selección de apps -> Tabla de conflictos -> Detalle por bloques (por archivo)
 - **Tabla de conflictos:** solo conflictos, conteos de nuevos/idénticos/no soportados, acciones por
   fila (revisar, aplicar, omitir), acciones globales (aplicar todo, omitir todo), confirmar
   deshabilitado hasta cubrir todos los conflictos y cancelar.
-- **Detalle:** `Espacio` o `Enter` alterna el bloque resaltado; `A` toma todos los restantes del
-  respaldo y `L` todos los locales; `Escape` vuelve y valida la mezcla. Si la mezcla es inválida, se
-  muestra el error y se permanece en el detalle; si algún original era inválido, se avisa y se
-  permite aplicar.
+- **Detalle:** `Espacio` o `Enter` alterna la línea resaltada; `A`/`L` toman todo el archivo del
+  respaldo o del local y `Shift+A`/`Shift+L` solo el bloque actual; `n`/`p` saltan entre bloques y
+  `Escape` vuelve y valida la mezcla. Las cabeceras y el contexto no son decidibles. Si la mezcla es
+  inválida, se muestra el error y se permanece en el detalle; si algún original era inválido, se
+  avisa y se permite aplicar.
 - **Confirmación:** conteos de restaurados, mezclados y omitidos, directorio del snapshot y botones
   aplicar, volver y cancelar.
 - **Resumen:** conteos finales y ruta del snapshot; salir.
 - **Ayuda:** `?` abre la ayuda en español con los atajos, el flujo y el aviso de secretos.
+
+### 5.3 Actualización
+
+1. `kamino update` comprueba que el proceso es un binario autocontenido. Si no lo es, indica la vía
+   de actualización de desarrollo (`uv sync`, `uv tool upgrade kamino-cli` o la de `pip`).
+2. Resuelve el archivo real del ejecutable (`sys.executable` con symlinks resueltos) y comprueba
+   que el sistema es macOS arm64.
+3. Consulta `https://api.github.com/repos/Gunmer/kamino/releases/latest` y lee `tag_name`, el asset
+   `kamino-arm64`, su `size` y su `digest` SHA-256.
+4. Compara la versión publicada con `__version__` como `X.Y.Z`. Si la instalada es igual o superior,
+   termina sin descargar ni escribir.
+5. Descarga el asset a un temporal en el mismo directorio que el binario, calculando el SHA-256 y el
+   tamaño mientras escribe.
+6. Verifica tamaño y digest, marca el temporal como ejecutable y lo reemplaza con `os.replace`. Si
+   algo falla, elimina el temporal y deja intacto el binario anterior.
+7. Informa de la versión anterior, la nueva y la ruta actualizada. El código es 0 si actualiza o ya
+   está al día; 1 ante cualquier error.
+
+No se ejecuta el binario descargado antes de reemplazarlo. La actualización no usa `sudo` ni
+modifica datos del usuario. La consulta usa `certifi` como bundle de CAs para no depender de las
+rutas de certificados del Python de build, y el binario de release incluye `certifi/cacert.pem`.
 
 ## 6. Decisiones técnicas relevantes
 
@@ -207,19 +229,22 @@ Selección de apps -> Tabla de conflictos -> Detalle por bloques (por archivo)
 - **Límite del HOME.** `SafeHome` abre el home una vez y recorre sus descendientes con `dir_fd` y `O_NOFOLLOW`. La validación léxica de `to_absolute`/`to_relative` sigue siendo la primera barrera; el acceso con descriptores impide que un enlace intermedio redirija una lectura o escritura fuera del home. Si la plataforma no ofrece estas primitivas, se aborta en lugar de degradar a `resolve()` seguido de una apertura insegura.
 - **Enlaces finales.** Se conserva la regla existente: un enlace final se guarda como enlace, nunca se sigue y solo se admite si su destino es relativo y no contiene `..`. `SafeHome.read_bytes` rechaza el componente final si es un enlace; `lstat` y `readlink` permiten representarlo en el manifiesto.
 - **Cambios concurrentes.** La planificación calcula el checksum con el mismo acceso seguro que usa el empaquetado, que reabre cada ruta y compara el contenido con el manifiesto. Si una ruta cambia a un enlace o a otro tipo entre el plan y la escritura, el respaldo falla en vez de incluir datos externos. En restauración se valida cada destino antes de la instantánea y se vuelve a abrir cada padre durante la aplicación; si la jerarquía cambia, se detiene sin escribir fuera del home. Además, la sesión guarda el hash del archivo regular, el destino del enlace o la ausencia del destino al planificar y los re-verifica justo antes del snapshot: si alguno cambió durante la revisión, aborta toda la restauración sin escribir.
-- **Conflictos y mezcla.** `conflicts.py` contiene el modelo y las funciones puras. La comparación decodifica UTF-8 y normaliza CRLF solo para comparar; un archivo que solo difiere en CRLF es idéntico. Un contenido con NUL o que no decodifica es binario; un texto de más de 5 MB o de más de 20 000 líneas se trata como grande para proteger `difflib` y la TUI. Los bloques se generan con `difflib.SequenceMatcher` y 3 líneas de contexto; empiezan en el respaldo y se alternan con el local. La composición conserva las líneas iguales del local, adapta las líneas del respaldo al estilo de final de línea local y respeta el último salto de línea del lado elegido. El núcleo compone el archivo; la TUI nunca inyecta bytes arbitrarios.
+- **Conflictos y mezcla.** `conflicts.py` contiene el modelo y las funciones puras. La comparación decodifica UTF-8 y normaliza CRLF solo para comparar; un archivo que solo difiere en CRLF es idéntico. Un contenido con NUL o que no decodifica es binario; un texto de más de 5 MB o de más de 20 000 líneas se trata como grande para proteger `difflib` y la TUI. Los bloques se generan con `difflib.SequenceMatcher` y 3 líneas de contexto; dentro de cada bloque, las líneas iguales son contexto y cada par local/respaldo o línea de un solo lado es una fila decidible que empieza en el respaldo. `build_hunks` y `compose` comparten la misma generación de filas, así que las decisiones se alinean por posición. La composición conserva las líneas iguales del local, adapta las líneas del respaldo al estilo de final de línea local y, si una línea sin salto final queda en medio, le añade el EOL dominante local; solo la última línea puede conservar la ausencia de salto final. El núcleo compone el archivo; la TUI nunca inyecta bytes arbitrarios.
 - **Validación de mezclas.** Se valida por extensión con la biblioteca estándar: TOML (`tomllib`), JSON (`json` con detección de claves duplicadas), INI/CFG/Git config (`configparser` estricto) y plist XML (`plistlib`, con detección de claves duplicadas en el XML). Solo se bloquea si ambos originales parsean y la mezcla no; si alguno ya era inválido se avisa y se permite aplicar. YAML y shell no se validan. `apply` repite la validación como defensa del núcleo.
 - **TUI de restauración.** `textual` aporta la tabla navegable, el detalle con scroll y las pruebas headless con `run_test`. `restore` abre la TUI solo en una terminal interactiva y sin `--yes`; `--apps` omite la pantalla de selección y `--dry-run` imprime los diffs en stdout sin abrirla. La TUI muestra un aviso de que los diffs pueden contener secretos y no persiste ni registra su contenido.
 - **Empaquetado de la TUI.** El build de PyInstaller incluye los datos de `textual` (CSS y recursos) con `--collect-data textual`, además del catálogo embebido.
 - **Referencias de Ghostty.** El descubrimiento es específico de `ghostty` y se limita a `config-file` y a la selección de temas. Resuelve cada candidato con el acceso seguro, aplica las exclusiones antes de leer, mantiene límites de tamaño, profundidad y cantidad, y deduplica por `(app_id, ruta relativa)`.
 - **Exclusiones y aviso.** Los respaldos nuevos excluyen credenciales independientes conocidas, historiales, sesiones, cachés y registros. El aviso de que el archivo no está cifrado se muestra siempre antes de respaldar y no modifica los bytes de los ajustes. Las exclusiones no se aplican a la restauración de respaldos antiguos ni a la instantánea previa.
+- **Actualización del binario.** `update.py` es un caso de uso independiente de la CLI. Solo actúa sobre binarios autocontenidos (`sys.frozen`), resuelve el ejecutable real y consulta la API de GitHub. La versión se compara como `X.Y.Z`; no se degrada ni se descarga si la instalada es igual o superior. La integridad se basa en el tamaño y el digest SHA-256 del asset. El reemplazo usa un temporal en el mismo directorio y `os.replace`, sin `sudo` y sin ejecutar el binario descargado. La consulta usa `urllib` y `certifi` para no introducir subprocesos en `src/`. No hay comprobación automática ni rollback.
+- **Tema ANSI de la TUI.** `KaminoRestoreApp` usa `ansi-dark` por defecto para que fondo, texto, bordes y botones salgan de la paleta ANSI del terminal. `TEXTUAL_THEME` conserva el override de Textual, por ejemplo `ansi-light`. `styles.tcss` ya usa tokens semánticos y no necesita cambios; los diffs de `widgets.py` ya usan colores ANSI.
 
 ## 7. Pruebas
 
 - **Unitarias:** carga del catálogo (definiciones válidas e inválidas), expansión de rutas y exclusiones, normalización de rutas y manifiesto.
-- **Conflictos:** `tests/test_conflicts.py` cubre detección de texto, binario, grande y enlace; archivos nuevos, idénticos, solo modo, CRLF y cambios de tipo; generación de bloques con contexto; composición con mezcla, todos-respaldo, todos-local, CRLF y último salto de línea; y validación de TOML, JSON, INI, plist, original inválido y formatos sin validar.
+- **Conflictos:** `tests/test_conflicts.py` cubre detección de texto, binario, grande y enlace; archivos nuevos, idénticos, solo modo, CRLF y cambios de tipo; generación de filas con contexto, emparejamiento e inserciones/eliminaciones; composición con mezcla dentro de un bloque, todos-respaldo, todos-local, CRLF, salvaguarda de salto final y longitud de decisiones; y validación de TOML, JSON, INI, plist, original inválido y formatos sin validar.
 - **Integración:** ciclo completo respaldo y restauración entre dos HOME falsos distintos, con apps "instaladas" simuladas mediante un `Info.plist` falso, comprobando que solo se restauran las instaladas. Las pruebas de conflicto cubren mezcla, snapshot, undo, `--yes` y `--dry-run` con diffs.
-- **TUI:** `tests/test_tui.py` usa `App.run_test()` (sin TTY) para abrir y cerrar la app, recorrer la selección de apps, la tabla, el detalle por bloques, la validación bloqueada, la confirmación, el resumen, la ayuda y el aborto por cambio concurrente.
+- **TUI:** `tests/test_tui.py` usa `App.run_test()` (sin TTY) para abrir y cerrar la app, recorrer la selección de apps, la tabla, el detalle por líneas (cursor que salta cabeceras y contexto, toggle, acciones globales y por bloque, saltos y reapertura), la validación bloqueada, la confirmación, el resumen, la ayuda y el aborto por cambio concurrente. También comprueba que el tema por defecto es ANSI (`ansi-dark`) y que `TEXTUAL_THEME` puede sobrescribirlo.
+- **Actualización:** `tests/test_update.py` cubre el parseo y la comparación de versiones, la consulta de la release, el asset ausente, el digest ausente o incorrecto, la descarga y el reemplazo atómico, los symlinks, la plataforma no soportada, una instalación no frozen y la paridad de `REPOSITORY`/`ASSET_NAME` con `scripts/install.sh`. Ninguna prueba accede a la red ni al HOME real.
 - **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado. `tests/test_paths.py` cubre el rechazo de enlaces intermedios y la conservación de enlaces finales; `tests/test_restore.py` cubre el rechazo antes de la instantánea, la sustitución de un directorio durante la aplicación y un destino cambiado entre plan y apply.
 - **Aislamiento:** una fixture que reemplaza `HOME` y hace fallar la prueba si alguna ruta resuelve fuera de `tmp_path`, para no tocar nunca el home real.
 - **CI:** GitHub Actions con runner de macOS para ejecutar `pytest`.
@@ -233,6 +258,8 @@ Selección de apps -> Tabla de conflictos -> Detalle por bloques (por archivo)
 | Binario autocontenido | PyInstaller `onefile`, uno por arquitectura (arm64 e Intel), publicado en GitHub Releases | en cada merge a `main` |
 
 El binario sin firmar recibe la cuarentena de macOS: hay que documentar cómo quitarla (`xattr -d com.apple.quarantine`) o firmarlo y notarizarlo con una cuenta de desarrollador.
+
+El binario incluye el bundle de CAs de `certifi`, necesario para que `kamino update` verifique TLS sin depender de las rutas de certificados del Python de build.
 
 El versionado y la publicación se automatizan con `python-semantic-release`: los títulos de los PRs siguen Conventional Commits (el CI los valida) y, al hacer merge a `main`, se calcula el bump semver, se actualiza `CHANGELOG.md`, se crea el tag `vX.Y.Z` y se publica la GitHub Release con los binarios adjuntos (workflow `.github/workflows/release.yml`). El tap depende de tener versiones etiquetadas, por eso `uv` va primero.
 

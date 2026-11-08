@@ -6,7 +6,7 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
-from textual.widgets import Button, DataTable, Static
+from textual.widgets import Button, DataTable, ListView, Static
 
 from kamino.conflicts import (
     Conflict,
@@ -14,9 +14,12 @@ from kamino.conflicts import (
     ConflictKind,
     FileAction,
     FileDecision,
-    HunkDecision,
+    HunkRow,
     LocalFile,
+    RowDecision,
+    RowKind,
     build_conflict,
+    build_hunks,
 )
 from kamino.errors import ConcurrentChangeError
 from kamino.restore import (
@@ -25,6 +28,7 @@ from kamino.restore import (
     RestorePlan,
     RestoreStatus,
 )
+from kamino.tui import app as app_module
 from kamino.tui import screens as screens_module
 from kamino.tui.app import KaminoRestoreApp
 from kamino.tui.screens import (
@@ -36,6 +40,7 @@ from kamino.tui.screens import (
     HelpScreen,
     SummaryScreen,
 )
+from kamino.tui.widgets import conflict_detail, context_text, hunk_header, row_text
 
 
 def _run(coroutine) -> None:
@@ -237,6 +242,35 @@ def test_apply_omit_and_global_actions() -> None:
     _run(scenario())
 
 
+def test_detail_starts_on_the_first_decidable_row_and_skips_context() -> None:
+    session = FakeSession()
+    app = KaminoRestoreApp(session, selected=["foo"])
+
+    async def scenario() -> None:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.click("#review")
+            await pilot.pause()
+            detail = app.screen
+            assert isinstance(detail, ConflictDetailScreen)
+            await pilot.pause()
+            list_view = detail.query_one("#hunks", ListView)
+            assert list_view.index == 2
+            await pilot.press("down")
+            await pilot.pause()
+            assert list_view.index == 10
+            await pilot.press("up")
+            await pilot.pause()
+            assert list_view.index == 2
+
+            header = list_view.children[0]
+            list_view.post_message(ListView.Selected(list_view, header, 0))
+            await pilot.pause()
+            assert list_view.index == 2
+
+    _run(scenario())
+
+
 def test_detail_toggles_and_global_shortcuts() -> None:
     session = FakeSession()
     app = KaminoRestoreApp(session, selected=["foo"])
@@ -249,22 +283,167 @@ def test_detail_toggles_and_global_shortcuts() -> None:
             await pilot.pause()
             detail = app.screen
             assert isinstance(detail, ConflictDetailScreen)
-            assert detail.decisions == [HunkDecision.BACKUP, HunkDecision.BACKUP]
+            assert detail.decisions == [RowDecision.BACKUP, RowDecision.BACKUP]
             await pilot.press("space")
             await pilot.pause()
-            assert detail.decisions[0] is HunkDecision.LOCAL
+            assert detail.decisions[0] is RowDecision.LOCAL
+            assert "[local]" in str(detail._row_widgets[0].content)
+            assert "[respaldo]" in str(detail._row_widgets[1].content)
+            await pilot.press("enter")
+            await pilot.pause()
+            assert detail.decisions[0] is RowDecision.BACKUP
+            await pilot.press("space")
+            await pilot.pause()
+            assert detail.decisions[0] is RowDecision.LOCAL
             await pilot.press("a")
             await pilot.pause()
-            assert detail.decisions == [HunkDecision.BACKUP, HunkDecision.BACKUP]
+            assert detail.decisions == [RowDecision.BACKUP, RowDecision.BACKUP]
             await pilot.press("l")
             await pilot.pause()
-            assert detail.decisions == [HunkDecision.LOCAL, HunkDecision.LOCAL]
+            assert detail.decisions == [RowDecision.LOCAL, RowDecision.LOCAL]
             await pilot.click("#back")
             await pilot.pause()
             assert isinstance(app.screen, ConflictSummaryScreen)
             assert app.decisions.get(path) == FileDecision(
-                FileAction.REVIEW, (HunkDecision.LOCAL, HunkDecision.LOCAL)
+                FileAction.REVIEW, (RowDecision.LOCAL, RowDecision.LOCAL)
             )
+
+            await pilot.click("#review")
+            await pilot.pause()
+            detail = app.screen
+            assert isinstance(detail, ConflictDetailScreen)
+            assert detail.decisions == [RowDecision.LOCAL, RowDecision.LOCAL]
+
+    _run(scenario())
+
+
+def test_detail_block_actions_and_navigation() -> None:
+    session = FakeSession()
+    app = KaminoRestoreApp(session, selected=["foo"])
+
+    async def scenario() -> None:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            await pilot.click("#review")
+            await pilot.pause()
+            detail = app.screen
+            assert isinstance(detail, ConflictDetailScreen)
+            list_view = detail.query_one("#hunks", ListView)
+
+            await pilot.press("l")
+            await pilot.pause()
+            assert detail.decisions == [RowDecision.LOCAL, RowDecision.LOCAL]
+            await pilot.press("A")
+            await pilot.pause()
+            assert detail.decisions == [RowDecision.BACKUP, RowDecision.LOCAL]
+            await pilot.press("L")
+            await pilot.pause()
+            assert detail.decisions == [RowDecision.LOCAL, RowDecision.LOCAL]
+            await pilot.click("#block-backup")
+            await pilot.pause()
+            assert detail.decisions == [RowDecision.BACKUP, RowDecision.LOCAL]
+
+            await pilot.press("n")
+            await pilot.pause()
+            assert list_view.index == 10
+            await pilot.press("n")
+            await pilot.pause()
+            assert list_view.index == 10
+            await pilot.press("A")
+            await pilot.pause()
+            assert detail.decisions == [RowDecision.BACKUP, RowDecision.BACKUP]
+            await pilot.press("p")
+            await pilot.pause()
+            assert list_view.index == 2
+            await pilot.press("p")
+            await pilot.pause()
+            assert list_view.index == 2
+            await pilot.click("#block-local")
+            await pilot.pause()
+            assert detail.decisions == [RowDecision.LOCAL, RowDecision.BACKUP]
+
+    _run(scenario())
+
+
+def test_detail_rejects_an_incomplete_previous_decision() -> None:
+    session = FakeSession()
+    app = KaminoRestoreApp(session, selected=["foo"])
+    conflict = session.plan_result.conflicts[0]
+
+    async def scenario() -> None:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            app.decisions.set(conflict.path, FileDecision(FileAction.REVIEW, (RowDecision.LOCAL,)))
+            await pilot.click("#review")
+            await pilot.pause()
+            detail = app.screen
+            assert isinstance(detail, ConflictDetailScreen)
+            assert detail.decisions == [RowDecision.BACKUP, RowDecision.BACKUP]
+
+    _run(scenario())
+
+
+def test_render_helpers_show_ranges_pairs_and_single_rows() -> None:
+    conflict = _conflict()
+    first, second = conflict.hunks
+    rows = [row for hunk in conflict.hunks for row in hunk.rows]
+
+    assert "local 1-5" in str(hunk_header(first))
+    assert "respaldo 1-5" in str(hunk_header(first))
+    assert "1 línea" in str(hunk_header(first))
+    assert "Bloque 2" in str(hunk_header(second))
+    assert "line 0" in str(context_text(first.rows[0]))
+
+    replaced = next(row for row in rows if row.local == "line 1\n")
+    assert "* - line 1  [local]" in str(row_text(replaced, RowDecision.LOCAL))
+    assert "* + LINE ONE  [respaldo]" in str(row_text(replaced, RowDecision.BACKUP))
+
+    inserted = HunkRow(RowKind.BACKUP_ONLY, None, "extra\n")
+    assert "* + extra  [respaldo]" in str(row_text(inserted, RowDecision.BACKUP))
+    assert "extra  [omitir]" in str(row_text(inserted, RowDecision.LOCAL))
+
+    removed = HunkRow(RowKind.LOCAL_ONLY, "gone\n", None)
+    assert "* - gone  [local]" in str(row_text(removed, RowDecision.LOCAL))
+    assert "gone  [omitir]" in str(row_text(removed, RowDecision.BACKUP))
+
+
+def test_render_header_shows_a_dash_for_an_empty_side() -> None:
+    (inserted,) = build_hunks("", "a\n")
+    (deleted,) = build_hunks("a\n", "")
+
+    inserted_header = str(hunk_header(inserted))
+    assert "local -" in inserted_header
+    assert "respaldo 1-1" in inserted_header
+    deleted_header = str(hunk_header(deleted))
+    assert "local 1-1" in deleted_header
+    assert "respaldo -" in deleted_header
+
+
+def test_summary_detail_counts_blocks_and_lines() -> None:
+    conflict = _conflict()
+
+    assert conflict_detail(conflict) == "2 bloques · 2 líneas"
+
+
+def test_summary_review_decision_counts_backup_rows() -> None:
+    session = FakeSession()
+    app = KaminoRestoreApp(session, selected=["foo"])
+    conflict = session.plan_result.conflicts[0]
+
+    async def scenario() -> None:
+        async with app.run_test() as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConflictSummaryScreen)
+            app.decisions.set(
+                conflict.path,
+                FileDecision(FileAction.REVIEW, (RowDecision.BACKUP, RowDecision.LOCAL)),
+            )
+            screen.refresh_table()
+            await pilot.pause()
+            row = screen.query_one(DataTable).get_row_at(0)
+            assert row[3] == "2 bloques · 2 líneas"
+            assert row[4] == "revisión (1/2 respaldo)"
 
     _run(scenario())
 
@@ -490,3 +669,28 @@ def test_real_session_full_tui_flow(tmp_path: Path) -> None:
         assert list((tmp_path / "snapshots").glob("*.tar.gz"))
     finally:
         session.close()
+
+
+def test_default_theme_is_ansi_dark(monkeypatch) -> None:
+    monkeypatch.delenv("TEXTUAL_THEME", raising=False)
+
+    assert app_module._default_theme() == "ansi-dark"
+
+
+def test_default_theme_can_be_overridden(monkeypatch) -> None:
+    monkeypatch.setenv("TEXTUAL_THEME", "ansi-light")
+
+    assert app_module._default_theme() == "ansi-light"
+
+
+def test_app_uses_terminal_ansi_colors(monkeypatch) -> None:
+    monkeypatch.setattr(KaminoRestoreApp, "theme", "ansi-dark")
+    app = KaminoRestoreApp(FakeSession(), selected=[])
+
+    async def scenario() -> None:
+        async with app.run_test():
+            assert app.theme == "ansi-dark"
+            assert app.current_theme.ansi is True
+            assert app.native_ansi_color is True
+
+    _run(scenario())

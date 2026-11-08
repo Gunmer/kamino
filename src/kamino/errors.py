@@ -31,6 +31,10 @@ class PathError(KaminoError):
     """Una ruta sale de los límites permitidos (home o archivo)."""
 
 
+class UpdateError(KaminoError):
+    """La actualización del binario no se pudo completar."""
+
+
 class ConflictError(KaminoError):
     """A restore conflict cannot be resolved with the given decisions."""
 
