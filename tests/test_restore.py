@@ -17,6 +17,7 @@ import shutil
 import stat
 import tarfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -24,8 +25,31 @@ from kamino import restore as restore_module
 from kamino.archive import FORMAT_VERSION, MANIFEST_NAME, Manifest, read_manifest, write_archive
 from kamino.backup import run_backup
 from kamino.catalog.models import AppDefinition
-from kamino.errors import IntegrityError, PathError, VersionError
-from kamino.restore import RestoreResult, RestoreStatus, run_restore
+from kamino.conflicts import (
+    ConflictDecisions,
+    ConflictKind,
+    FileAction,
+    FileDecision,
+    HunkDecision,
+    apply_all,
+    compose,
+    omit_all,
+    review_all,
+)
+from kamino.errors import (
+    ConcurrentChangeError,
+    DecisionRequiredError,
+    IntegrityError,
+    InvalidMergeError,
+    PathError,
+    VersionError,
+)
+from kamino.restore import (
+    RestoreResult,
+    RestoreStatus,
+    prepare_restore,
+    run_restore,
+)
 
 
 def _app(*, app_id: str, paths: list[str]) -> AppDefinition:
@@ -642,3 +666,308 @@ def test_ghostty_absolute_reference_warns_on_restore_and_dry_run(tmp_path: Path)
     assert (home / ".config/ghostty/config").read_bytes() == (
         f"config-file = {reference}\n".encode()
     )
+
+
+# --- conflict session API (§5.2 and restore-conflicts) ---
+
+
+def _prepare(tmp_path: Path, backup: Path, home: Path, catalog: dict[str, AppDefinition]):
+    return prepare_restore(
+        backup,
+        home=home,
+        catalog=catalog,
+        application_dirs=[],
+        path=_fake_path(tmp_path / "target-path", "foo"),
+        snapshots_dir=tmp_path / "snapshots",
+    )
+
+
+def _two_hunk_backup(tmp_path: Path) -> tuple[Path, dict[str, AppDefinition], str, str]:
+    local = "".join(f"line {index}\n" for index in range(20))
+    backup = local.replace("line 1\n", "LINE ONE\n").replace("line 18\n", "LINE EIGHTEEN\n")
+    path, catalog = _backup(
+        tmp_path, apps={"foo": ["cfg.conf"]}, files={"cfg.conf": backup.encode()}
+    )
+    return path, catalog, local, backup
+
+
+def test_plan_reports_content_conflict_and_dry_run_keeps_text(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "cfg.toml", b"a = 1\n")
+    backup, catalog = _backup(tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"a = 2\n"})
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan(dry_run=True)
+
+        assert len(plan.conflicts) == 1
+        conflict = plan.conflicts[0]
+        assert conflict.kind is ConflictKind.TEXT
+        assert conflict.local_text == "a = 1\n"
+        assert conflict.backup_text == "a = 2\n"
+        assert plan.entries[0].status is RestoreStatus.DIFFERENT
+        assert session.staging is None
+        assert (home / "cfg.toml").read_bytes() == b"a = 1\n"
+    finally:
+        session.close()
+
+
+def test_apply_omit_keeps_local_without_snapshot(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "cfg.toml", b"a = 1\n")
+    backup, catalog = _backup(tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"a = 2\n"})
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        result = session.apply(omit_all(plan.conflicts))
+
+        assert (home / "cfg.toml").read_bytes() == b"a = 1\n"
+        assert result.restored == []
+        assert result.merged == []
+        assert result.omitted == ["cfg.toml"]
+        assert result.snapshot is None
+        assert not (tmp_path / "snapshots").exists()
+    finally:
+        session.close()
+
+
+def test_apply_review_mixes_blocks_and_classifies_merged(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "cfg.conf", "".join(f"line {index}\n" for index in range(20)).encode())
+    backup, catalog, local, backup_text = _two_hunk_backup(tmp_path)
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        conflict = plan.conflicts[0]
+        decisions = ConflictDecisions(
+            {
+                conflict.path: FileDecision(
+                    FileAction.REVIEW, (HunkDecision.BACKUP, HunkDecision.LOCAL)
+                )
+            }
+        )
+        result = session.apply(decisions)
+
+        written = (home / "cfg.conf").read_text()
+        expected = compose(local, backup_text, (HunkDecision.BACKUP, HunkDecision.LOCAL))
+        assert written == expected
+        assert "LINE ONE" in written
+        assert "line 18" in written
+        assert result.merged == ["cfg.conf"]
+        assert result.restored == []
+        assert result.omitted == []
+        assert result.snapshot is not None
+    finally:
+        session.close()
+
+
+def test_review_all_local_writes_nothing_and_keeps_mode(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    target = _write_file(
+        home, "cfg.conf", "".join(f"line {index}\n" for index in range(20)).encode()
+    )
+    target.chmod(0o600)
+    backup, catalog, _local, _backup_text = _two_hunk_backup(tmp_path)
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        conflict = plan.conflicts[0]
+        result = session.apply(
+            ConflictDecisions({conflict.path: review_all(conflict, HunkDecision.LOCAL)})
+        )
+
+        assert target.read_text() == "".join(f"line {index}\n" for index in range(20))
+        assert stat.S_IMODE(target.stat().st_mode) == 0o600
+        assert result.omitted == ["cfg.conf"]
+        assert result.snapshot is None
+    finally:
+        session.close()
+
+
+def test_review_all_backup_is_restored_with_backup_mode(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    target = _write_file(
+        home, "cfg.conf", "".join(f"line {index}\n" for index in range(20)).encode()
+    )
+    target.chmod(0o600)
+    backup, catalog, _local, _backup_text = _two_hunk_backup(tmp_path)
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        conflict = plan.conflicts[0]
+        result = session.apply(ConflictDecisions({conflict.path: review_all(conflict)}))
+
+        assert "LINE ONE" in target.read_text()
+        assert "LINE EIGHTEEN" in target.read_text()
+        assert stat.S_IMODE(target.stat().st_mode) == 0o644
+        assert result.restored == ["cfg.conf"]
+        assert result.merged == []
+    finally:
+        session.close()
+
+
+def test_apply_requires_decisions_for_every_conflict(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "cfg.toml", b"a = 1\n")
+    backup, catalog = _backup(tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"a = 2\n"})
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        session.plan()
+        with pytest.raises(DecisionRequiredError):
+            session.apply(ConflictDecisions())
+
+        assert (home / "cfg.toml").read_bytes() == b"a = 1\n"
+        assert not (tmp_path / "snapshots").exists()
+    finally:
+        session.close()
+
+
+def test_core_revalidates_merge_before_writing(tmp_path: Path, monkeypatch) -> None:
+    local = "a = 1\n"
+    home = tmp_path / "home"
+    _write_file(home, "cfg.toml", local.encode())
+    backup, catalog = _backup(tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"a = 2\n"})
+    monkeypatch.setattr(
+        restore_module,
+        "validate_merge",
+        lambda *args, **kwargs: SimpleNamespace(status="invalid", message="boom"),
+    )
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        conflict = plan.conflicts[0]
+        decisions = ConflictDecisions(
+            {conflict.path: FileDecision(FileAction.REVIEW, (HunkDecision.BACKUP,))}
+        )
+        with pytest.raises(InvalidMergeError):
+            session.apply(decisions)
+
+        assert (home / "cfg.toml").read_text() == local
+        assert not (tmp_path / "snapshots").exists()
+    finally:
+        session.close()
+
+
+def test_destination_changed_between_plan_and_apply_aborts(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "cfg.toml", b"a = 1\n")
+    backup, catalog = _backup(tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"a = 2\n"})
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        _write_file(home, "cfg.toml", b"a = 3\n")
+
+        with pytest.raises(ConcurrentChangeError):
+            session.apply(apply_all(plan.conflicts))
+
+        assert (home / "cfg.toml").read_bytes() == b"a = 3\n"
+        assert not (tmp_path / "snapshots").exists()
+    finally:
+        session.close()
+
+
+def test_new_destination_appearing_after_plan_aborts(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    backup, catalog = _backup(
+        tmp_path, apps={"foo": ["nuevo.toml"]}, files={"nuevo.toml": b"nuevo\n"}
+    )
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        session.plan()
+        _write_file(home, "nuevo.toml", b"intruso\n")
+
+        with pytest.raises(ConcurrentChangeError):
+            session.apply(ConflictDecisions())
+
+        assert (home / "nuevo.toml").read_bytes() == b"intruso\n"
+        assert not (tmp_path / "snapshots").exists()
+    finally:
+        session.close()
+
+
+def test_symlink_target_changed_after_plan_aborts(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "real.txt")
+    (home / "enlace.txt").symlink_to("uno.txt")
+    backup, catalog = _backup(
+        tmp_path, apps={"foo": ["enlace.txt"]}, files={}, links={"enlace.txt": "dos.txt"}
+    )
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        (home / "enlace.txt").unlink()
+        (home / "enlace.txt").symlink_to("tres.txt")
+
+        with pytest.raises(ConcurrentChangeError):
+            session.apply(apply_all(plan.conflicts))
+
+        assert os.readlink(home / "enlace.txt") == "tres.txt"
+        assert not (tmp_path / "snapshots").exists()
+    finally:
+        session.close()
+
+
+def test_snapshot_only_contains_written_destinations(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "a.toml", b"a = 1\n")
+    _write_file(home, "b.toml", b"b = 1\n")
+    backup, catalog = _backup(
+        tmp_path,
+        apps={"foo": ["a.toml", "b.toml"]},
+        files={"a.toml": b"a = 2\n", "b.toml": b"b = 2\n"},
+    )
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+        by_path = {conflict.path: conflict for conflict in plan.conflicts}
+        decisions = ConflictDecisions(
+            {
+                "a.toml": FileDecision(FileAction.APPLY),
+                "b.toml": FileDecision(FileAction.OMIT),
+            }
+        )
+        assert by_path.keys() == decisions.decisions.keys()
+        result = session.apply(decisions)
+
+        assert (home / "a.toml").read_bytes() == b"a = 2\n"
+        assert (home / "b.toml").read_bytes() == b"b = 1\n"
+        assert result.snapshot is not None
+        snapshot_manifest = read_manifest(result.snapshot)
+        (app,) = snapshot_manifest.apps
+        assert [entry.path for entry in app.files] == ["a.toml"]
+    finally:
+        session.close()
+
+
+def test_type_change_is_not_a_conflict(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "real.txt", b"real\n")
+    (home / "cfg.toml").symlink_to("real.txt")
+    backup, catalog = _backup(
+        tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"regular\n"}
+    )
+    session = _prepare(tmp_path, backup, home, catalog)
+    try:
+        plan = session.plan()
+
+        assert plan.conflicts == []
+        assert plan.entries[0].status is RestoreStatus.DIFFERENT
+        result = session.apply(ConflictDecisions())
+        assert result.restored == ["cfg.toml"]
+        assert not (home / "cfg.toml").is_symlink()
+    finally:
+        session.close()
+
+
+def test_dry_run_does_not_verify_the_archive(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "cfg.toml", b"a = 1\n")
+    backup, catalog = _backup(tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"a = 2\n"})
+    tampered = _tamper(backup, "apps/foo/cfg.toml", b"alterado\n")
+
+    result = _run(tmp_path, tampered, home, catalog, dry_run=True)
+
+    assert result.dry_run is True
+    assert result.plan.conflicts
+    assert (home / "cfg.toml").read_bytes() == b"a = 1\n"
+    assert not (tmp_path / "snapshots").exists()

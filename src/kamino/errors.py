@@ -29,3 +29,19 @@ class VersionError(KaminoError):
 
 class PathError(KaminoError):
     """Una ruta sale de los límites permitidos (home o archivo)."""
+
+
+class ConflictError(KaminoError):
+    """A restore conflict cannot be resolved with the given decisions."""
+
+
+class DecisionRequiredError(ConflictError):
+    """At least one conflict has no decision."""
+
+
+class InvalidMergeError(ConflictError):
+    """A composed file is invalid and both originals were valid."""
+
+
+class ConcurrentChangeError(ConflictError):
+    """A destination changed between planning and applying."""

@@ -9,10 +9,16 @@ from __future__ import annotations
 import plistlib
 from pathlib import Path
 
+from typer.testing import CliRunner
+
+import kamino.cli as cli
 from kamino.backup import run_backup
 from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
-from kamino.restore import run_restore
+from kamino.conflicts import ConflictDecisions, FileAction, FileDecision, HunkDecision
+from kamino.restore import prepare_restore, run_restore
+
+runner = CliRunner()
 
 
 def _app() -> AppDefinition:
@@ -206,3 +212,119 @@ def test_uninstalled_new_tool_is_not_backed_up(tmp_path: Path, monkeypatch) -> N
     )
 
     assert result.manifest.apps == []
+
+
+# --- restore conflicts end to end ---
+
+
+def _conflict_setup(tmp_path: Path) -> tuple[Path, AppDefinition, Path, Path, str, str]:
+    catalog = {
+        "foo": AppDefinition.model_validate(
+            {
+                "id": "foo",
+                "name": "Foo",
+                "command": "foo",
+                "paths": [".config/foo/config.conf"],
+            }
+        )
+    }
+    local = "".join(f"line {index}\n" for index in range(20))
+    backup_text = local.replace("line 1\n", "LINE ONE\n").replace("line 18\n", "LINE EIGHTEEN\n")
+    origin = tmp_path / "origin"
+    _write(origin, ".config/foo/config.conf", backup_text)
+    bin_dir = tmp_path / "bin"
+    _fake_executable(bin_dir, "foo")
+    backup = tmp_path / "backup.tar.gz"
+    run_backup(
+        home=origin,
+        catalog=catalog,
+        application_dirs=[],
+        path=str(bin_dir),
+        output=backup,
+    )
+    target = tmp_path / "target"
+    _write(target, ".config/foo/config.conf", local)
+    return backup, catalog["foo"], target, bin_dir, local, backup_text
+
+
+def test_conflict_mix_snapshot_and_undo(tmp_path: Path) -> None:
+    backup, definition, target, bin_dir, local, _backup_text = _conflict_setup(tmp_path)
+    catalog = {"foo": definition}
+    session = prepare_restore(
+        backup,
+        home=target,
+        catalog=catalog,
+        application_dirs=[],
+        path=str(bin_dir),
+        snapshots_dir=tmp_path / "snapshots",
+    )
+    try:
+        plan = session.plan()
+        conflict = plan.conflicts[0]
+        result = session.apply(
+            ConflictDecisions(
+                {
+                    conflict.path: FileDecision(
+                        FileAction.REVIEW, (HunkDecision.BACKUP, HunkDecision.LOCAL)
+                    )
+                }
+            )
+        )
+    finally:
+        session.close()
+
+    merged = (target / ".config/foo/config.conf").read_text()
+    assert "LINE ONE" in merged
+    assert "line 18" in merged
+    assert "LINE EIGHTEEN" not in merged
+    assert result.merged == [".config/foo/config.conf"]
+    assert result.snapshot is not None
+
+    undone = run_restore(
+        result.snapshot,
+        home=target,
+        catalog=catalog,
+        application_dirs=[],
+        path=str(bin_dir),
+        snapshots_dir=tmp_path / "snapshots",
+    )
+
+    assert (target / ".config/foo/config.conf").read_text() == local
+    assert undone.restored == [".config/foo/config.conf"]
+
+
+def _cli_environment(tmp_path: Path, target: Path, bin_dir: Path) -> dict[str, str]:
+    apps = target / ".config" / "kamino" / "apps"
+    apps.mkdir(parents=True, exist_ok=True)
+    (apps / "foo.toml").write_text(
+        'id = "foo"\nname = "Foo"\ncommand = "foo"\npaths = [".config/foo/config.conf"]\n',
+        encoding="utf-8",
+    )
+    return {"HOME": str(target), "PATH": str(bin_dir)}
+
+
+def test_cli_yes_applies_conflicts_without_tui(tmp_path: Path) -> None:
+    backup, _definition, target, bin_dir, _local, backup_text = _conflict_setup(tmp_path)
+    env = _cli_environment(tmp_path, target, bin_dir)
+
+    result = runner.invoke(cli.app, ["restore", str(backup), "--yes"], env=env)
+
+    assert result.exit_code == 0, result.output
+    assert (target / ".config/foo/config.conf").read_text() == backup_text
+    snapshots = target / "Library" / "Application Support" / "kamino" / "snapshots"
+    assert list(snapshots.glob("*.tar.gz"))
+
+
+def test_cli_dry_run_prints_diff_without_writing(tmp_path: Path) -> None:
+    backup, _definition, target, bin_dir, local, _backup_text = _conflict_setup(tmp_path)
+    env = _cli_environment(tmp_path, target, bin_dir)
+
+    result = runner.invoke(cli.app, ["restore", str(backup), "--dry-run"], env=env)
+
+    assert result.exit_code == 0, result.output
+    assert "--- local/.config/foo/config.conf" in result.output
+    assert "+++ respaldo/.config/foo/config.conf" in result.output
+    assert "LINE ONE" in result.output
+    assert (target / ".config/foo/config.conf").read_text() == local
+    snapshots = target / "Library" / "Application Support" / "kamino" / "snapshots"
+    assert not snapshots.exists()

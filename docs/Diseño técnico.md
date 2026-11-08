@@ -19,6 +19,7 @@ Este documento concreta cómo se construye la herramienta descrita en el diseño
 | Lenguaje | Python 3.11.4 o superior | `tomllib` y filtros de extracción de `tarfile` en la librería estándar |
 | Comandos y opciones | Typer (alternativa: `argparse`) | ayuda automática y tipado; `argparse` si prefieres cero dependencias |
 | Selección interactiva | `questionary` (alternativa: `InquirerPy`) | lista de selección múltiple en terminal |
+| Revisión interactiva de conflictos | `textual` | tabla navegable, detalle con scroll y pruebas headless con `run_test` |
 | Salida formateada | `rich` | tablas, progreso y colores |
 | Lectura del catálogo | `tomllib` (estándar) | TOML sin dependencias |
 | Validación del catálogo | `pydantic` (alternativa: dataclasses y validación propia) | errores claros si una definición es inválida; añade peso al binario |
@@ -42,7 +43,13 @@ src/kamino/
 ├── cli.py            # comandos backup y restore, y menú TUI sin argumentos
 ├── ui.py             # selección interactiva, menú de comandos, tablas, progreso
 ├── backup.py         # caso de uso: construir plan y ejecutar respaldo
-├── restore.py        # caso de uso: construir plan y ejecutar restauración
+├── restore.py        # caso de uso: sesión, plan y ejecución de restauración
+├── conflicts.py      # diff por bloques, composición y validación de mezclas
+├── tui/
+│   ├── app.py        # KaminoRestoreApp, estado y entrada run_restore_tui
+│   ├── screens.py    # apps, conflictos, detalle, confirmación, resumen y ayuda
+│   ├── widgets.py    # tabla, visor de bloques y avisos
+│   └── styles.tcss   # estilos de la aplicación
 ├── plan.py           # Plan y Operation, compartidos por ambos
 ├── catalog/
 │   ├── models.py     # AppDefinition (validación)
@@ -138,14 +145,50 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
 ### 5.2 Restauración
 
 1. Abrir el archivo, leer `manifest.json` y validar `format_version`.
-2. Detectar las apps instaladas y cruzarlas con las del manifiesto; las que no están instaladas se listan como omitidas.
-3. El usuario confirma qué apps aplicar.
-4. Construir el plan: el destino de cada archivo es `Path.home()` más su ruta relativa, clasificado como nuevo, idéntico (se omite) o distinto (se sobrescribe).
-5. Con `--dry-run`: imprimir el plan y terminar.
-6. Extraer a un directorio temporal y comparar cada archivo con su checksum; si algo no coincide, abortar antes de tocar nada.
-7. Crear la copia previa (snapshot) de los destinos que van a cambiar.
-8. Aplicar con reemplazo atómico (`os.replace`), conservando permisos.
-9. Mostrar el resumen: restauradas, omitidas y ruta del snapshot.
+2. Detectar las apps instaladas y cruzarlas con las del manifiesto; las que no están instaladas se
+   listan como omitidas.
+3. Elegir qué apps aplicar: la TUI muestra todas las restaurables sin marcar ninguna por defecto, o
+   `--apps` proporciona la selección y omite esa pantalla.
+4. Construir el plan: el destino de cada archivo es `Path.home()` más su ruta relativa, clasificado
+   como nuevo, idéntico (se omite, incluida una diferencia solo de CRLF), distinto o no soportado.
+   Para cada archivo distinto se construye un conflicto: bloques de texto para revisar, o archivo
+   entero si es binario, grande o un enlace con enlace.
+5. Verificar el `tar.gz` completo antes de extraerlo, extraerlo a un directorio temporal y leer el
+   contenido de cada conflicto. Con `--dry-run` no se verifica ni se extrae: se lee el contenido
+   directamente del archivo y se imprimen los diffs; no se abre la TUI, ni se crea snapshot, ni se
+   escribe nada.
+6. Revisar los conflictos en la TUI: tabla con solo los conflictos y los conteos, detalle por
+   bloques y validación de la mezcla al volver. Ningún conflicto puede quedar sin decisión. La
+   confirmación final exige una acción explícita; volver o cancelar no escribe ni crea snapshot.
+7. Aplicar en este orden: exigir cobertura de decisiones, revalidar las mezclas, re-verificar los
+   destinos que se van a escribir, crear el snapshot de esos destinos y escribir con reemplazo
+   atómico. Si un destino cambió desde el plan, abortar toda la operación antes del snapshot.
+8. Mostrar el resumen: restaurados, mezclados, omitidos y ruta del snapshot. Un archivo mezclado es
+   éxito; el código 3 se reserva a los elementos omitidos.
+
+El orden de seguridad es `verificar -> extraer -> decidir -> snapshot -> aplicar`. `--yes` resuelve
+todos los conflictos aplicando el respaldo y conserva la vía no interactiva.
+
+Pantallas y atajos de la TUI:
+
+```text
+Selección de apps -> Tabla de conflictos -> Detalle por bloques (por archivo)
+                  -> Confirmación -> Resumen
+```
+
+- **Selección de apps:** casillas sin marcar por defecto, botones para seleccionar todas o ninguna,
+  continuar y cancelar. Se omite con `--apps`.
+- **Tabla de conflictos:** solo conflictos, conteos de nuevos/idénticos/no soportados, acciones por
+  fila (revisar, aplicar, omitir), acciones globales (aplicar todo, omitir todo), confirmar
+  deshabilitado hasta cubrir todos los conflictos y cancelar.
+- **Detalle:** `Espacio` o `Enter` alterna el bloque resaltado; `A` toma todos los restantes del
+  respaldo y `L` todos los locales; `Escape` vuelve y valida la mezcla. Si la mezcla es inválida, se
+  muestra el error y se permanece en el detalle; si algún original era inválido, se avisa y se
+  permite aplicar.
+- **Confirmación:** conteos de restaurados, mezclados y omitidos, directorio del snapshot y botones
+  aplicar, volver y cancelar.
+- **Resumen:** conteos finales y ruta del snapshot; salir.
+- **Ayuda:** `?` abre la ayuda en español con los atajos, el flujo y el aviso de secretos.
 
 ## 6. Decisiones técnicas relevantes
 
@@ -163,15 +206,21 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
 - **Códigos de salida.** 0 éxito, 1 error, 2 uso incorrecto, 3 éxito con elementos omitidos.
 - **Límite del HOME.** `SafeHome` abre el home una vez y recorre sus descendientes con `dir_fd` y `O_NOFOLLOW`. La validación léxica de `to_absolute`/`to_relative` sigue siendo la primera barrera; el acceso con descriptores impide que un enlace intermedio redirija una lectura o escritura fuera del home. Si la plataforma no ofrece estas primitivas, se aborta en lugar de degradar a `resolve()` seguido de una apertura insegura.
 - **Enlaces finales.** Se conserva la regla existente: un enlace final se guarda como enlace, nunca se sigue y solo se admite si su destino es relativo y no contiene `..`. `SafeHome.read_bytes` rechaza el componente final si es un enlace; `lstat` y `readlink` permiten representarlo en el manifiesto.
-- **Cambios concurrentes.** La planificación calcula el checksum con el mismo acceso seguro que usa el empaquetado, que reabre cada ruta y compara el contenido con el manifiesto. Si una ruta cambia a un enlace o a otro tipo entre el plan y la escritura, el respaldo falla en vez de incluir datos externos. En restauración se valida cada destino antes de la instantánea y se vuelve a abrir cada padre durante la aplicación; si la jerarquía cambia, se detiene sin escribir fuera del home.
+- **Cambios concurrentes.** La planificación calcula el checksum con el mismo acceso seguro que usa el empaquetado, que reabre cada ruta y compara el contenido con el manifiesto. Si una ruta cambia a un enlace o a otro tipo entre el plan y la escritura, el respaldo falla en vez de incluir datos externos. En restauración se valida cada destino antes de la instantánea y se vuelve a abrir cada padre durante la aplicación; si la jerarquía cambia, se detiene sin escribir fuera del home. Además, la sesión guarda el hash del archivo regular, el destino del enlace o la ausencia del destino al planificar y los re-verifica justo antes del snapshot: si alguno cambió durante la revisión, aborta toda la restauración sin escribir.
+- **Conflictos y mezcla.** `conflicts.py` contiene el modelo y las funciones puras. La comparación decodifica UTF-8 y normaliza CRLF solo para comparar; un archivo que solo difiere en CRLF es idéntico. Un contenido con NUL o que no decodifica es binario; un texto de más de 5 MB o de más de 20 000 líneas se trata como grande para proteger `difflib` y la TUI. Los bloques se generan con `difflib.SequenceMatcher` y 3 líneas de contexto; empiezan en el respaldo y se alternan con el local. La composición conserva las líneas iguales del local, adapta las líneas del respaldo al estilo de final de línea local y respeta el último salto de línea del lado elegido. El núcleo compone el archivo; la TUI nunca inyecta bytes arbitrarios.
+- **Validación de mezclas.** Se valida por extensión con la biblioteca estándar: TOML (`tomllib`), JSON (`json` con detección de claves duplicadas), INI/CFG/Git config (`configparser` estricto) y plist XML (`plistlib`, con detección de claves duplicadas en el XML). Solo se bloquea si ambos originales parsean y la mezcla no; si alguno ya era inválido se avisa y se permite aplicar. YAML y shell no se validan. `apply` repite la validación como defensa del núcleo.
+- **TUI de restauración.** `textual` aporta la tabla navegable, el detalle con scroll y las pruebas headless con `run_test`. `restore` abre la TUI solo en una terminal interactiva y sin `--yes`; `--apps` omite la pantalla de selección y `--dry-run` imprime los diffs en stdout sin abrirla. La TUI muestra un aviso de que los diffs pueden contener secretos y no persiste ni registra su contenido.
+- **Empaquetado de la TUI.** El build de PyInstaller incluye los datos de `textual` (CSS y recursos) con `--collect-data textual`, además del catálogo embebido.
 - **Referencias de Ghostty.** El descubrimiento es específico de `ghostty` y se limita a `config-file` y a la selección de temas. Resuelve cada candidato con el acceso seguro, aplica las exclusiones antes de leer, mantiene límites de tamaño, profundidad y cantidad, y deduplica por `(app_id, ruta relativa)`.
 - **Exclusiones y aviso.** Los respaldos nuevos excluyen credenciales independientes conocidas, historiales, sesiones, cachés y registros. El aviso de que el archivo no está cifrado se muestra siempre antes de respaldar y no modifica los bytes de los ajustes. Las exclusiones no se aplican a la restauración de respaldos antiguos ni a la instantánea previa.
 
 ## 7. Pruebas
 
 - **Unitarias:** carga del catálogo (definiciones válidas e inválidas), expansión de rutas y exclusiones, normalización de rutas y manifiesto.
-- **Integración:** ciclo completo respaldo y restauración entre dos HOME falsos distintos, con apps "instaladas" simuladas mediante un `Info.plist` falso, comprobando que solo se restauran las instaladas.
-- **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado. `tests/test_paths.py` cubre el rechazo de enlaces intermedios y la conservación de enlaces finales; `tests/test_restore.py` cubre el rechazo antes de la instantánea y la sustitución de un directorio durante la aplicación.
+- **Conflictos:** `tests/test_conflicts.py` cubre detección de texto, binario, grande y enlace; archivos nuevos, idénticos, solo modo, CRLF y cambios de tipo; generación de bloques con contexto; composición con mezcla, todos-respaldo, todos-local, CRLF y último salto de línea; y validación de TOML, JSON, INI, plist, original inválido y formatos sin validar.
+- **Integración:** ciclo completo respaldo y restauración entre dos HOME falsos distintos, con apps "instaladas" simuladas mediante un `Info.plist` falso, comprobando que solo se restauran las instaladas. Las pruebas de conflicto cubren mezcla, snapshot, undo, `--yes` y `--dry-run` con diffs.
+- **TUI:** `tests/test_tui.py` usa `App.run_test()` (sin TTY) para abrir y cerrar la app, recorrer la selección de apps, la tabla, el detalle por bloques, la validación bloqueada, la confirmación, el resumen, la ayuda y el aborto por cambio concurrente.
+- **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado. `tests/test_paths.py` cubre el rechazo de enlaces intermedios y la conservación de enlaces finales; `tests/test_restore.py` cubre el rechazo antes de la instantánea, la sustitución de un directorio durante la aplicación y un destino cambiado entre plan y apply.
 - **Aislamiento:** una fixture que reemplaza `HOME` y hace fallar la prueba si alguna ruta resuelve fuera de `tmp_path`, para no tocar nunca el home real.
 - **CI:** GitHub Actions con runner de macOS para ejecutar `pytest`.
 

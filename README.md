@@ -7,7 +7,8 @@ corresponda a las apps que estén instaladas.
 ## Estado
 
 MVP v1 implementado: `backup` y `restore` funcionales con catálogo declarativo, detección de
-apps, archivado `tar.gz` con manifiesto y checksums, y CLI interactiva.
+apps, archivado `tar.gz` con manifiesto y checksums, CLI interactiva y revisión de conflictos por
+bloques en una TUI de `textual`.
 
 ## Requisitos
 
@@ -158,16 +159,39 @@ kamino backup -a vscode,iterm2,git -o respaldo.tar.gz -v
 kamino backup -a vscode,iterm2,git -o respaldo.tar.gz -n   # simulación: no crea el archivo
 ```
 
-En `restore`, `-n` equivale a `--dry-run`, `-y` a `--yes` y `-v` a `--verbose`; el archivo de
-respaldo sigue siendo un argumento posicional:
+En `restore`, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes` y `-v` a `--verbose`; el archivo de respaldo sigue siendo un argumento posicional:
 
 ```bash
-kamino restore respaldo.tar.gz -y -v
-kamino restore respaldo.tar.gz -n   # simulación: no pide confirmación ni escribe destinos
+kamino restore respaldo.tar.gz               # TUI: elige apps y revisa conflictos
+kamino restore respaldo.tar.gz -a git,zsh    # sin selección de apps; revisa conflictos
+kamino restore respaldo.tar.gz -y -v         # aplica todo sin preguntar
+kamino restore respaldo.tar.gz -n            # simulación: imprime diffs, no escribe
 ```
 
 Sin terminal interactiva, una restauración real requiere `-y` o `--yes`; la simulación con `-n`
-no lo requiere.
+no lo requiere. `-a` valida los ids contra las apps restaurables: los desconocidos o no instalados
+se avisan y cuentan como omitidos (código de salida 3).
+
+### Conflictos en la restauración
+
+- En una terminal interactiva, `restore` abre una TUI. La primera pantalla elige apps (ninguna
+  marcada por defecto); después aparece solo la tabla de archivos en conflicto, con los conteos de
+  nuevos, idénticos y no soportados.
+- Cada conflicto de texto se revisa por bloques: cada bloque empieza en la versión del respaldo y
+  se puede alternar con la local. `A` toma todos los bloques restantes del respaldo y `L` todos los
+  locales. No se mezclan líneas dentro de un bloque ni se muestra una vista previa completa.
+- Los binarios, los textos de más de 5 MB y los enlaces con enlace se resuelven como archivo entero:
+  aplicar el respaldo u omitir.
+- Antes de aplicar una mezcla se valida TOML, JSON, INI y plist con la biblioteca estándar. Si ambos
+  originales eran válidos y la mezcla no, se bloquea y se vuelve al detalle; si algún original ya
+  era inválido, se avisa y se permite aplicar. YAML y shell no se validan.
+- La confirmación final muestra los conteos de restaurados, mezclados y omitidos y el directorio
+  del snapshot; hay que confirmar explícitamente antes de escribir. Volver o cancelar no escribe ni
+  crea snapshot. El resumen final incluye la ruta del snapshot creado.
+- Si un destino cambia mientras la revisión está abierta, se aborta toda la operación antes de
+  escribir y no se crea snapshot.
+- `--yes` no abre la TUI y resuelve todos los conflictos aplicando el respaldo. `--dry-run` tampoco
+  abre la TUI: usa `--apps` o todas las apps instaladas y vuelca los diffs a la salida estándar.
 
 Al ejecutar `kamino` sin comandos (en una terminal interactiva) se muestra una lista con los
 comandos disponibles (`backup` y `restore`) para elegir uno. Sin terminal, se muestra la ayuda.
@@ -270,7 +294,9 @@ src/kamino/
 ├── cli.py            # comandos backup y restore, y menú TUI sin argumentos
 ├── ui.py             # selección interactiva, menú de comandos, tablas, progreso
 ├── backup.py         # caso de uso: plan y ejecución del respaldo
-├── restore.py        # caso de uso: plan y ejecución de la restauración
+├── restore.py        # caso de uso: sesión, plan y ejecución de la restauración
+├── conflicts.py      # diff por bloques, composición y validación de mezclas
+├── tui/              # TUI de restauración: apps, conflictos, detalle, confirmación y resumen
 ├── plan.py           # Plan y Operation, compartidos
 ├── catalog/
 │   ├── models.py     # AppDefinition (validación)

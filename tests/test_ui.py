@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from rich.console import Console
 
 from kamino import ui
+from kamino.conflicts import ConflictKind
 
 
 class _FakeCheckbox:
@@ -87,14 +88,59 @@ def test_print_restore_summary(monkeypatch) -> None:
     monkeypatch.setattr(ui, "_console", console)
     result = SimpleNamespace(
         dry_run=False,
-        plan=SimpleNamespace(entries=[]),
+        plan=SimpleNamespace(entries=[], conflicts=[]),
         manifest=SimpleNamespace(apps=[]),
         restored=["x"],
+        merged=["m"],
         omitted=["y"],
         snapshot="snap.tar.gz",
     )
     ui.print_restore_summary(result)
     text = console.export_text()
     assert "Restauradas: 1" in text
+    assert "Mezcladas: 1" in text
     assert "Omitidas: 1" in text
     assert "snap.tar.gz" in text
+
+
+def test_print_restore_summary_dry_run_with_diffs(monkeypatch) -> None:
+    console = Console(record=True)
+    monkeypatch.setattr(ui, "_console", console)
+    text_conflict = SimpleNamespace(
+        kind=ConflictKind.TEXT,
+        path="cfg.toml",
+        local_text="a = 1\n",
+        backup_text="a = 2\n",
+    )
+    binary_conflict = SimpleNamespace(
+        kind=ConflictKind.BINARY,
+        path="blob.bin",
+        local_size=4,
+        backup_size=5,
+    )
+    link_conflict = SimpleNamespace(
+        kind=ConflictKind.SYMLINK,
+        path="link",
+        local_link="a",
+        backup_link="b",
+    )
+    result = SimpleNamespace(
+        dry_run=True,
+        plan=SimpleNamespace(
+            entries=[],
+            conflicts=[text_conflict, binary_conflict, link_conflict],
+            notices=[],
+        ),
+        manifest=SimpleNamespace(apps=[]),
+        restored=[],
+        merged=[],
+        omitted=["same.toml"],
+    )
+    ui.print_restore_summary(result)
+    text = console.export_text()
+    assert "--- local/cfg.toml" in text
+    assert "+++ respaldo/cfg.toml" in text
+    assert "a = 2" in text
+    assert "binario" in text
+    assert "enlace local -> a" in text
+    assert "Omitidas: 1" in text
