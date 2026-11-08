@@ -13,14 +13,14 @@ from typing import Annotated
 import typer
 
 from kamino import __version__, ui
-from kamino.archive import read_manifest
 from kamino.backup import run_backup
 from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
+from kamino.conflicts import apply_all
 from kamino.detect import is_installed
 from kamino.errors import KaminoError
-from kamino.restore import run_restore
-from kamino.snapshot import SNAPSHOT_APP_ID
+from kamino.restore import RestoreSession, prepare_restore
+from kamino.tui.app import run_restore_tui
 
 app = typer.Typer(
     name="kamino",
@@ -154,6 +154,14 @@ def restore(
         Path,
         typer.Argument(help="Archivo de respaldo (.tar.gz)."),
     ],
+    apps: Annotated[
+        str | None,
+        typer.Option(
+            "--apps",
+            "-a",
+            help="Apps a restaurar, separadas por comas (omite la selección interactiva).",
+        ),
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", "-n", help="Simula sin escribir nada."),
@@ -169,29 +177,55 @@ def restore(
 ) -> None:
     """Restaura desde un archivo, solo las apps instaladas."""
     try:
-        selected: list[str] | None = None
-        if not yes and sys.stdin.isatty():
-            manifest = read_manifest(backup_file)
-            catalog = load_catalog()
-            installed_ids = {app_id for app_id, app in catalog.items() if is_installed(app)}
-            restorable = [
-                app for app in manifest.apps if app.id in installed_ids or app.id == SNAPSHOT_APP_ID
-            ]
-            chosen = ui.select_apps([(app.id, app.name) for app in restorable])
-            if chosen is None:
-                typer.echo("restauración cancelada", err=True)
-                raise typer.Exit(code=1)
-            selected = chosen
-        elif not yes and not dry_run:
-            # Sin --yes y sin terminal (y no es una simulación): no se puede confirmar.
+        requested = _parse_apps(apps)
+        if not yes and not dry_run and not sys.stdin.isatty():
             typer.echo("se requiere --yes para restaurar sin terminal interactiva", err=True)
             raise typer.Exit(code=1)
-        result = run_restore(backup_file, selected=selected, dry_run=dry_run)
-        ui.print_restore_summary(result, verbose=verbose)
-        raise typer.Exit(code=3 if result.omitted else 0)
+        session = prepare_restore(backup_file)
+        try:
+            selected, missing = _resolve_selection(requested, session)
+            for app_id in missing:
+                typer.echo(f"aviso: app no restaurable o desconocida: {app_id}", err=True)
+            if dry_run:
+                plan = session.plan(selected, dry_run=True)
+                result = session.dry_run_result(plan)
+                ui.print_restore_summary(result, verbose=verbose)
+                raise typer.Exit(code=3 if (result.omitted or missing) else 0)
+            if yes:
+                plan = session.plan(selected)
+                result = session.apply(apply_all(plan.conflicts))
+                ui.print_restore_summary(result, verbose=verbose)
+                raise typer.Exit(code=3 if (result.omitted or missing) else 0)
+            result = run_restore_tui(session, selected)
+            if result is None:
+                typer.echo("restauración cancelada", err=True)
+                raise typer.Exit(code=1)
+            ui.print_restore_summary(result, verbose=verbose)
+            raise typer.Exit(code=3 if (result.omitted or missing) else 0)
+        finally:
+            session.close()
     except KaminoError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from None
+
+
+def _parse_apps(value: str | None) -> list[str] | None:
+    """Split a comma-separated ``--apps`` value, preserving order and uniqueness."""
+    if value is None:
+        return None
+    return list(dict.fromkeys(part.strip() for part in value.split(",") if part.strip()))
+
+
+def _resolve_selection(
+    requested: list[str] | None, session: RestoreSession
+) -> tuple[list[str] | None, list[str]]:
+    """Keep requested apps that are restorable and report the rest."""
+    if requested is None:
+        return None, []
+    restorable = {app.id for app in session.restorable_apps}
+    selected = [app_id for app_id in requested if app_id in restorable]
+    missing = [app_id for app_id in requested if app_id not in restorable]
+    return selected, missing
 
 
 if __name__ == "__main__":

@@ -1,0 +1,56 @@
+Screen {
+    background: $surface;
+}
+
+#title {
+    padding: 1 2 0 2;
+    text-style: bold;
+}
+
+#counts,
+#status,
+#warning,
+#snapshot,
+#snapshot-dir,
+#help-body,
+#error {
+    padding: 0 2;
+}
+
+#status {
+    color: $warning;
+}
+
+#error {
+    color: $error;
+}
+
+#hunk-error {
+    color: $error;
+    min-height: 1;
+    padding: 0 2;
+}
+
+DataTable {
+    height: 1fr;
+}
+
+ListView {
+    height: 1fr;
+    border: round $primary;
+    margin: 0 2;
+}
+
+#buttons,
+#actions {
+    height: auto;
+    padding: 1 2;
+}
+
+Button {
+    margin-right: 1;
+}
+
+.action-row {
+    height: auto;
+}

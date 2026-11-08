@@ -6,15 +6,18 @@ el resto del núcleo no habla con el usuario (diseño técnico §1).
 
 from __future__ import annotations
 
+import difflib
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
 import questionary
 from rich.console import Console
 from rich.table import Table
+from rich.text import Text
 
 if TYPE_CHECKING:
     from kamino.backup import BackupResult
+    from kamino.conflicts import Conflict
     from kamino.restore import RestoreResult
 
 _console = Console()
@@ -107,15 +110,19 @@ def print_backup_summary(result: BackupResult, *, verbose: bool = False) -> None
 
 
 def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> None:
-    """Imprime el resumen de la restauración, o el plan en modo dry-run."""
+    """Print the restore summary, or the plan and diffs in dry-run mode."""
     if result.dry_run:
         _console.print("[bold]Plan de restauración (dry-run)[/bold]")
         for entry in result.plan.entries:
             _console.print(f"  [{entry.status}] {entry.path}")
+        for conflict in result.plan.conflicts:
+            _print_conflict_diff(conflict)
+        _console.print(f"Omitidas: {len(result.omitted)}")
         for notice in getattr(result.plan, "notices", []):
             _console.print(f"  ! {notice}")
         return
     _console.print(f"Restauradas: {len(result.restored)}")
+    _console.print(f"Mezcladas: {len(result.merged)}")
     _console.print(f"Omitidas: {len(result.omitted)}")
     if result.snapshot is not None:
         _console.print(f"Snapshot: {result.snapshot}")
@@ -125,5 +132,31 @@ def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> No
         _console.print("[bold]Detalle[/bold]")
         for path in result.restored:
             _console.print(f"  + {path}")
+        for path in result.merged:
+            _console.print(f"  * {path}")
         for path in result.omitted:
             _console.print(f"  ~ {path}")
+
+
+def _print_conflict_diff(conflict: Conflict) -> None:
+    """Write one conflict diff or a whole-file note to stdout."""
+    if conflict.kind.value == "text":
+        if conflict.local_text is None or conflict.backup_text is None:
+            return
+        diff = difflib.unified_diff(
+            conflict.local_text.splitlines(),
+            conflict.backup_text.splitlines(),
+            fromfile=f"local/{conflict.path}",
+            tofile=f"respaldo/{conflict.path}",
+            lineterm="",
+        )
+        _console.print(Text("\n".join(diff)), markup=False, highlight=False)
+        return
+    if conflict.kind.value == "symlink":
+        _console.print(
+            f"  ! {conflict.path}: enlace local -> {conflict.local_link}, "
+            f"respaldo -> {conflict.backup_link}"
+        )
+        return
+    reason = "binario" if conflict.kind.value == "binary" else "grande (>5 MB)"
+    _console.print(f"  ! {conflict.path}: conflicto {reason}; se resuelve como archivo entero")

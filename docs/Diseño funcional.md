@@ -28,7 +28,9 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 - Lee el manifiesto del archivo de respaldo.
 - **Comprueba qué apps del respaldo están instaladas** en el Mac actual y restaura solo esas.
 - Informa de las apps omitidas por no estar instaladas.
-- Permite elegir, entre las restaurables, cuáles aplicar realmente.
+- En una terminal interactiva, permite elegir, entre las restaurables, cuáles aplicar realmente y
+  revisar los conflictos por bloques antes de escribir. `--apps` omite la selección de apps
+  interactiva y `--yes` aplica todo sin preguntar.
 - Antes de sobrescribir, guarda una copia de seguridad de la configuración actual (ver 3.2).
 
 ### 2.3 Catálogo de aplicaciones
@@ -64,7 +66,29 @@ Al llevar el respaldo a otro Mac, el nombre de usuario y las rutas pueden cambia
 
 ### 3.7 Manejo de conflictos
 
-Cuando el archivo destino ya existe y difiere: preguntar (sobrescribir, omitir, ver diferencias) o aplicar una política global (`--overwrite`, `--skip-existing`).
+Cuando el archivo destino ya existe y difiere:
+
+- La restauración interactiva abre una TUI que integra la selección de apps, la tabla de conflictos,
+  el detalle por bloques y la confirmación final.
+- La tabla lista solo los conflictos y muestra los conteos de archivos nuevos, idénticos y no
+  soportados. Cada archivo se puede revisar, aplicar entero desde el respaldo u omitir; también hay
+  acciones globales para aplicar u omitir todos antes de la confirmación.
+- En el detalle, cada bloque de cambio empieza con la versión del respaldo y se alterna con la
+  local (`A` toma todos del respaldo, `L` todos del local). No se mezclan líneas dentro de un
+  bloque ni se muestra una vista previa completa.
+- Los binarios, los textos de más de 5 MB y los enlaces con enlace se resuelven como archivo
+  entero, sin diff de líneas.
+- Antes de aplicar una mezcla se validan TOML, JSON, INI y plist. Si ambos originales eran válidos
+  y la mezcla no, se bloquea; si alguno ya era inválido, se avisa y se permite aplicar. YAML y
+  shell no se validan.
+- La confirmación final muestra lo que se restaurará, mezclará y omitirá, y el directorio del
+  snapshot; cancelar o volver no escribe ni crea snapshot.
+- Si un destino cambia durante la revisión, se aborta toda la operación antes de escribir.
+- `--yes` mantiene una vía no interactiva que aplica el respaldo a todos los conflictos.
+  `--dry-run` imprime los diffs en la salida estándar sin abrir la TUI ni escribir nada, y
+  `--apps` permite elegir apps concretas sin la pantalla de selección.
+- El resumen distingue archivos restaurados, mezclados y omitidos; un archivo mezclado cuenta como
+  éxito y el código 3 queda reservado a los elementos omitidos.
 
 ### 3.8 Compatibilidad de versiones
 
