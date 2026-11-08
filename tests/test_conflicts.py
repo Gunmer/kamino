@@ -5,6 +5,8 @@ from __future__ import annotations
 from hashlib import sha256
 from pathlib import Path
 
+import pytest
+
 from kamino.archive import FileEntry
 from kamino.conflicts import (
     MAX_TEXT_BYTES,
@@ -12,14 +14,16 @@ from kamino.conflicts import (
     ConflictKind,
     FileAction,
     FileDecision,
-    HunkDecision,
     LocalFile,
+    RowDecision,
+    RowKind,
     apply_all,
     build_conflict,
     build_hunks,
     compose,
     omit_all,
     review_all,
+    row_count,
     validate_merge,
 )
 
@@ -71,7 +75,7 @@ def test_text_conflict_has_hunks_starting_on_backup() -> None:
     assert conflict.local_mode == "0600"
     assert conflict.backup_mode == "0644"
     assert len(conflict.hunks) == 1
-    assert conflict.hunks[0].decision is HunkDecision.BACKUP
+    assert [row.kind for row in conflict.hunks[0].rows] == [RowKind.REPLACE]
 
 
 def test_identical_file_is_not_a_conflict() -> None:
@@ -184,8 +188,54 @@ def test_hunks_use_three_lines_of_context() -> None:
 
     assert hunk.local_start == 4
     assert hunk.local_end == 11
-    assert hunk.context_before == ("line 3", "line 4", "line 5")
-    assert hunk.context_after == ("line 7", "line 8", "line 9")
+    context = [row for row in hunk.rows if row.kind is RowKind.EQUAL]
+    expected_context = [f"line {index}\n" for index in range(3, 6)]
+    expected_context += [f"line {index}\n" for index in range(7, 10)]
+    assert [row.local for row in context] == expected_context
+    changed = [row for row in hunk.rows if row.kind is RowKind.REPLACE]
+    assert [(row.local, row.backup) for row in changed] == [("line 6\n", "line six\n")]
+
+
+def test_rows_pair_replacements_and_leave_the_extra_backup_line() -> None:
+    local = "a\nb\nc\n"
+    backup = "a\nX\nY\nZ\n"
+
+    (hunk,) = build_hunks(local, backup)
+
+    assert [(row.kind, row.local, row.backup) for row in hunk.rows] == [
+        (RowKind.EQUAL, "a\n", "a\n"),
+        (RowKind.REPLACE, "b\n", "X\n"),
+        (RowKind.REPLACE, "c\n", "Y\n"),
+        (RowKind.BACKUP_ONLY, None, "Z\n"),
+    ]
+
+
+def test_rows_include_insertions_and_deletions() -> None:
+    inserted = build_hunks("a\nc\n", "a\nb\nc\n")
+    deleted = build_hunks("a\nb\nc\n", "a\nc\n")
+
+    assert [row.kind for row in inserted[0].rows] == [
+        RowKind.EQUAL,
+        RowKind.BACKUP_ONLY,
+        RowKind.EQUAL,
+    ]
+    assert [row.kind for row in deleted[0].rows] == [
+        RowKind.EQUAL,
+        RowKind.LOCAL_ONLY,
+        RowKind.EQUAL,
+    ]
+    assert inserted[0].rows[1].backup == "b\n"
+    assert deleted[0].rows[1].local == "b\n"
+
+
+def test_row_count_ignores_context_rows() -> None:
+    local = "".join(f"line {index}\n" for index in range(20))
+    backup = local.replace("line 1\n", "LINE ONE\n").replace("line 19\n", "LINE NINETEEN\n")
+    conflict = _conflict(local.encode(), backup.encode())
+    assert conflict is not None
+
+    assert len(conflict.hunks) == 2
+    assert row_count(conflict) == 2
 
 
 # --- compose ---
@@ -201,14 +251,30 @@ def test_compose_mixes_two_blocks() -> None:
         conflict.local_text or "",
         conflict.backup_text or "",
         [
-            HunkDecision.BACKUP,
-            HunkDecision.LOCAL,
+            RowDecision.BACKUP,
+            RowDecision.LOCAL,
         ],
     )
 
     assert "LINE ONE" in merged
     assert "line 19" in merged
     assert "LINE NINETEEN" not in merged
+
+
+def test_compose_mixes_lines_inside_one_block() -> None:
+    local = "a\nb\nc\n"
+    backup = "a\nB\nC\n"
+    conflict = _conflict(local.encode(), backup.encode())
+    assert conflict is not None
+    assert row_count(conflict) == 2
+
+    merged = compose(
+        conflict.local_text or "",
+        conflict.backup_text or "",
+        [RowDecision.BACKUP, RowDecision.LOCAL],
+    )
+
+    assert merged == "a\nB\nc\n"
 
 
 def test_compose_all_backup_equals_backup() -> None:
@@ -220,7 +286,7 @@ def test_compose_all_backup_equals_backup() -> None:
     merged = compose(
         conflict.local_text or "",
         conflict.backup_text or "",
-        [HunkDecision.BACKUP] * len(conflict.hunks),
+        [RowDecision.BACKUP] * row_count(conflict),
     )
 
     assert merged == backup
@@ -235,7 +301,7 @@ def test_compose_all_local_equals_local() -> None:
     merged = compose(
         conflict.local_text or "",
         conflict.backup_text or "",
-        [HunkDecision.LOCAL] * len(conflict.hunks),
+        [RowDecision.LOCAL] * row_count(conflict),
     )
 
     assert merged == local
@@ -250,7 +316,7 @@ def test_compose_adapts_backup_lines_to_local_crlf() -> None:
     merged = compose(
         conflict.local_text or "",
         conflict.backup_text or "",
-        [HunkDecision.BACKUP] * len(conflict.hunks),
+        [RowDecision.BACKUP] * row_count(conflict),
     )
 
     assert merged == "a\r\nB\r\nC\r\n"
@@ -265,10 +331,34 @@ def test_compose_preserves_missing_final_newline_of_chosen_side() -> None:
     merged = compose(
         conflict.local_text or "",
         conflict.backup_text or "",
-        [HunkDecision.BACKUP] * len(conflict.hunks),
+        [RowDecision.BACKUP] * row_count(conflict),
     )
 
     assert merged == "a\nB"
+
+
+def test_compose_adds_local_eol_to_a_mid_file_line_without_final_newline() -> None:
+    local = "L1\nL2\nL3"
+    backup = "B1\nB2"
+    conflict = _conflict(local.encode(), backup.encode())
+    assert conflict is not None
+    assert row_count(conflict) == 3
+
+    merged = compose(
+        conflict.local_text or "",
+        conflict.backup_text or "",
+        [RowDecision.BACKUP, RowDecision.BACKUP, RowDecision.LOCAL],
+    )
+
+    assert merged == "B1\nB2\nL3"
+
+
+def test_compose_rejects_a_decision_list_that_does_not_match_the_rows() -> None:
+    conflict = _conflict(b"a\nb\nc\n", b"a\nB\nC\n")
+    assert conflict is not None
+
+    with pytest.raises(ValueError, match="decision list"):
+        compose(conflict.local_text or "", conflict.backup_text or "", [RowDecision.BACKUP])
 
 
 # --- validate_merge ---
@@ -368,7 +458,17 @@ def test_apply_all_and_omit_all_cover_every_conflict() -> None:
     assert omitted.missing(conflicts) == []
     assert applied.get("a.toml") == FileDecision(FileAction.APPLY)
     assert omitted.get("b.toml") == FileDecision(FileAction.OMIT)
-    assert review_all(first).hunks == (HunkDecision.BACKUP,)
+    assert review_all(first).rows == (RowDecision.BACKUP,)
+
+
+def test_review_all_builds_one_decision_per_row() -> None:
+    conflict = _conflict(b"a\nb\nc\n", b"a\nB\nC\n")
+    assert conflict is not None
+
+    decision = review_all(conflict, RowDecision.LOCAL)
+
+    assert row_count(conflict) == 2
+    assert decision.rows == (RowDecision.LOCAL, RowDecision.LOCAL)
 
 
 def test_missing_decisions_are_reported() -> None:

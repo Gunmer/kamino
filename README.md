@@ -8,7 +8,7 @@ corresponda a las apps que estén instaladas.
 
 MVP v1 implementado: `backup` y `restore` funcionales con catálogo declarativo, detección de
 apps, archivado `tar.gz` con manifiesto y checksums, CLI interactiva y revisión de conflictos por
-bloques en una TUI de `textual`.
+líneas dentro de cada bloque en una TUI de `textual`.
 
 ## Requisitos
 
@@ -61,6 +61,28 @@ kamino --help
 
 Para conservarlo en nuevas terminales, añade esa línea al archivo de inicio de tu shell (por
 ejemplo, `~/.zshrc` si usas zsh).
+
+## Actualización
+
+Si instalaste el binario autocontenido, puedes actualizarlo a la última release publicada en
+GitHub:
+
+```bash
+kamino update
+```
+
+El comando consulta la última release, compara su versión con `kamino --version` y, si hay una
+más nueva, descarga `kamino-arm64`, verifica su tamaño y SHA-256 y reemplaza el binario en
+ejecución de forma atómica. No requiere `sudo` y no toca configuraciones, respaldos ni
+instantáneas. Si ya estás en la última versión, o tienes una más reciente, no descarga ni escribe
+nada.
+
+La actualización solo está disponible para el binario autocontenido. En una instalación desde
+código o con `uv`/`pip`, actualiza con `uv sync`, `uv tool upgrade kamino-cli` o el comando
+equivalente de tu gestor.
+
+El comando termina con código 0 tanto si actualiza como si ya está al día, y con 1 ante cualquier
+error. La opción también aparece en el menú que se abre al ejecutar `kamino` sin argumentos.
 
 ## Instalación (desarrollo)
 
@@ -140,15 +162,17 @@ kamino                       # TUI: lista interactiva con los comandos disponibl
 kamino --help
 kamino backup --apps vscode,iterm2,git
 kamino restore kamino-<equipo>-<fecha>.tar.gz
+kamino update                # actualiza el binario a la última release
 ```
 
-`-h` es alias de `--help` en el nivel principal y en `backup` y `restore`, y `-V` es alias de
-`--version`:
+`-h` es alias de `--help` en el nivel principal y en `backup`, `restore` y `update`, y `-V` es
+alias de `--version`:
 
 ```bash
 kamino -h
 kamino backup -h
 kamino restore -h
+kamino update -h
 kamino -V
 ```
 
@@ -177,9 +201,13 @@ se avisan y cuentan como omitidos (código de salida 3).
 - En una terminal interactiva, `restore` abre una TUI. La primera pantalla elige apps (ninguna
   marcada por defecto); después aparece solo la tabla de archivos en conflicto, con los conteos de
   nuevos, idénticos y no soportados.
-- Cada conflicto de texto se revisa por bloques: cada bloque empieza en la versión del respaldo y
-  se puede alternar con la local. `A` toma todos los bloques restantes del respaldo y `L` todos los
-  locales. No se mezclan líneas dentro de un bloque ni se muestra una vista previa completa.
+- Cada conflicto de texto se revisa por líneas dentro de cada bloque: la cabecera y el contexto no
+  son decidibles y cada línea cambiada empieza en la versión del respaldo. `Espacio` o `Enter`
+  alterna la línea resaltada, `A`/`L` toman todo el archivo del respaldo o del local, y `Shift+A`/
+  `Shift+L` solo el bloque actual; `n`/`p` saltan entre bloques. La composición puede mezclar líneas
+  de un mismo bloque y no se muestra una vista previa completa del archivo.
+- Si una línea sin salto final queda antes de otra línea elegida, la composición le añade el final
+  de línea dominante local; solo la última línea puede conservar la ausencia de salto final.
 - Los binarios, los textos de más de 5 MB y los enlaces con enlace se resuelven como archivo entero:
   aplicar el respaldo u omitir.
 - Antes de aplicar una mezcla se valida TOML, JSON, INI y plist con la biblioteca estándar. Si ambos
@@ -193,8 +221,13 @@ se avisan y cuentan como omitidos (código de salida 3).
 - `--yes` no abre la TUI y resuelve todos los conflictos aplicando el respaldo. `--dry-run` tampoco
   abre la TUI: usa `--apps` o todas las apps instaladas y vuelca los diffs a la salida estándar.
 
+La TUI usa la paleta ANSI del terminal: el tema por defecto es `ansi-dark` y `TEXTUAL_THEME`
+permite elegir otro tema válido de Textual, por ejemplo `ansi-light`. Así el fondo, el texto, los
+bordes y los botones siguen el esquema de colores de la terminal.
+
 Al ejecutar `kamino` sin comandos (en una terminal interactiva) se muestra una lista con los
-comandos disponibles (`backup` y `restore`) para elegir uno. Sin terminal, se muestra la ayuda.
+comandos disponibles (`backup`, `restore` y `update`) para elegir uno. Sin terminal, se muestra la
+ayuda.
 
 ## Privacidad y aviso previo
 
@@ -291,11 +324,12 @@ uv run ruff format .   # formato
 
 ```
 src/kamino/
-├── cli.py            # comandos backup y restore, y menú TUI sin argumentos
+├── cli.py            # comandos backup, restore y update, y menú TUI sin argumentos
 ├── ui.py             # selección interactiva, menú de comandos, tablas, progreso
 ├── backup.py         # caso de uso: plan y ejecución del respaldo
 ├── restore.py        # caso de uso: sesión, plan y ejecución de la restauración
-├── conflicts.py      # diff por bloques, composición y validación de mezclas
+├── update.py         # actualización del binario desde GitHub
+├── conflicts.py      # diff por líneas, composición y validación de mezclas
 ├── tui/              # TUI de restauración: apps, conflictos, detalle, confirmación y resumen
 ├── plan.py           # Plan y Operation, compartidos
 ├── catalog/

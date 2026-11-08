@@ -15,11 +15,12 @@ Rules:
   treated as a whole-file conflict without a line diff.
 - Symlinks with different targets are whole-file conflicts.
 - Hunks are generated with :class:`difflib.SequenceMatcher` using
-  :data:`CONTEXT_LINES` lines of context. Every hunk starts on the backup side
-  and can be switched to the local side.
+  :data:`CONTEXT_LINES` lines of context. Each changed line is a row that starts
+  on the backup side and can be switched to the local side.
 - Composition keeps equal lines from the local file (including their endings),
   adapts backup lines to the dominant local line ending and preserves the final
-  newline of the chosen side.
+  newline of the chosen side; a missing final newline only survives on the last
+  emitted line.
 """
 
 from __future__ import annotations
@@ -58,8 +59,17 @@ class ConflictKind(StrEnum):
     SYMLINK = "symlink"
 
 
-class HunkDecision(StrEnum):
-    """Which side of a hunk is written."""
+class RowKind(StrEnum):
+    """How a line takes part in the diff of a hunk."""
+
+    EQUAL = "equal"
+    REPLACE = "replace"
+    LOCAL_ONLY = "local_only"
+    BACKUP_ONLY = "backup_only"
+
+
+class RowDecision(StrEnum):
+    """Which side of a row is written."""
 
     BACKUP = "backup"
     LOCAL = "local"
@@ -84,6 +94,19 @@ class LocalFile:
 
 
 @dataclass(frozen=True)
+class HunkRow:
+    """One line of a hunk with its local and backup versions.
+
+    ``EQUAL`` rows carry both sides, ``REPLACE`` rows pair one line per side,
+    and ``LOCAL_ONLY``/``BACKUP_ONLY`` rows have a single side.
+    """
+
+    kind: RowKind
+    local: str | None = None
+    backup: str | None = None
+
+
+@dataclass(frozen=True)
 class Hunk:
     """A contiguous change block with enough context to review it."""
 
@@ -94,25 +117,21 @@ class Hunk:
     #: 1-based, end-exclusive backup line range covered by the block.
     backup_start: int
     backup_end: int
-    #: Original lines, including their line endings.
-    local_lines: tuple[str, ...]
-    backup_lines: tuple[str, ...]
-    #: Normalised context lines before and after the changed opcodes.
-    context_before: tuple[str, ...] = ()
-    context_after: tuple[str, ...] = ()
-    decision: HunkDecision = HunkDecision.BACKUP
+    #: Context and changed lines in document order, with their original endings.
+    rows: tuple[HunkRow, ...]
 
 
 @dataclass(frozen=True)
 class FileDecision:
     """Decision for one conflicted file.
 
-    ``REVIEW`` carries one decision per hunk, in the same order as
-    :attr:`Conflict.hunks`. ``APPLY`` and ``OMIT`` ignore the list.
+    ``REVIEW`` carries one decision per decidable row, in the same order as
+    :attr:`Conflict.hunks` and their rows. ``APPLY`` and ``OMIT`` ignore the
+    list.
     """
 
     action: FileAction
-    hunks: tuple[HunkDecision, ...] = ()
+    rows: tuple[RowDecision, ...] = ()
 
 
 @dataclass
@@ -308,84 +327,108 @@ def build_hunks(local_text: str, backup_text: str) -> tuple[Hunk, ...]:
     for group in matcher.get_grouped_opcodes(CONTEXT_LINES):
         if not any(opcode[0] != "equal" for opcode in group):
             continue
-        local_start = group[0][1]
-        local_end = group[-1][2]
-        backup_start = group[0][3]
-        backup_end = group[-1][4]
-        before: tuple[str, ...] = ()
-        after: tuple[str, ...] = ()
-        if group[0][0] == "equal":
-            before = tuple(line.rstrip("\n") for line in local_norm[group[0][1] : group[0][2]])
-        if group[-1][0] == "equal":
-            after = tuple(line.rstrip("\n") for line in local_norm[group[-1][1] : group[-1][2]])
+        rows: list[HunkRow] = []
+        for tag, i1, i2, j1, j2 in group:
+            rows.extend(_rows_for_opcode(tag, local_lines, backup_lines, i1, i2, j1, j2))
         hunks.append(
             Hunk(
                 index=len(hunks) + 1,
-                local_start=local_start + 1,
-                local_end=local_end + 1,
-                backup_start=backup_start + 1,
-                backup_end=backup_end + 1,
-                local_lines=tuple(local_lines[local_start:local_end]),
-                backup_lines=tuple(backup_lines[backup_start:backup_end]),
-                context_before=before,
-                context_after=after,
+                local_start=group[0][1] + 1,
+                local_end=group[-1][2] + 1,
+                backup_start=group[0][3] + 1,
+                backup_end=group[-1][4] + 1,
+                rows=tuple(rows),
             )
         )
     return tuple(hunks)
 
 
-def compose(local_text: str, backup_text: str, decisions: Sequence[HunkDecision]) -> str:
-    """Compose the result from the selected side of every hunk.
+def _rows_for_opcode(
+    tag: str,
+    local_lines: Sequence[str],
+    backup_lines: Sequence[str],
+    i1: int,
+    i2: int,
+    j1: int,
+    j2: int,
+) -> tuple[HunkRow, ...]:
+    """Turn one diff opcode into aligned rows with the original line endings."""
+    local_slice = local_lines[i1:i2]
+    backup_slice = backup_lines[j1:j2]
+    if tag == "equal":
+        return tuple(
+            HunkRow(RowKind.EQUAL, local, backup)
+            for local, backup in zip(local_slice, backup_slice, strict=True)
+        )
+    if tag == "replace":
+        paired = min(len(local_slice), len(backup_slice))
+        rows = [
+            HunkRow(RowKind.REPLACE, local_slice[index], backup_slice[index])
+            for index in range(paired)
+        ]
+        rows.extend(HunkRow(RowKind.LOCAL_ONLY, line, None) for line in local_slice[paired:])
+        rows.extend(HunkRow(RowKind.BACKUP_ONLY, None, line) for line in backup_slice[paired:])
+        return tuple(rows)
+    if tag == "delete":
+        return tuple(HunkRow(RowKind.LOCAL_ONLY, line, None) for line in local_slice)
+    if tag == "insert":
+        return tuple(HunkRow(RowKind.BACKUP_ONLY, None, line) for line in backup_slice)
+    raise ValueError(f"unknown diff opcode: {tag}")
+
+
+def compose(local_text: str, backup_text: str, decisions: Sequence[RowDecision]) -> str:
+    """Compose the result from the selected side of every decidable row.
 
     Equal lines always come from the local file. Backup lines adopt the
-    dominant local line ending, but a missing final newline is preserved.
+    dominant local line ending, and a missing final newline is only preserved
+    on the last emitted line.
     """
     local_lines = local_text.splitlines(keepends=True)
     backup_lines = backup_text.splitlines(keepends=True)
     local_norm = _normalise_newlines(local_text).splitlines(keepends=True)
     backup_norm = _normalise_newlines(backup_text).splitlines(keepends=True)
     matcher = SequenceMatcher(None, local_norm, backup_norm, autojunk=False)
-    full = matcher.get_opcodes()
-    grouped = list(matcher.get_grouped_opcodes(CONTEXT_LINES))
-    if len(grouped) != len(decisions):
-        raise ValueError("the decision list does not match the conflict hunks")
 
-    hunk_for_opcode = _map_grouped_opcodes(full, grouped)
+    expected = sum(
+        len(_rows_for_opcode(tag, local_lines, backup_lines, i1, i2, j1, j2))
+        for tag, i1, i2, j1, j2 in matcher.get_opcodes()
+        if tag != "equal"
+    )
+    if len(decisions) != expected:
+        raise ValueError("the decision list does not match the conflict rows")
+
     eol = _dominant_eol(local_text)
     output: list[str] = []
-    for index, (tag, i1, i2, j1, j2) in enumerate(full):
+    decision_index = 0
+    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
         if tag == "equal":
             output.extend(local_lines[i1:i2])
             continue
-        hunk_index = hunk_for_opcode[index]
-        if decisions[hunk_index] == HunkDecision.LOCAL:
-            output.extend(local_lines[i1:i2])
-        else:
-            output.extend(_adapt_line(line, eol) for line in backup_lines[j1:j2])
+        rows = _rows_for_opcode(tag, local_lines, backup_lines, i1, i2, j1, j2)
+        for row in rows:
+            decision = decisions[decision_index]
+            decision_index += 1
+            if row.kind is RowKind.REPLACE:
+                if decision is RowDecision.LOCAL:
+                    output.append(row.local or "")
+                else:
+                    output.append(_adapt_line(row.backup or "", eol))
+            elif row.kind is RowKind.LOCAL_ONLY:
+                if decision is RowDecision.LOCAL:
+                    output.append(row.local or "")
+            else:
+                if decision is RowDecision.BACKUP:
+                    output.append(_adapt_line(row.backup or "", eol))
+    return _ensure_final_newline(output, eol)
+
+
+def _ensure_final_newline(lines: Sequence[str], eol: str) -> str:
+    """Keep a missing final newline only on the last emitted line."""
+    output = [
+        line if index == len(lines) - 1 or line.endswith("\n") else line + eol
+        for index, line in enumerate(lines)
+    ]
     return "".join(output)
-
-
-def _map_grouped_opcodes(
-    full: Sequence[tuple[str, int, int, int, int]],
-    grouped: Sequence[Sequence[tuple[str, int, int, int, int]]],
-) -> dict[int, int]:
-    """Map each non-equal full opcode to its hunk index."""
-    mapped: dict[int, int] = {}
-    cursor = 0
-    for hunk_index, group in enumerate(grouped):
-        for opcode in group:
-            if opcode[0] == "equal":
-                continue
-            found = None
-            for index in range(cursor, len(full)):
-                if full[index] == opcode:
-                    found = index
-                    break
-            if found is None:
-                raise ValueError("inconsistent diff grouping")
-            cursor = found + 1
-            mapped[found] = hunk_index
-    return mapped
 
 
 def _dominant_eol(text: str) -> str:
@@ -459,9 +502,14 @@ def omit_all(conflicts: Sequence[Conflict]) -> ConflictDecisions:
     )
 
 
-def review_all(conflict: Conflict, decision: HunkDecision = HunkDecision.BACKUP) -> FileDecision:
-    """Build a ``REVIEW`` decision with every hunk on the same side."""
-    return FileDecision(FileAction.REVIEW, tuple(decision for _hunk in conflict.hunks))
+def row_count(conflict: Conflict) -> int:
+    """Return how many decidable rows the conflict has."""
+    return sum(1 for hunk in conflict.hunks for row in hunk.rows if row.kind is not RowKind.EQUAL)
+
+
+def review_all(conflict: Conflict, decision: RowDecision = RowDecision.BACKUP) -> FileDecision:
+    """Build a ``REVIEW`` decision with every row on the same side."""
+    return FileDecision(FileAction.REVIEW, tuple(decision for _row in range(row_count(conflict))))
 
 
 def _decode_text(data: bytes) -> str | None:

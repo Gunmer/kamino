@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from kamino.backup import BackupResult
     from kamino.conflicts import Conflict
     from kamino.restore import RestoreResult
+    from kamino.update import UpdateResult
 
 _console = Console()
 
@@ -37,6 +38,26 @@ CommandChoice = tuple[str, str, str]
 def print_privacy_warning() -> None:
     """Muestra el aviso de contenido sensible antes de respaldar."""
     _console.print(f"[yellow]{PRIVACY_WARNING}[/yellow]")
+
+
+def print_update_start() -> None:
+    """Muestra que comienza la comprobación de la última versión."""
+    _console.print("Comprobando la última versión publicada...")
+
+
+def print_update_result(result: UpdateResult) -> None:
+    """Imprime el resultado de la actualización o de la consulta."""
+    if result.updated:
+        _console.print(f"kamino {result.current_version} -> {result.latest_version}")
+        _console.print(f"Actualizado: {result.target}")
+        return
+    if result.current_version == result.latest_version:
+        _console.print(f"kamino {result.current_version} ya es la última versión disponible.")
+        return
+    _console.print(
+        f"kamino {result.current_version} es más reciente que la última publicada "
+        f"({result.latest_version}); no se modifica."
+    )
 
 
 def select_command(choices: Sequence[CommandChoice]) -> str | None:

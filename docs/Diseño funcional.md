@@ -10,7 +10,7 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 
 ### 2.0 Menú interactivo (TUI)
 
-- Al ejecutar `kamino` sin comandos, en una terminal interactiva, se muestra una lista con los comandos disponibles (`backup` y `restore`) para elegir uno.
+- Al ejecutar `kamino` sin comandos, en una terminal interactiva, se muestra una lista con los comandos disponibles (`backup`, `restore` y `update`) para elegir uno.
 - Sin terminal, se muestra la ayuda como antes.
 
 ### 2.1 Respaldo (`backup`)
@@ -29,7 +29,7 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 - **Comprueba qué apps del respaldo están instaladas** en el Mac actual y restaura solo esas.
 - Informa de las apps omitidas por no estar instaladas.
 - En una terminal interactiva, permite elegir, entre las restaurables, cuáles aplicar realmente y
-  revisar los conflictos por bloques antes de escribir. `--apps` omite la selección de apps
+  revisar los conflictos por líneas antes de escribir. `--apps` omite la selección de apps
   interactiva y `--yes` aplica todo sin preguntar.
 - Antes de sobrescribir, guarda una copia de seguridad de la configuración actual (ver 3.2).
 
@@ -37,6 +37,14 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 
 - Cada app soportada se describe con una **definición declarativa** (archivo YAML/TOML/JSON): nombre, cómo detectar si está instalada (bundle ID o ruta en `/Applications`), y qué rutas respaldar (por ejemplo `~/Library/Preferences/...`, `~/Library/Application Support/...`, `~/.config/...`, dotfiles).
 - Añadir soporte para una nueva app = añadir una definición, sin tocar el código.
+
+### 2.4 Actualización (`update`)
+
+- Solo está disponible para el binario autocontenido. En instalaciones desde código, `uv` o `pip` se indica la vía de actualización correspondiente.
+- Consulta la última release publicada en GitHub y compara su versión con la instalada usando el orden SemVer. Si la instalada es igual o superior, no descarga ni escribe nada.
+- Descarga `kamino-arm64`, verifica su tamaño y SHA-256 y reemplaza el binario en ejecución de forma atómica. Ante cualquier error, el binario actual queda intacto y el temporal se elimina.
+- No requiere `sudo`, no pide confirmación adicional y no modifica configuraciones, respaldos ni instantáneas.
+- El comando termina con código 0 si actualiza o ya está al día, y con 1 ante cualquier error. La opción aparece en el menú interactivo.
 
 ## 3. Funcionalidades sugeridas (que conviene considerar)
 
@@ -69,13 +77,18 @@ Al llevar el respaldo a otro Mac, el nombre de usuario y las rutas pueden cambia
 Cuando el archivo destino ya existe y difiere:
 
 - La restauración interactiva abre una TUI que integra la selección de apps, la tabla de conflictos,
-  el detalle por bloques y la confirmación final.
+  el detalle por líneas y la confirmación final.
+- La TUI usa la paleta ANSI del terminal (`ansi-dark` por defecto); `TEXTUAL_THEME` permite elegir
+  otro tema válido de Textual, como `ansi-light`.
 - La tabla lista solo los conflictos y muestra los conteos de archivos nuevos, idénticos y no
   soportados. Cada archivo se puede revisar, aplicar entero desde el respaldo u omitir; también hay
   acciones globales para aplicar u omitir todos antes de la confirmación.
-- En el detalle, cada bloque de cambio empieza con la versión del respaldo y se alterna con la
-  local (`A` toma todos del respaldo, `L` todos del local). No se mezclan líneas dentro de un
-  bloque ni se muestra una vista previa completa.
+- En el detalle, la cabecera y el contexto de cada bloque no son decidibles. Cada línea cambiada
+  empieza en la versión del respaldo y se alterna con la local; `A`/`L` afectan a todo el archivo y
+  `Shift+A`/`Shift+L` solo al bloque actual, con `n`/`p` para saltar entre bloques. La composición
+  puede mezclar líneas de un mismo bloque y no se muestra una vista previa completa.
+- Una línea sin salto final solo puede quedar al final: si la mezcla la deja en medio, recibe el
+  final de línea dominante local.
 - Los binarios, los textos de más de 5 MB y los enlaces con enlace se resuelven como archivo
   entero, sin diff de líneas.
 - Antes de aplicar una mezcla se validan TOML, JSON, INI y plist. Si ambos originales eran válidos

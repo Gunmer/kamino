@@ -12,7 +12,7 @@ from rich.text import Text
 from typer.testing import CliRunner
 
 import kamino.cli as cli
-from kamino.errors import ArchiveError
+from kamino.errors import ArchiveError, UpdateError
 
 runner = CliRunner()
 
@@ -568,3 +568,66 @@ def test_no_args_tty_menu_cancel(monkeypatch) -> None:
     result = runner.invoke(cli.app, [])
     assert result.exit_code == 1
     assert "cancelado" in result.output
+
+
+def test_update_command_runs_use_case(monkeypatch) -> None:
+    update_result = SimpleNamespace(
+        current_version="0.4.0",
+        latest_version="0.5.0",
+        target=Path("/tmp/kamino"),
+        updated=True,
+    )
+    calls: list[object] = []
+
+    def fake_run(version: str):
+        calls.append(("run", version))
+        return update_result
+
+    monkeypatch.setattr(cli, "run_update", fake_run)
+    monkeypatch.setattr(cli.ui, "print_update_start", lambda: calls.append(("start", None)))
+    monkeypatch.setattr(
+        cli.ui, "print_update_result", lambda result: calls.append(("result", result))
+    )
+
+    result = runner.invoke(cli.app, ["update"])
+
+    assert result.exit_code == 0
+    assert calls == [("start", None), ("run", cli.__version__), ("result", update_result)]
+
+
+def test_update_command_error_exit_1(monkeypatch) -> None:
+    def boom(version: str):
+        raise UpdateError("fallo de actualización")
+
+    monkeypatch.setattr(cli, "run_update", boom)
+    monkeypatch.setattr(cli.ui, "print_update_start", lambda: None)
+
+    result = runner.invoke(cli.app, ["update"])
+
+    assert result.exit_code == 1
+    assert "fallo de actualización" in result.output
+
+
+def test_run_menu_invokes_update_via_ctx(monkeypatch) -> None:
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "update")
+    ctx = MagicMock()
+    cli._run_menu(ctx)
+    ctx.invoke.assert_called_once_with(cli.update)
+
+
+def test_run_menu_lists_update_option(monkeypatch) -> None:
+    choices: list[tuple[str, str, str]] = []
+
+    def fake_select(options):
+        choices.extend(options)
+        return "update"
+
+    monkeypatch.setattr(cli.ui, "select_command", fake_select)
+    ctx = MagicMock()
+    cli._run_menu(ctx)
+
+    assert (
+        "update",
+        "Actualización",
+        "Actualiza a la última versión publicada.",
+    ) in choices

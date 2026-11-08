@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from textual.app import App
 from textual.binding import Binding
 
@@ -16,11 +18,17 @@ from kamino.tui.screens import (
 )
 
 
+def _default_theme() -> str:
+    """Devuelve el tema ANSI del terminal, salvo que TEXTUAL_THEME lo sobrescriba."""
+    return os.environ.get("TEXTUAL_THEME", "ansi-dark")
+
+
 class KaminoRestoreApp(App[RestoreResult | None]):
-    """Review conflicts, decide block by block and apply a restore."""
+    """Review conflicts, decide line by line and apply a restore."""
 
     CSS_PATH = "styles.tcss"
     TITLE = "kamino · restauración"
+    theme = _default_theme()
     BINDINGS = [Binding("question_mark", "help", "Ayuda")]
 
     def __init__(self, session: RestoreSession, selected: list[str] | None = None) -> None:

@@ -27,10 +27,13 @@ from kamino.conflicts import (
     ConflictKind,
     FileAction,
     FileDecision,
-    HunkDecision,
+    HunkRow,
+    RowDecision,
+    RowKind,
     apply_all,
     compose,
     omit_all,
+    row_count,
     validate_merge,
 )
 from kamino.errors import ConcurrentChangeError, ConflictError, KaminoError
@@ -39,7 +42,9 @@ from kamino.tui.widgets import (
     conflict_detail,
     conflict_kind_label,
     conflict_warning,
-    hunk_text,
+    context_text,
+    hunk_header,
+    row_text,
 )
 
 _ACTION_LABELS = {
@@ -167,8 +172,8 @@ class ConflictSummaryScreen(Screen[None]):
         if decision is None:
             return "sin decidir"
         if decision.action is FileAction.REVIEW:
-            backup = sum(1 for item in decision.hunks if item is HunkDecision.BACKUP)
-            return f"revisión ({backup}/{len(decision.hunks)} respaldo)"
+            backup = sum(1 for item in decision.rows if item is RowDecision.BACKUP)
+            return f"revisión ({backup}/{len(decision.rows)} respaldo)"
         return _ACTION_LABELS[decision.action]
 
     def _refresh_counts(self) -> None:
@@ -290,7 +295,7 @@ class ConflictSummaryScreen(Screen[None]):
 
 
 class ConflictDetailScreen(Screen[FileDecision | None]):
-    """Review a text conflict block by block."""
+    """Review a text conflict line by line."""
 
     BINDINGS = [
         Binding("escape", "save", "Volver"),
@@ -298,6 +303,10 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
         Binding("enter", "toggle", "Alternar"),
         Binding("a", "all_backup", "Todo respaldo"),
         Binding("l", "all_local", "Todo local"),
+        Binding("A", "block_backup", "Bloque respaldo"),
+        Binding("L", "block_local", "Bloque local"),
+        Binding("n", "next_block", "Siguiente bloque"),
+        Binding("p", "prev_block", "Bloque anterior"),
         Binding("question_mark", "help", "Ayuda"),
     ]
 
@@ -305,15 +314,21 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
         super().__init__()
         self.conflict = conflict
         self.decisions = self._initial_decisions(decision)
+        self._rows: list[HunkRow] = []
+        self._item_to_row: list[int | None] = []
+        self._item_block: list[int] = []
+        self._row_widgets: list[Static] = []
+        self._row_block: list[int] = []
+        self._block_first_item: list[int] = []
 
-    def _initial_decisions(self, decision: FileDecision | None) -> list[HunkDecision]:
+    def _initial_decisions(self, decision: FileDecision | None) -> list[RowDecision]:
         if (
             decision is not None
             and decision.action is FileAction.REVIEW
-            and len(decision.hunks) == len(self.conflict.hunks)
+            and len(decision.rows) == row_count(self.conflict)
         ):
-            return list(decision.hunks)
-        return [HunkDecision.BACKUP for _hunk in self.conflict.hunks]
+            return list(decision.rows)
+        return [RowDecision.BACKUP for _row in range(row_count(self.conflict))]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -332,62 +347,159 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
                 yield Button("Todo respaldo (A)", id="all-backup")
                 yield Button("Todo local (L)", id="all-local")
             with Horizontal(classes="action-row"):
+                yield Button("Bloque respaldo (Shift+A)", id="block-backup")
+                yield Button("Bloque local (Shift+L)", id="block-local")
+            with Horizontal(classes="action-row"):
                 yield Button("Volver", id="back", variant="warning")
                 yield Button("Ayuda", id="help")
         yield Footer()
 
     async def on_mount(self) -> None:
-        await self._refresh_hunks()
+        await self._build_list()
 
-    async def _refresh_hunks(self) -> None:
+    async def _build_list(self) -> None:
         list_view = self.query_one("#hunks", ListView)
-        index = list_view.index if list_view.index is not None else 0
-        await list_view.clear()
-        items = [
-            ListItem(Static(hunk_text(hunk, self.decisions[hunk.index - 1])))
-            for hunk in self.conflict.hunks
-        ]
+        items: list[ListItem] = []
+        for block, hunk in enumerate(self.conflict.hunks):
+            items.append(ListItem(Static(hunk_header(hunk)), disabled=True))
+            self._item_to_row.append(None)
+            self._item_block.append(block)
+            first_item: int | None = None
+            for row in hunk.rows:
+                if row.kind is RowKind.EQUAL:
+                    items.append(ListItem(Static(context_text(row)), disabled=True))
+                    self._item_to_row.append(None)
+                    self._item_block.append(block)
+                    continue
+                if first_item is None:
+                    first_item = len(items)
+                row_index = len(self._rows)
+                widget = Static(row_text(row, self.decisions[row_index]))
+                items.append(ListItem(widget))
+                self._item_to_row.append(row_index)
+                self._item_block.append(block)
+                self._row_widgets.append(widget)
+                self._row_block.append(block)
+                self._rows.append(row)
+            if first_item is not None:
+                self._block_first_item.append(first_item)
         await list_view.extend(items)
-        if items:
-            list_view.index = min(index, len(items) - 1)
+        if self._block_first_item:
+            list_view.index = self._block_first_item[0]
+        list_view.focus()
 
-    async def on_button_pressed(self, event: Button.Pressed) -> None:
+    def _current_row(self) -> int | None:
+        list_view = self.query_one("#hunks", ListView)
+        index = list_view.index
+        if index is None or index < 0 or index >= len(self._item_to_row):
+            return None
+        return self._item_to_row[index]
+
+    def _current_block(self) -> int | None:
+        list_view = self.query_one("#hunks", ListView)
+        index = list_view.index
+        if index is None or index < 0 or index >= len(self._item_block):
+            return None
+        return self._item_block[index]
+
+    def _update_row(self, row_index: int) -> None:
+        row = self._rows[row_index]
+        self._row_widgets[row_index].update(row_text(row, self.decisions[row_index]))
+
+    def on_list_view_selected(self, event: ListView.Selected) -> None:
+        event.stop()
+        index = event.index
+        if index is None or index < 0 or index >= len(self._item_to_row):
+            return
+        row_index = self._item_to_row[index]
+        if row_index is None:
+            self._move_to_nearest_decidable(index)
+            return
+        self._toggle_row(row_index)
+
+    def _move_to_nearest_decidable(self, index: int) -> None:
+        for offset in range(1, len(self._item_to_row)):
+            for candidate in (index - offset, index + offset):
+                if (
+                    0 <= candidate < len(self._item_to_row)
+                    and self._item_to_row[candidate] is not None
+                ):
+                    self.query_one("#hunks", ListView).index = candidate
+                    return
+
+    def _toggle_row(self, row_index: int) -> None:
+        self.decisions[row_index] = (
+            RowDecision.LOCAL
+            if self.decisions[row_index] is RowDecision.BACKUP
+            else RowDecision.BACKUP
+        )
+        self._update_row(row_index)
+
+    def _set_all(self, decision: RowDecision) -> None:
+        self.decisions = [decision for _item in self.decisions]
+        for row_index in range(len(self.decisions)):
+            self._update_row(row_index)
+
+    def _set_block(self, decision: RowDecision) -> None:
+        block = self._current_block()
+        if block is None:
+            return
+        for row_index, row_block in enumerate(self._row_block):
+            if row_block == block:
+                self.decisions[row_index] = decision
+                self._update_row(row_index)
+
+    def _jump_block(self, step: int) -> None:
+        block = self._current_block()
+        if block is None:
+            return
+        target = block + step
+        if 0 <= target < len(self._block_first_item):
+            self.query_one("#hunks", ListView).index = self._block_first_item[target]
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
         button = event.button.id
         if button == "toggle":
-            await self._toggle()
+            self.action_toggle()
         elif button == "all-backup":
-            await self._set_all(HunkDecision.BACKUP)
+            self._set_all(RowDecision.BACKUP)
         elif button == "all-local":
-            await self._set_all(HunkDecision.LOCAL)
+            self._set_all(RowDecision.LOCAL)
+        elif button == "block-backup":
+            self._set_block(RowDecision.BACKUP)
+        elif button == "block-local":
+            self._set_block(RowDecision.LOCAL)
         elif button == "back":
             self.action_save()
         elif button == "help":
             self.app.push_screen(HelpScreen())
 
-    async def _toggle(self) -> None:
-        list_view = self.query_one("#hunks", ListView)
-        index = list_view.index
-        if index is None or index < 0 or index >= len(self.decisions):
+    def action_toggle(self) -> None:
+        row_index = self._current_row()
+        if row_index is None:
+            index = self.query_one("#hunks", ListView).index
+            if index is not None:
+                self._move_to_nearest_decidable(index)
             return
-        self.decisions[index] = (
-            HunkDecision.LOCAL
-            if self.decisions[index] is HunkDecision.BACKUP
-            else HunkDecision.BACKUP
-        )
-        await self._refresh_hunks()
+        self._toggle_row(row_index)
 
-    async def _set_all(self, decision: HunkDecision) -> None:
-        self.decisions = [decision for _item in self.decisions]
-        await self._refresh_hunks()
+    def action_all_backup(self) -> None:
+        self._set_all(RowDecision.BACKUP)
 
-    async def action_toggle(self) -> None:
-        await self._toggle()
+    def action_all_local(self) -> None:
+        self._set_all(RowDecision.LOCAL)
 
-    async def action_all_backup(self) -> None:
-        await self._set_all(HunkDecision.BACKUP)
+    def action_block_backup(self) -> None:
+        self._set_block(RowDecision.BACKUP)
 
-    async def action_all_local(self) -> None:
-        await self._set_all(HunkDecision.LOCAL)
+    def action_block_local(self) -> None:
+        self._set_block(RowDecision.LOCAL)
+
+    def action_next_block(self) -> None:
+        self._jump_block(1)
+
+    def action_prev_block(self) -> None:
+        self._jump_block(-1)
 
     def action_save(self) -> None:
         if self.conflict.local_text is None or self.conflict.backup_text is None:
@@ -402,7 +514,7 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
         )
         if validation.status == "invalid":
             self.query_one("#hunk-error", Static).update(
-                f"Mezcla inválida: {validation.message}. Corrige los bloques o vuelve a intentarlo."
+                f"Mezcla inválida: {validation.message}. Corrige las líneas o vuelve a intentarlo."
             )
             return
         decision = FileDecision(FileAction.REVIEW, tuple(self.decisions))
@@ -510,11 +622,12 @@ class HelpScreen(Screen[None]):
         yield Static(
             "Apps: ninguna está marcada por defecto. Usa Seleccionar todas, "
             "Seleccionar ninguna, Continuar o Cancelar.\n\n"
-            "Conflictos: Revisar abre el detalle por bloques; Aplicar restaura el "
+            "Conflictos: Revisar abre el detalle por líneas; Aplicar restaura el "
             "archivo del respaldo; Omitir conserva el local. Aplicar todo y Omitir "
             "todo afectan a todos los conflictos y luego puedes cambiarlos uno a uno.\n\n"
-            "Detalle: Espacio o Enter alterna el bloque resaltado. A toma todos los "
-            "bloques del respaldo y L todos los locales. Escape vuelve y valida la mezcla.\n\n"
+            "Detalle: Espacio o Enter alterna la línea resaltada. A toma todas las "
+            "líneas del respaldo y L todas las locales; Shift+A y Shift+L solo el "
+            "bloque actual. n y p saltan entre bloques. Escape vuelve y valida la mezcla.\n\n"
             "Confirmación: Aplicar escribe; Volver regresa a la tabla; Cancelar no "
             "escribe ni crea snapshot. Escape sale.\n\n"
             "Los diffs pueden contener secretos. No se guardan ni se envían a ningún sitio.",
