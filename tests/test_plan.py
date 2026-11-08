@@ -1,6 +1,6 @@
 """Pruebas de `plan.py`: expansión de rutas, exclusiones y operaciones.
 
-Cubre el paso 4 de `backup` (diseño técnico §5.1): expandir `paths` de cada
+Cubre el paso 4 de `clone` (diseño técnico §5.1): expandir `paths` de cada
 app, aplicar `exclude` y construir el plan con tamaño y checksum; las rutas
 que no existen se registran como omitidas, no como error. Los enlaces
 simbólicos se guardan como enlace y no se siguen (§6). Todo se resuelve

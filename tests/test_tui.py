@@ -1,4 +1,4 @@
-"""Headless tests for the interactive restore TUI."""
+"""Headless tests for the interactive deploy TUI."""
 
 from __future__ import annotations
 
@@ -21,16 +21,16 @@ from kamino.conflicts import (
     build_conflict,
     build_hunks,
 )
-from kamino.errors import ConcurrentChangeError
-from kamino.restore import (
-    RestoreClassification,
-    RestoreEntry,
-    RestorePlan,
-    RestoreStatus,
+from kamino.deploy import (
+    DeployClassification,
+    DeployEntry,
+    DeployPlan,
+    DeployStatus,
 )
+from kamino.errors import ConcurrentChangeError
 from kamino.tui import app as app_module
 from kamino.tui import screens as screens_module
-from kamino.tui.app import KaminoRestoreApp
+from kamino.tui.app import KaminoDeployApp
 from kamino.tui.screens import (
     AppSelectionScreen,
     ConfirmScreen,
@@ -49,12 +49,12 @@ def _run(coroutine) -> None:
 
 def _text_file() -> tuple[str, str]:
     local = "".join(f"line {index}\n" for index in range(20))
-    backup = local.replace("line 1\n", "LINE ONE\n").replace("line 18\n", "LINE EIGHTEEN\n")
-    return local, backup
+    clone = local.replace("line 1\n", "LINE ONE\n").replace("line 18\n", "LINE EIGHTEEN\n")
+    return local, clone
 
 
 def _conflict() -> Conflict:
-    local, backup = _text_file()
+    local, clone = _text_file()
     conflict = build_conflict(
         app_id="foo",
         path=".config/foo/config.yaml",
@@ -62,30 +62,30 @@ def _conflict() -> Conflict:
         entry=__import__("kamino.archive", fromlist=["FileEntry"]).FileEntry(
             path=".config/foo/config.yaml",
             sha256="0" * 64,
-            size=len(backup),
+            size=len(clone),
             mode="0644",
         ),
         local=LocalFile(kind="file", data=local.encode(), mode="0600"),
-        backup_content=backup.encode(),
+        clone_content=clone.encode(),
     )
     assert conflict is not None
     return conflict
 
 
-def _plan() -> RestorePlan:
+def _plan() -> DeployPlan:
     conflict = _conflict()
     entries = [
-        RestoreEntry(
+        DeployEntry(
             app_id="foo",
             path=conflict.path,
             destination=conflict.destination,
-            size=conflict.backup_size,
-            sha256=conflict.backup_sha256,
+            size=conflict.clone_size,
+            sha256=conflict.clone_sha256,
             mode="0644",
             link=None,
-            status=RestoreStatus.DIFFERENT,
+            status=DeployStatus.DIFFERENT,
         ),
-        RestoreEntry(
+        DeployEntry(
             app_id="foo",
             path="new.toml",
             destination=Path("/home/user/new.toml"),
@@ -93,9 +93,9 @@ def _plan() -> RestorePlan:
             sha256="1" * 64,
             mode="0644",
             link=None,
-            status=RestoreStatus.NEW,
+            status=DeployStatus.NEW,
         ),
-        RestoreEntry(
+        DeployEntry(
             app_id="foo",
             path="same.toml",
             destination=Path("/home/user/same.toml"),
@@ -103,9 +103,9 @@ def _plan() -> RestorePlan:
             sha256="2" * 64,
             mode="0644",
             link=None,
-            status=RestoreStatus.IDENTICAL,
+            status=DeployStatus.IDENTICAL,
         ),
-        RestoreEntry(
+        DeployEntry(
             app_id="foo",
             path="special",
             destination=Path("/home/user/special"),
@@ -113,17 +113,17 @@ def _plan() -> RestorePlan:
             sha256=None,
             mode="0644",
             link=None,
-            status=RestoreStatus.UNSUPPORTED,
+            status=DeployStatus.UNSUPPORTED,
         ),
     ]
-    return RestorePlan(entries=entries, conflicts=[conflict], omitted=["same.toml", "special"])
+    return DeployPlan(entries=entries, conflicts=[conflict], omitted=["same.toml", "special"])
 
 
 class FakeSession:
-    def __init__(self, plan: RestorePlan | None = None, *, error: Exception | None = None):
-        self.restorable_apps = [SimpleNamespace(id="foo", name="Foo")]
+    def __init__(self, plan: DeployPlan | None = None, *, error: Exception | None = None):
+        self.deployable_apps = [SimpleNamespace(id="foo", name="Foo")]
         self.result = SimpleNamespace(
-            restored=["restored"],
+            deployed=["deployed"],
             merged=["merged"],
             omitted=["omitted"],
             snapshot=Path("/tmp/snapshots/snap.tar.gz"),
@@ -139,7 +139,7 @@ class FakeSession:
         return self.plan_result
 
     def preview(self, decisions):
-        return RestoreClassification(restored=["restored"], merged=["merged"], omitted=["omitted"])
+        return DeployClassification(deployed=["deployed"], merged=["merged"], omitted=["omitted"])
 
     def apply(self, decisions):
         if self.error is not None:
@@ -149,7 +149,7 @@ class FakeSession:
 
 
 def test_smoke_app_opens_and_closes() -> None:
-    app = KaminoRestoreApp(FakeSession(), selected=[])
+    app = KaminoDeployApp(FakeSession(), selected=[])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -164,7 +164,7 @@ def test_smoke_app_opens_and_closes() -> None:
 
 def test_app_selection_defaults_to_none_and_can_select_all() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=None)
+    app = KaminoDeployApp(session, selected=None)
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -180,7 +180,7 @@ def test_app_selection_defaults_to_none_and_can_select_all() -> None:
 
 def test_app_selection_select_all_continues() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=None)
+    app = KaminoDeployApp(session, selected=None)
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -196,7 +196,7 @@ def test_app_selection_select_all_continues() -> None:
 
 def test_summary_table_lists_conflicts_and_counts() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -217,7 +217,7 @@ def test_summary_table_lists_conflicts_and_counts() -> None:
 
 def test_apply_omit_and_global_actions() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
     path = session.plan_result.conflicts[0].path
 
     async def scenario() -> None:
@@ -244,7 +244,7 @@ def test_apply_omit_and_global_actions() -> None:
 
 def test_detail_starts_on_the_first_decidable_row_and_skips_context() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -273,7 +273,7 @@ def test_detail_starts_on_the_first_decidable_row_and_skips_context() -> None:
 
 def test_detail_toggles_and_global_shortcuts() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
     path = session.plan_result.conflicts[0].path
 
     async def scenario() -> None:
@@ -283,21 +283,21 @@ def test_detail_toggles_and_global_shortcuts() -> None:
             await pilot.pause()
             detail = app.screen
             assert isinstance(detail, ConflictDetailScreen)
-            assert detail.decisions == [RowDecision.BACKUP, RowDecision.BACKUP]
+            assert detail.decisions == [RowDecision.CLONE, RowDecision.CLONE]
             await pilot.press("space")
             await pilot.pause()
             assert detail.decisions[0] is RowDecision.LOCAL
             assert "[local]" in str(detail._row_widgets[0].content)
-            assert "[respaldo]" in str(detail._row_widgets[1].content)
+            assert "[clon]" in str(detail._row_widgets[1].content)
             await pilot.press("enter")
             await pilot.pause()
-            assert detail.decisions[0] is RowDecision.BACKUP
+            assert detail.decisions[0] is RowDecision.CLONE
             await pilot.press("space")
             await pilot.pause()
             assert detail.decisions[0] is RowDecision.LOCAL
             await pilot.press("a")
             await pilot.pause()
-            assert detail.decisions == [RowDecision.BACKUP, RowDecision.BACKUP]
+            assert detail.decisions == [RowDecision.CLONE, RowDecision.CLONE]
             await pilot.press("l")
             await pilot.pause()
             assert detail.decisions == [RowDecision.LOCAL, RowDecision.LOCAL]
@@ -319,7 +319,7 @@ def test_detail_toggles_and_global_shortcuts() -> None:
 
 def test_detail_block_actions_and_navigation() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -335,13 +335,13 @@ def test_detail_block_actions_and_navigation() -> None:
             assert detail.decisions == [RowDecision.LOCAL, RowDecision.LOCAL]
             await pilot.press("A")
             await pilot.pause()
-            assert detail.decisions == [RowDecision.BACKUP, RowDecision.LOCAL]
+            assert detail.decisions == [RowDecision.CLONE, RowDecision.LOCAL]
             await pilot.press("L")
             await pilot.pause()
             assert detail.decisions == [RowDecision.LOCAL, RowDecision.LOCAL]
-            await pilot.click("#block-backup")
+            await pilot.click("#block-clone")
             await pilot.pause()
-            assert detail.decisions == [RowDecision.BACKUP, RowDecision.LOCAL]
+            assert detail.decisions == [RowDecision.CLONE, RowDecision.LOCAL]
 
             await pilot.press("n")
             await pilot.pause()
@@ -351,7 +351,7 @@ def test_detail_block_actions_and_navigation() -> None:
             assert list_view.index == 10
             await pilot.press("A")
             await pilot.pause()
-            assert detail.decisions == [RowDecision.BACKUP, RowDecision.BACKUP]
+            assert detail.decisions == [RowDecision.CLONE, RowDecision.CLONE]
             await pilot.press("p")
             await pilot.pause()
             assert list_view.index == 2
@@ -360,14 +360,14 @@ def test_detail_block_actions_and_navigation() -> None:
             assert list_view.index == 2
             await pilot.click("#block-local")
             await pilot.pause()
-            assert detail.decisions == [RowDecision.LOCAL, RowDecision.BACKUP]
+            assert detail.decisions == [RowDecision.LOCAL, RowDecision.CLONE]
 
     _run(scenario())
 
 
 def test_detail_rejects_an_incomplete_previous_decision() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
     conflict = session.plan_result.conflicts[0]
 
     async def scenario() -> None:
@@ -378,7 +378,7 @@ def test_detail_rejects_an_incomplete_previous_decision() -> None:
             await pilot.pause()
             detail = app.screen
             assert isinstance(detail, ConflictDetailScreen)
-            assert detail.decisions == [RowDecision.BACKUP, RowDecision.BACKUP]
+            assert detail.decisions == [RowDecision.CLONE, RowDecision.CLONE]
 
     _run(scenario())
 
@@ -389,22 +389,22 @@ def test_render_helpers_show_ranges_pairs_and_single_rows() -> None:
     rows = [row for hunk in conflict.hunks for row in hunk.rows]
 
     assert "local 1-5" in str(hunk_header(first))
-    assert "respaldo 1-5" in str(hunk_header(first))
+    assert "clon 1-5" in str(hunk_header(first))
     assert "1 línea" in str(hunk_header(first))
     assert "Bloque 2" in str(hunk_header(second))
     assert "line 0" in str(context_text(first.rows[0]))
 
     replaced = next(row for row in rows if row.local == "line 1\n")
     assert "* - line 1  [local]" in str(row_text(replaced, RowDecision.LOCAL))
-    assert "* + LINE ONE  [respaldo]" in str(row_text(replaced, RowDecision.BACKUP))
+    assert "* + LINE ONE  [clon]" in str(row_text(replaced, RowDecision.CLONE))
 
-    inserted = HunkRow(RowKind.BACKUP_ONLY, None, "extra\n")
-    assert "* + extra  [respaldo]" in str(row_text(inserted, RowDecision.BACKUP))
+    inserted = HunkRow(RowKind.CLONE_ONLY, None, "extra\n")
+    assert "* + extra  [clon]" in str(row_text(inserted, RowDecision.CLONE))
     assert "extra  [omitir]" in str(row_text(inserted, RowDecision.LOCAL))
 
     removed = HunkRow(RowKind.LOCAL_ONLY, "gone\n", None)
     assert "* - gone  [local]" in str(row_text(removed, RowDecision.LOCAL))
-    assert "gone  [omitir]" in str(row_text(removed, RowDecision.BACKUP))
+    assert "gone  [omitir]" in str(row_text(removed, RowDecision.CLONE))
 
 
 def test_render_header_shows_a_dash_for_an_empty_side() -> None:
@@ -413,10 +413,10 @@ def test_render_header_shows_a_dash_for_an_empty_side() -> None:
 
     inserted_header = str(hunk_header(inserted))
     assert "local -" in inserted_header
-    assert "respaldo 1-1" in inserted_header
+    assert "clon 1-1" in inserted_header
     deleted_header = str(hunk_header(deleted))
     assert "local 1-1" in deleted_header
-    assert "respaldo -" in deleted_header
+    assert "clon -" in deleted_header
 
 
 def test_summary_detail_counts_blocks_and_lines() -> None:
@@ -425,9 +425,9 @@ def test_summary_detail_counts_blocks_and_lines() -> None:
     assert conflict_detail(conflict) == "2 bloques · 2 líneas"
 
 
-def test_summary_review_decision_counts_backup_rows() -> None:
+def test_summary_review_decision_counts_clone_rows() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
     conflict = session.plan_result.conflicts[0]
 
     async def scenario() -> None:
@@ -437,20 +437,20 @@ def test_summary_review_decision_counts_backup_rows() -> None:
             assert isinstance(screen, ConflictSummaryScreen)
             app.decisions.set(
                 conflict.path,
-                FileDecision(FileAction.REVIEW, (RowDecision.BACKUP, RowDecision.LOCAL)),
+                FileDecision(FileAction.REVIEW, (RowDecision.CLONE, RowDecision.LOCAL)),
             )
             screen.refresh_table()
             await pilot.pause()
             row = screen.query_one(DataTable).get_row_at(0)
             assert row[3] == "2 bloques · 2 líneas"
-            assert row[4] == "revisión (1/2 respaldo)"
+            assert row[4] == "revisión (1/2 clon)"
 
     _run(scenario())
 
 
 def test_detail_blocks_invalid_merge(monkeypatch) -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
 
     def invalid(*args, **kwargs):
         return SimpleNamespace(status="invalid", message="boom")
@@ -474,7 +474,7 @@ def test_detail_blocks_invalid_merge(monkeypatch) -> None:
 
 def test_confirm_screen_and_summary() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -484,14 +484,14 @@ def test_confirm_screen_and_summary() -> None:
             await pilot.pause()
             confirm = app.screen
             assert isinstance(confirm, ConfirmScreen)
-            assert "Restaurados: 1" in str(confirm.query_one("#counts", Static).content)
+            assert "Desplegados: 1" in str(confirm.query_one("#counts", Static).content)
             assert "/tmp/snapshots" in str(confirm.query_one("#snapshot-dir", Static).content)
             await pilot.click("#apply")
             await pilot.pause()
             assert session.applied is not None
             assert isinstance(app.screen, SummaryScreen)
             text = str(app.screen.query_one("#counts", Static).content)
-            assert "Restaurados: 1" in text
+            assert "Desplegados: 1" in text
             assert "Mezclados: 1" in text
             assert "Omitidos: 1" in text
             await pilot.click("#exit")
@@ -503,7 +503,7 @@ def test_confirm_screen_and_summary() -> None:
 
 def test_confirm_cancel_does_not_apply() -> None:
     session = FakeSession()
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -521,7 +521,7 @@ def test_confirm_cancel_does_not_apply() -> None:
 
 def test_confirm_apply_handles_concurrent_change() -> None:
     session = FakeSession(error=ConcurrentChangeError("cambió"))
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -541,7 +541,7 @@ def test_confirm_apply_handles_concurrent_change() -> None:
 
 
 def test_help_screen_is_available() -> None:
-    app = KaminoRestoreApp(FakeSession(), selected=["foo"])
+    app = KaminoDeployApp(FakeSession(), selected=["foo"])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -567,18 +567,18 @@ def test_non_text_conflict_does_not_open_detail() -> None:
         destination=Path("/home/user/blob.bin"),
         kind=ConflictKind.BINARY,
         local_size=1,
-        backup_size=1,
+        clone_size=1,
         local_mode="0644",
-        backup_mode="0644",
+        clone_mode="0644",
         local_sha256=None,
-        backup_sha256=None,
+        clone_sha256=None,
         local_link=None,
-        backup_link=None,
+        clone_link=None,
         local_text=None,
-        backup_text=None,
+        clone_text=None,
     )
     session = FakeSession(plan)
-    app = KaminoRestoreApp(session, selected=["foo"])
+    app = KaminoDeployApp(session, selected=["foo"])
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -592,9 +592,9 @@ def test_non_text_conflict_does_not_open_detail() -> None:
 
 
 def _real_session(tmp_path: Path):
-    from kamino.backup import run_backup
     from kamino.catalog.models import AppDefinition
-    from kamino.restore import prepare_restore
+    from kamino.clone import run_clone
+    from kamino.deploy import prepare_deploy
 
     definition = AppDefinition.model_validate(
         {
@@ -605,40 +605,40 @@ def _real_session(tmp_path: Path):
         }
     )
     catalog = {"foo": definition}
-    local, backup_text = _text_file()
+    local, clone_text = _text_file()
     origin = tmp_path / "origin"
     (origin / ".config/foo").mkdir(parents=True)
-    (origin / ".config/foo/config.yaml").write_text(backup_text)
+    (origin / ".config/foo/config.yaml").write_text(clone_text)
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     binary = bin_dir / "foo"
     binary.write_text("")
     binary.chmod(0o755)
-    backup = tmp_path / "backup.tar.gz"
-    run_backup(
+    clone = tmp_path / "clone.tar.gz"
+    run_clone(
         home=origin,
         catalog=catalog,
         application_dirs=[],
         path=str(bin_dir),
-        output=backup,
+        output=clone,
     )
     target = tmp_path / "target"
     (target / ".config/foo").mkdir(parents=True)
     (target / ".config/foo/config.yaml").write_text(local)
-    session = prepare_restore(
-        backup,
+    session = prepare_deploy(
+        clone,
         home=target,
         catalog=catalog,
         application_dirs=[],
         path=str(bin_dir),
         snapshots_dir=tmp_path / "snapshots",
     )
-    return session, target, backup_text
+    return session, target, clone_text
 
 
 def test_real_session_full_tui_flow(tmp_path: Path) -> None:
-    session, target, backup_text = _real_session(tmp_path)
-    app = KaminoRestoreApp(session, selected=None)
+    session, target, clone_text = _real_session(tmp_path)
+    app = KaminoDeployApp(session, selected=None)
 
     async def scenario() -> None:
         async with app.run_test() as pilot:
@@ -665,7 +665,7 @@ def test_real_session_full_tui_flow(tmp_path: Path) -> None:
 
     try:
         _run(scenario())
-        assert (target / ".config/foo/config.yaml").read_text() == backup_text
+        assert (target / ".config/foo/config.yaml").read_text() == clone_text
         assert list((tmp_path / "snapshots").glob("*.tar.gz"))
     finally:
         session.close()
@@ -684,8 +684,8 @@ def test_default_theme_can_be_overridden(monkeypatch) -> None:
 
 
 def test_app_uses_terminal_ansi_colors(monkeypatch) -> None:
-    monkeypatch.setattr(KaminoRestoreApp, "theme", "ansi-dark")
-    app = KaminoRestoreApp(FakeSession(), selected=[])
+    monkeypatch.setattr(KaminoDeployApp, "theme", "ansi-dark")
+    app = KaminoDeployApp(FakeSession(), selected=[])
 
     async def scenario() -> None:
         async with app.run_test():

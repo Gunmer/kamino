@@ -1,8 +1,8 @@
-"""Copia de seguridad previa a restaurar (snapshot).
+"""Copia de seguridad previa a desplegar (snapshot).
 
 Se guarda en `~/Library/Application Support/kamino/snapshots/<fecha>.tar.gz` con
-el mismo formato que un respaldo (diseño técnico §6): una única app sintética
-`snapshot` con las rutas relativas al home, así el futuro `undo` es un `restore`
+el mismo formato que un clon (diseño técnico §6): una única app sintética
+`snapshot` con las rutas relativas al home, así el futuro `undo` es un `deploy`
 del snapshot.
 
 Módulo sin interfaz (§1): no imprime ni pregunta. `home`, `snapshots_dir` y
@@ -37,12 +37,12 @@ def create_snapshot(
     snapshots_dir: Path | None = None,
     timestamp: str | None = None,
 ) -> Path | None:
-    """Guarda el estado actual de `paths` antes de que la restauración lo cambie.
+    """Guarda el estado actual de `paths` antes de que el despliegue lo cambie.
 
-    Crea un archivo con el mismo formato que un respaldo (§6) bajo una única app
+    Crea un archivo con el mismo formato que un clon (§6) bajo una única app
     sintética `snapshot`, con las rutas relativas al home. Los directorios se
     expanden recursivamente; lo que no existe o no cabe en el manifiesto (enlaces
-    inseguros, tipos especiales) se omite, igual que en un respaldo.
+    inseguros, tipos especiales) se omite, igual que en un clon.
 
     Se guarda en `snapshots_dir` (por defecto
     `~/Library/Application Support/kamino/snapshots/`) con nombre

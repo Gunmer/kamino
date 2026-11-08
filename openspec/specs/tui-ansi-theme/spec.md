@@ -2,17 +2,17 @@
 
 ## Purpose
 
-Hacer que la TUI de restauración respete la paleta ANSI del terminal en el que se ejecuta, sin imponer colores truecolor propios.
+Hacer que la TUI de despliegue respete la paleta ANSI del terminal en el que se ejecuta, sin imponer colores truecolor propios.
 
 ## Requirements
 
 ### Requirement: Paleta ANSI del terminal
 
-La TUI de restauración DEBE (`MUST`) usar un tema ANSI de Textual para que el fondo, el texto y los colores de énfasis provengan de la paleta del terminal. NO DEBE (`MUST NOT`) imponer colores truecolor propios para esos elementos.
+La TUI de despliegue DEBE (`MUST`) usar un tema ANSI de Textual para que el fondo, el texto y los colores de énfasis provengan de la paleta del terminal. NO DEBE (`MUST NOT`) imponer colores truecolor propios para esos elementos.
 
 #### Scenario: Tema ANSI activo
 
-- **WHEN** se abre la TUI de restauración
+- **WHEN** se abre la TUI de despliegue
 - **THEN** el tema activo es `ansi-dark` y los colores ANSI nativos están habilitados
 
 #### Scenario: Terminal con paleta personalizada

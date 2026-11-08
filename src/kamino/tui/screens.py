@@ -1,4 +1,4 @@
-"""Screens for the interactive restore review."""
+"""Screens for the interactive deploy review."""
 
 from __future__ import annotations
 
@@ -36,8 +36,8 @@ from kamino.conflicts import (
     row_count,
     validate_merge,
 )
+from kamino.deploy import DeployClassification, DeployPlan, DeployResult, DeploySession
 from kamino.errors import ConcurrentChangeError, ConflictError, KaminoError
-from kamino.restore import RestoreClassification, RestorePlan, RestoreResult, RestoreSession
 from kamino.tui.widgets import (
     conflict_detail,
     conflict_kind_label,
@@ -48,13 +48,13 @@ from kamino.tui.widgets import (
 )
 
 _ACTION_LABELS = {
-    FileAction.APPLY: "aplicar respaldo",
+    FileAction.APPLY: "aplicar clon",
     FileAction.OMIT: "omitir (local)",
 }
 
 
 class AppSelectionScreen(Screen[list[str] | None]):
-    """Choose which restorable apps to include."""
+    """Choose which deployable apps to include."""
 
     BINDINGS = [Binding("escape", "cancel", "Cancelar")]
 
@@ -65,7 +65,7 @@ class AppSelectionScreen(Screen[list[str] | None]):
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
         yield Static(
-            "Selecciona las apps que quieres restaurar. Ninguna está marcada por defecto.",
+            "Selecciona las apps que quieres desplegar. Ninguna está marcada por defecto.",
             id="title",
         )
         if self.apps:
@@ -75,7 +75,7 @@ class AppSelectionScreen(Screen[list[str] | None]):
             ]
             yield SelectionList[str](*selections, id="apps")
         else:
-            yield Static("Este respaldo no tiene apps restaurables en esta máquina.", id="empty")
+            yield Static("Este clon no tiene apps desplegables en esta máquina.", id="empty")
         with Horizontal(id="buttons"):
             yield Button("Seleccionar todas", id="all")
             yield Button("Seleccionar ninguna", id="none")
@@ -113,8 +113,8 @@ class ConflictSummaryScreen(Screen[None]):
 
     def __init__(
         self,
-        session: RestoreSession,
-        plan: RestorePlan,
+        session: DeploySession,
+        plan: DeployPlan,
         decisions: ConflictDecisions,
     ) -> None:
         super().__init__()
@@ -172,8 +172,8 @@ class ConflictSummaryScreen(Screen[None]):
         if decision is None:
             return "sin decidir"
         if decision.action is FileAction.REVIEW:
-            backup = sum(1 for item in decision.rows if item is RowDecision.BACKUP)
-            return f"revisión ({backup}/{len(decision.rows)} respaldo)"
+            clone = sum(1 for item in decision.rows if item is RowDecision.CLONE)
+            return f"revisión ({clone}/{len(decision.rows)} clon)"
         return _ACTION_LABELS[decision.action]
 
     def _refresh_counts(self) -> None:
@@ -301,9 +301,9 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
         Binding("escape", "save", "Volver"),
         Binding("space", "toggle", "Alternar"),
         Binding("enter", "toggle", "Alternar"),
-        Binding("a", "all_backup", "Todo respaldo"),
+        Binding("a", "all_clone", "Todo clon"),
         Binding("l", "all_local", "Todo local"),
-        Binding("A", "block_backup", "Bloque respaldo"),
+        Binding("A", "block_clone", "Bloque clon"),
         Binding("L", "block_local", "Bloque local"),
         Binding("n", "next_block", "Siguiente bloque"),
         Binding("p", "prev_block", "Bloque anterior"),
@@ -328,7 +328,7 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
             and len(decision.rows) == row_count(self.conflict)
         ):
             return list(decision.rows)
-        return [RowDecision.BACKUP for _row in range(row_count(self.conflict))]
+        return [RowDecision.CLONE for _row in range(row_count(self.conflict))]
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
@@ -344,10 +344,10 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
         with Vertical(id="actions"):
             with Horizontal(classes="action-row"):
                 yield Button("Alternar", id="toggle", variant="primary")
-                yield Button("Todo respaldo (A)", id="all-backup")
+                yield Button("Todo clon (A)", id="all-clone")
                 yield Button("Todo local (L)", id="all-local")
             with Horizontal(classes="action-row"):
-                yield Button("Bloque respaldo (Shift+A)", id="block-backup")
+                yield Button("Bloque clon (Shift+A)", id="block-clone")
                 yield Button("Bloque local (Shift+L)", id="block-local")
             with Horizontal(classes="action-row"):
                 yield Button("Volver", id="back", variant="warning")
@@ -430,8 +430,8 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
     def _toggle_row(self, row_index: int) -> None:
         self.decisions[row_index] = (
             RowDecision.LOCAL
-            if self.decisions[row_index] is RowDecision.BACKUP
-            else RowDecision.BACKUP
+            if self.decisions[row_index] is RowDecision.CLONE
+            else RowDecision.CLONE
         )
         self._update_row(row_index)
 
@@ -461,12 +461,12 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
         button = event.button.id
         if button == "toggle":
             self.action_toggle()
-        elif button == "all-backup":
-            self._set_all(RowDecision.BACKUP)
+        elif button == "all-clone":
+            self._set_all(RowDecision.CLONE)
         elif button == "all-local":
             self._set_all(RowDecision.LOCAL)
-        elif button == "block-backup":
-            self._set_block(RowDecision.BACKUP)
+        elif button == "block-clone":
+            self._set_block(RowDecision.CLONE)
         elif button == "block-local":
             self._set_block(RowDecision.LOCAL)
         elif button == "back":
@@ -483,14 +483,14 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
             return
         self._toggle_row(row_index)
 
-    def action_all_backup(self) -> None:
-        self._set_all(RowDecision.BACKUP)
+    def action_all_clone(self) -> None:
+        self._set_all(RowDecision.CLONE)
 
     def action_all_local(self) -> None:
         self._set_all(RowDecision.LOCAL)
 
-    def action_block_backup(self) -> None:
-        self._set_block(RowDecision.BACKUP)
+    def action_block_clone(self) -> None:
+        self._set_block(RowDecision.CLONE)
 
     def action_block_local(self) -> None:
         self._set_block(RowDecision.LOCAL)
@@ -502,14 +502,14 @@ class ConflictDetailScreen(Screen[FileDecision | None]):
         self._jump_block(-1)
 
     def action_save(self) -> None:
-        if self.conflict.local_text is None or self.conflict.backup_text is None:
+        if self.conflict.local_text is None or self.conflict.clone_text is None:
             self.dismiss(None)
             return
-        merged = compose(self.conflict.local_text, self.conflict.backup_text, self.decisions)
+        merged = compose(self.conflict.local_text, self.conflict.clone_text, self.decisions)
         validation = validate_merge(
             self.conflict.path,
             self.conflict.local_text,
-            self.conflict.backup_text,
+            self.conflict.clone_text,
             merged,
         )
         if validation.status == "invalid":
@@ -537,8 +537,8 @@ class ConfirmScreen(Screen[str | None]):
 
     def __init__(
         self,
-        session: RestoreSession,
-        classification: RestoreClassification,
+        session: DeploySession,
+        classification: DeployClassification,
         decisions: ConflictDecisions,
     ) -> None:
         super().__init__()
@@ -548,9 +548,9 @@ class ConfirmScreen(Screen[str | None]):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        yield Static("Confirmación de la restauración", id="title")
+        yield Static("Confirmación del despliegue", id="title")
         yield Static(
-            f"Restaurados: {len(self.classification.restored)} · "
+            f"Desplegados: {len(self.classification.deployed)} · "
             f"Mezclados: {len(self.classification.merged)} · "
             f"Omitidos: {len(self.classification.omitted)}",
             id="counts",
@@ -580,19 +580,19 @@ class ConfirmScreen(Screen[str | None]):
 
 
 class SummaryScreen(Screen[None]):
-    """Final result after applying the restore."""
+    """Final result after applying the deploy."""
 
     BINDINGS = [Binding("escape", "exit", "Salir")]
 
-    def __init__(self, result: RestoreResult) -> None:
+    def __init__(self, result: DeployResult) -> None:
         super().__init__()
         self.result = result
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        yield Static("Restauración completada", id="title")
+        yield Static("Despliegue completado", id="title")
         yield Static(
-            f"Restaurados: {len(self.result.restored)} · "
+            f"Desplegados: {len(self.result.deployed)} · "
             f"Mezclados: {len(self.result.merged)} · "
             f"Omitidos: {len(self.result.omitted)}",
             id="counts",
@@ -618,15 +618,15 @@ class HelpScreen(Screen[None]):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        yield Static("Ayuda de la restauración interactiva", id="title")
+        yield Static("Ayuda del despliegue interactivo", id="title")
         yield Static(
             "Apps: ninguna está marcada por defecto. Usa Seleccionar todas, "
             "Seleccionar ninguna, Continuar o Cancelar.\n\n"
-            "Conflictos: Revisar abre el detalle por líneas; Aplicar restaura el "
-            "archivo del respaldo; Omitir conserva el local. Aplicar todo y Omitir "
+            "Conflictos: Revisar abre el detalle por líneas; Aplicar despliega el "
+            "archivo del clon; Omitir conserva el local. Aplicar todo y Omitir "
             "todo afectan a todos los conflictos y luego puedes cambiarlos uno a uno.\n\n"
             "Detalle: Espacio o Enter alterna la línea resaltada. A toma todas las "
-            "líneas del respaldo y L todas las locales; Shift+A y Shift+L solo el "
+            "líneas del clon y L todas las locales; Shift+A y Shift+L solo el "
             "bloque actual. n y p saltan entre bloques. Escape vuelve y valida la mezcla.\n\n"
             "Confirmación: Aplicar escribe; Volver regresa a la tabla; Cancelar no "
             "escribe ni crea snapshot. Escape sale.\n\n"
@@ -688,7 +688,7 @@ class ErrorScreen(Screen[None]):
 
     def compose(self) -> ComposeResult:
         yield Header(show_clock=False)
-        yield Static("No se pudo completar la restauración", id="title")
+        yield Static("No se pudo completar el despliegue", id="title")
         yield Static(self.message, id="error")
         with Horizontal(id="actions"):
             if not self.fatal:

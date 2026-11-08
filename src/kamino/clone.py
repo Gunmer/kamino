@@ -1,4 +1,4 @@
-"""Caso de uso de respaldo: construir el plan y ejecutarlo.
+"""Caso de uso de clonación: construir el plan y ejecutarlo.
 
 Flujo (diseño técnico §5.1): cargar catálogo, detectar apps instaladas, cruzar
 la selección, expandir paths aplicando exclusiones, construir el plan y
@@ -31,8 +31,8 @@ _MAX_SUFFIX = 1000
 
 
 @dataclass(frozen=True)
-class BackupResult:
-    """Resultado del respaldo: plan, manifiesto, archivo escrito y modo.
+class CloneResult:
+    """Resultado de la clonación: plan, manifiesto, archivo escrito y modo.
 
     Con `dry_run` el plan y el manifiesto se construyen igual pero no se
     escribe nada y `output` es `None` (§1: planificar y luego ejecutar).
@@ -44,7 +44,7 @@ class BackupResult:
     dry_run: bool
 
 
-def run_backup(
+def run_clone(
     *,
     home: Path | None = None,
     selected: list[str] | None = None,
@@ -54,11 +54,11 @@ def run_backup(
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
     metadata: dict[str, str] | None = None,
-) -> BackupResult:
-    """Ejecuta el flujo completo de respaldo y devuelve el resultado tipado.
+) -> CloneResult:
+    """Ejecuta el flujo completo de clonación y devuelve el resultado tipado.
 
     - `home`: home falso para las pruebas; por defecto el del usuario.
-    - `selected`: ids a respaldar; `None` usa todas las instaladas. Los ids
+    - `selected`: ids a clonar; `None` usa todas las instaladas. Los ids
       desconocidos o no instalados se ignoran (cruce de conjuntos).
     - `output`: archivo destino; por defecto `kamino-<hostname>-<fecha>.tar.gz`
       en el directorio actual, añadiendo un sufijo numérico si ya existe para
@@ -82,11 +82,11 @@ def run_backup(
     manifest = _build_manifest(apps, plan, application_dirs, metadata, root)
 
     if dry_run:
-        return BackupResult(plan=plan, manifest=manifest, output=None, dry_run=True)
+        return CloneResult(plan=plan, manifest=manifest, output=None, dry_run=True)
 
     target = output if output is not None else _default_output(manifest)
     write_archive(target, manifest, source_root=root)
-    return BackupResult(plan=plan, manifest=manifest, output=target, dry_run=False)
+    return CloneResult(plan=plan, manifest=manifest, output=target, dry_run=False)
 
 
 def _select_installed(
@@ -115,7 +115,7 @@ def _build_manifest(
     metadata: dict[str, str] | None,
     home: Path,
 ) -> Manifest:
-    """Monta el manifiesto del respaldo (§4.2) a partir del plan ya calculado."""
+    """Monta el manifiesto del clon (§4.2) a partir del plan ya calculado."""
     meta = metadata or {}
     files_by_app: dict[str, list[FileEntry]] = {}
     for operation in plan.operations:

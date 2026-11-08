@@ -1,4 +1,4 @@
-"""Restore use case: plan the restore, resolve conflicts and apply it safely.
+"""Deploy use case: plan the deploy, resolve conflicts and apply it safely.
 
 The session keeps the safety invariants in one place: verify the archive before
 extracting, extract only into a temporary directory, create a snapshot before
@@ -11,7 +11,7 @@ Classification of every manifest file against its destination:
 - ``IDENTICAL``: content matches (sha256 for regular files, target for symlinks,
   and CRLF-normalised text for text files); it is omitted.
 - ``DIFFERENT``: content or type differs; a content conflict is added to
-  ``RestorePlan.conflicts`` for an explicit decision, while a type change keeps
+  ``DeployPlan.conflicts`` for an explicit decision, while a type change keeps
   the existing overwrite behaviour.
 - ``UNSUPPORTED``: the destination is a directory, socket, pipe...; it is
   omitted.
@@ -68,7 +68,7 @@ from kamino.paths import SafeHome, to_absolute, to_relative
 from kamino.snapshot import SNAPSHOT_APP_ID, create_snapshot
 
 
-class RestoreStatus(StrEnum):
+class DeployStatus(StrEnum):
     """Classification of a manifest file against its destination (§5.2.4)."""
 
     NEW = "new"
@@ -80,14 +80,14 @@ class RestoreStatus(StrEnum):
 class ResultCategory(StrEnum):
     """Final outcome of an active manifest file."""
 
-    RESTORED = "restored"
+    DEPLOYED = "deployed"
     MERGED = "merged"
     OMITTED = "omitted"
 
 
 @dataclass(frozen=True)
-class RestoreEntry:
-    """A manifest file classified for restoration."""
+class DeployEntry:
+    """A manifest file classified for deployment."""
 
     app_id: str
     path: str
@@ -96,44 +96,44 @@ class RestoreEntry:
     sha256: str | None
     mode: str
     link: str | None
-    status: RestoreStatus
+    status: DeployStatus
 
 
 @dataclass(frozen=True)
-class RestorePlan:
-    """The restore plan: active manifest files, conflicts and omissions."""
+class DeployPlan:
+    """The deploy plan: active manifest files, conflicts and omissions."""
 
-    entries: list[RestoreEntry] = field(default_factory=list)
+    entries: list[DeployEntry] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
     conflicts: list[Conflict] = field(default_factory=list)
     omitted: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
-class RestoreResult:
-    """Result of a restore (§5.2.9).
+class DeployResult:
+    """Result of a deploy (§5.2.9).
 
-    ``restored`` contains files written with the backup content, ``merged``
+    ``deployed`` contains files written with the clone content, ``merged``
     contains real block mixes and ``omitted`` contains everything left
     untouched (not installed, identical, unsupported, omitted by decision and
     all-local reviews).
     """
 
-    plan: RestorePlan
+    plan: DeployPlan
     manifest: Manifest
     output: Path | None
     dry_run: bool
     snapshot: Path | None
-    restored: list[str]
+    deployed: list[str]
     merged: list[str]
     omitted: list[str]
 
 
 @dataclass(frozen=True)
-class RestoreClassification:
+class DeployClassification:
     """Prospective result categories, used by the final confirmation screen."""
 
-    restored: list[str]
+    deployed: list[str]
     merged: list[str]
     omitted: list[str]
 
@@ -155,32 +155,32 @@ class _ResolvedFile:
     category: ResultCategory
     write: bool
     local_text: str | None = None
-    backup_text: str | None = None
+    clone_text: str | None = None
     merged_text: str | None = None
 
 
-class RestoreSession:
-    """Prepared restore with ``plan``, ``preview`` and ``apply`` steps."""
+class DeploySession:
+    """Prepared deploy with ``plan``, ``preview`` and ``apply`` steps."""
 
     def __init__(
         self,
-        backup_file: Path,
+        clone_file: Path,
         *,
         home: Path,
         manifest: Manifest,
-        restorable_apps: Sequence[AppEntry],
+        deployable_apps: Sequence[AppEntry],
         not_installed_apps: Sequence[AppEntry],
         snapshots_dir: Path | None,
     ) -> None:
-        self.backup_file = backup_file
+        self.clone_file = clone_file
         self.home = home
         self.manifest = manifest
-        self.restorable_apps = list(restorable_apps)
+        self.deployable_apps = list(deployable_apps)
         self.not_installed_apps = list(not_installed_apps)
         self.snapshots_dir = snapshots_dir
-        self.notices = _ghostty_portability_notices(manifest, backup_file, home)
+        self.notices = _ghostty_portability_notices(manifest, clone_file, home)
         self._staging: Path | None = None
-        self._plan: RestorePlan | None = None
+        self._plan: DeployPlan | None = None
         self._fingerprints: dict[str, _DestinationFingerprint] = {}
         self._closed = False
 
@@ -195,7 +195,7 @@ class RestoreSession:
             return self.snapshots_dir
         return self.home / "Library" / "Application Support" / "kamino" / "snapshots"
 
-    def plan(self, selected: list[str] | None = None, *, dry_run: bool = False) -> RestorePlan:
+    def plan(self, selected: list[str] | None = None, *, dry_run: bool = False) -> DeployPlan:
         """Classify the chosen apps and build every content conflict.
 
         With ``dry_run`` the archive is neither verified nor extracted; the
@@ -204,11 +204,11 @@ class RestoreSession:
         """
         self._require_open()
         if not dry_run:
-            verify_archive(self.backup_file, self.manifest)
+            verify_archive(self.clone_file, self.manifest)
             self.home.mkdir(parents=True, exist_ok=True)
             self._reset_staging()
 
-        entries: list[RestoreEntry] = []
+        entries: list[DeployEntry] = []
         conflicts: list[Conflict] = []
         omitted: list[str] = list(
             file.path for app in self.not_installed_apps for file in app.files
@@ -224,12 +224,12 @@ class RestoreSession:
                 except FileNotFoundError:
                     local = None
                 if local is None:
-                    status = RestoreStatus.NEW
+                    status = DeployStatus.NEW
                 else:
-                    backup_for_classification = self._backup_content(app.id, file, dry_run=dry_run)
-                    status = _classify_local(local, file, backup_for_classification)
+                    clone_for_classification = self._clone_content(app.id, file, dry_run=dry_run)
+                    status = _classify_local(local, file, clone_for_classification)
                 entries.append(
-                    RestoreEntry(
+                    DeployEntry(
                         app_id=app.id,
                         path=file.path,
                         destination=destination,
@@ -240,29 +240,29 @@ class RestoreSession:
                         status=status,
                     )
                 )
-                if status in (RestoreStatus.IDENTICAL, RestoreStatus.UNSUPPORTED):
+                if status in (DeployStatus.IDENTICAL, DeployStatus.UNSUPPORTED):
                     omitted.append(file.path)
-                if status is RestoreStatus.DIFFERENT and file.path not in seen_conflicts:
+                if status is DeployStatus.DIFFERENT and file.path not in seen_conflicts:
                     conflict = self._build_conflict(app.id, file, destination, local, dry_run)
                     if conflict is not None:
                         conflicts.append(conflict)
                         seen_conflicts.add(file.path)
-                if status in (RestoreStatus.NEW, RestoreStatus.DIFFERENT) and safe is not None:
+                if status in (DeployStatus.NEW, DeployStatus.DIFFERENT) and safe is not None:
                     if file.path not in fingerprints:
                         fingerprints[file.path] = _fingerprint(safe, file.path)
-                elif status is RestoreStatus.NEW and file.path not in fingerprints:
+                elif status is DeployStatus.NEW and file.path not in fingerprints:
                     fingerprints[file.path] = _DestinationFingerprint("missing")
         finally:
             if safe is not None:
                 safe.close()
 
-        changed = [entry for entry in entries if entry.status is not RestoreStatus.UNSUPPORTED]
+        changed = [entry for entry in entries if entry.status is not DeployStatus.UNSUPPORTED]
         if changed and self.home.exists():
             _validate_destinations(
-                [entry for entry in changed if entry.status is not RestoreStatus.IDENTICAL],
+                [entry for entry in changed if entry.status is not DeployStatus.IDENTICAL],
                 self.home,
             )
-        plan = RestorePlan(
+        plan = DeployPlan(
             entries=entries,
             notices=self.notices,
             conflicts=conflicts,
@@ -272,25 +272,25 @@ class RestoreSession:
         self._fingerprints = fingerprints
         return plan
 
-    def preview(self, decisions: ConflictDecisions) -> RestoreClassification:
+    def preview(self, decisions: ConflictDecisions) -> DeployClassification:
         """Return the categories that applying ``decisions`` would produce."""
         plan, resolved = self._resolve(decisions)
         return _classification(plan, resolved)
 
-    def dry_run_result(self, plan: RestorePlan) -> RestoreResult:
+    def dry_run_result(self, plan: DeployPlan) -> DeployResult:
         """Build the result of a simulation (no writes, no snapshot)."""
-        return RestoreResult(
+        return DeployResult(
             plan=plan,
             manifest=self.manifest,
             output=None,
             dry_run=True,
             snapshot=None,
-            restored=[],
+            deployed=[],
             merged=[],
             omitted=plan.omitted,
         )
 
-    def apply(self, decisions: ConflictDecisions) -> RestoreResult:
+    def apply(self, decisions: ConflictDecisions) -> DeployResult:
         """Apply the decisions with a snapshot and atomic per-file writes."""
         self._require_open()
         plan, resolved = self._resolve(decisions)
@@ -299,13 +299,13 @@ class RestoreSession:
         writes = [item for item in resolved if item.write]
         paths = [item.path for item in writes]
         if not paths:
-            return RestoreResult(
+            return DeployResult(
                 plan=plan,
                 manifest=self.manifest,
-                output=self.backup_file,
+                output=self.clone_file,
                 dry_run=False,
                 snapshot=None,
-                restored=[],
+                deployed=[],
                 merged=[],
                 omitted=_merged_paths(plan, resolved),
             )
@@ -322,13 +322,13 @@ class RestoreSession:
         )
         _write_resolved(writes, home=self.home)
         classification = _classification(plan, resolved)
-        return RestoreResult(
+        return DeployResult(
             plan=plan,
             manifest=self.manifest,
-            output=self.backup_file,
+            output=self.clone_file,
             dry_run=False,
             snapshot=snapshot,
-            restored=classification.restored,
+            deployed=classification.deployed,
             merged=classification.merged,
             omitted=classification.omitted,
         )
@@ -340,7 +340,7 @@ class RestoreSession:
             self._staging = None
         self._closed = True
 
-    def __enter__(self) -> RestoreSession:
+    def __enter__(self) -> DeploySession:
         return self
 
     def __exit__(self, *_exc: object) -> None:
@@ -348,23 +348,23 @@ class RestoreSession:
 
     def _require_open(self) -> None:
         if self._closed:
-            raise RuntimeError("restore session is closed")
+            raise RuntimeError("deploy session is closed")
 
     def _reset_staging(self) -> None:
         if self._staging is not None:
             shutil.rmtree(self._staging, ignore_errors=True)
-        self._staging = Path(tempfile.mkdtemp(prefix="kamino-restore-"))
-        extract_archive(self.backup_file, self._staging)
+        self._staging = Path(tempfile.mkdtemp(prefix="kamino-deploy-"))
+        extract_archive(self.clone_file, self._staging)
 
     def _active_files(self, selected: list[str] | None) -> Sequence[tuple[AppEntry, FileEntry]]:
         active: list[tuple[AppEntry, FileEntry]] = []
-        for app in self.restorable_apps:
+        for app in self.deployable_apps:
             if selected is not None and app.id not in selected:
                 continue
             active.extend((app, file) for file in app.files)
         return active
 
-    def _backup_content(self, app_id: str, file: FileEntry, *, dry_run: bool) -> bytes | None:
+    def _clone_content(self, app_id: str, file: FileEntry, *, dry_run: bool) -> bytes | None:
         if file.link is not None or file.size > MAX_TEXT_BYTES:
             return None
         if self._staging is not None:
@@ -372,7 +372,7 @@ class RestoreSession:
             if not source.is_file():
                 return None
             return source.read_bytes()
-        return read_file_from_archive(self.backup_file, app_id, file.path, limit=MAX_TEXT_BYTES + 1)
+        return read_file_from_archive(self.clone_file, app_id, file.path, limit=MAX_TEXT_BYTES + 1)
 
     def _build_conflict(
         self,
@@ -391,19 +391,19 @@ class RestoreSession:
                 destination=destination,
                 entry=file,
                 local=local,
-                backup_content=None,
+                clone_content=None,
             )
-        backup_content = self._backup_content(app_id, file, dry_run=dry_run)
+        clone_content = self._clone_content(app_id, file, dry_run=dry_run)
         return build_conflict(
             app_id=app_id,
             path=file.path,
             destination=destination,
             entry=file,
             local=local,
-            backup_content=backup_content,
+            clone_content=clone_content,
         )
 
-    def _resolve(self, decisions: ConflictDecisions) -> tuple[RestorePlan, list[_ResolvedFile]]:
+    def _resolve(self, decisions: ConflictDecisions) -> tuple[DeployPlan, list[_ResolvedFile]]:
         plan = self._plan
         if plan is None:
             raise RuntimeError("call plan() before preview() or apply()")
@@ -418,7 +418,7 @@ class RestoreSession:
             if entry.path in done:
                 continue
             done.add(entry.path)
-            if entry.status in (RestoreStatus.IDENTICAL, RestoreStatus.UNSUPPORTED):
+            if entry.status in (DeployStatus.IDENTICAL, DeployStatus.UNSUPPORTED):
                 resolved.append(
                     _ResolvedFile(
                         entry.path,
@@ -433,7 +433,7 @@ class RestoreSession:
                 continue
             conflict = conflicts.get(entry.path)
             if conflict is None:
-                content, link = self._backup_output(entry)
+                content, link = self._clone_output(entry)
                 resolved.append(
                     _ResolvedFile(
                         entry.path,
@@ -441,7 +441,7 @@ class RestoreSession:
                         content,
                         link,
                         entry.mode,
-                        ResultCategory.RESTORED,
+                        ResultCategory.DEPLOYED,
                         True,
                     )
                 )
@@ -453,7 +453,7 @@ class RestoreSession:
         return plan, resolved
 
     def _resolve_conflict(
-        self, entry: RestoreEntry, conflict: Conflict, decision: FileDecision
+        self, entry: DeployEntry, conflict: Conflict, decision: FileDecision
     ) -> _ResolvedFile:
         if decision.action is FileAction.OMIT:
             return _ResolvedFile(
@@ -466,21 +466,21 @@ class RestoreSession:
                 False,
             )
         if decision.action is FileAction.APPLY:
-            content, link = self._backup_output(entry)
+            content, link = self._clone_output(entry)
             return _ResolvedFile(
                 entry.path,
                 entry.destination,
                 content,
                 link,
                 entry.mode,
-                ResultCategory.RESTORED,
+                ResultCategory.DEPLOYED,
                 True,
             )
-        if conflict.local_text is None or conflict.backup_text is None:
+        if conflict.local_text is None or conflict.clone_text is None:
             raise ConflictError(f"{entry.path} no admite revisión por líneas")
         if len(decision.rows) != row_count(conflict):
             raise ConflictError(f"la decisión de {entry.path} no cubre todas las líneas")
-        merged = compose(conflict.local_text, conflict.backup_text, decision.rows)
+        merged = compose(conflict.local_text, conflict.clone_text, decision.rows)
         if merged == conflict.local_text:
             return _ResolvedFile(
                 entry.path,
@@ -491,11 +491,11 @@ class RestoreSession:
                 ResultCategory.OMITTED,
                 False,
                 local_text=conflict.local_text,
-                backup_text=conflict.backup_text,
+                clone_text=conflict.clone_text,
                 merged_text=merged,
             )
-        all_backup = all(item is RowDecision.BACKUP for item in decision.rows)
-        category = ResultCategory.RESTORED if all_backup else ResultCategory.MERGED
+        all_clone = all(item is RowDecision.CLONE for item in decision.rows)
+        category = ResultCategory.DEPLOYED if all_clone else ResultCategory.MERGED
         return _ResolvedFile(
             entry.path,
             entry.destination,
@@ -505,11 +505,11 @@ class RestoreSession:
             category,
             True,
             local_text=conflict.local_text,
-            backup_text=conflict.backup_text,
+            clone_text=conflict.clone_text,
             merged_text=merged,
         )
 
-    def _backup_output(self, entry: RestoreEntry) -> tuple[bytes | None, str | None]:
+    def _clone_output(self, entry: DeployEntry) -> tuple[bytes | None, str | None]:
         if entry.link is not None:
             return None, entry.link
         if self._staging is None:
@@ -518,42 +518,42 @@ class RestoreSession:
         return source.read_bytes(), None
 
 
-def prepare_restore(
-    backup_file: Path,
+def prepare_deploy(
+    clone_file: Path,
     *,
     home: Path | None = None,
     catalog: dict[str, AppDefinition] | None = None,
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
     snapshots_dir: Path | None = None,
-) -> RestoreSession:
-    """Read the manifest and split manifest apps into restorable and missing."""
+) -> DeploySession:
+    """Read the manifest and split manifest apps into deployable and missing."""
     root = home if home is not None else Path.home()
     definitions = (
         catalog
         if catalog is not None
         else load_catalog(user_dir=root / ".config" / "kamino" / "apps")
     )
-    manifest = read_manifest(backup_file)
-    restorable: list[AppEntry] = []
+    manifest = read_manifest(clone_file)
+    deployable: list[AppEntry] = []
     missing: list[AppEntry] = []
     for app in manifest.apps:
         if _is_app_installed(app, definitions, application_dirs, path, root):
-            restorable.append(app)
+            deployable.append(app)
         else:
             missing.append(app)
-    return RestoreSession(
-        backup_file,
+    return DeploySession(
+        clone_file,
         home=root,
         manifest=manifest,
-        restorable_apps=restorable,
+        deployable_apps=deployable,
         not_installed_apps=missing,
         snapshots_dir=snapshots_dir,
     )
 
 
-def run_restore(
-    backup_file: Path,
+def run_deploy(
+    clone_file: Path,
     *,
     home: Path | None = None,
     selected: list[str] | None = None,
@@ -562,14 +562,14 @@ def run_restore(
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
     snapshots_dir: Path | None = None,
-) -> RestoreResult:
-    """Run the complete restore and return the typed result.
+) -> DeployResult:
+    """Run the complete deploy and return the typed result.
 
     This is the non-interactive wrapper: every conflict is resolved by applying
-    the backup side. ``dry_run`` only builds the plan and conflicts.
+    the clone side. ``dry_run`` only builds the plan and conflicts.
     """
-    session = prepare_restore(
-        backup_file,
+    session = prepare_deploy(
+        clone_file,
         home=home,
         catalog=catalog,
         application_dirs=application_dirs,
@@ -598,32 +598,32 @@ def _read_local(safe: SafeHome | None, rel: str) -> LocalFile:
 
 
 def _classify_local(
-    local: LocalFile, entry: FileEntry, backup_content: bytes | None
-) -> RestoreStatus:
+    local: LocalFile, entry: FileEntry, clone_content: bytes | None
+) -> DeployStatus:
     if local.kind == "special":
-        return RestoreStatus.UNSUPPORTED
+        return DeployStatus.UNSUPPORTED
     if local.kind == "symlink":
         if entry.link is None:
-            return RestoreStatus.DIFFERENT
-        return RestoreStatus.IDENTICAL if local.link == entry.link else RestoreStatus.DIFFERENT
+            return DeployStatus.DIFFERENT
+        return DeployStatus.IDENTICAL if local.link == entry.link else DeployStatus.DIFFERENT
     if entry.link is not None:
-        return RestoreStatus.DIFFERENT
+        return DeployStatus.DIFFERENT
     if entry.sha256 is not None and hashlib.sha256(local.data).hexdigest() == entry.sha256:
-        return RestoreStatus.IDENTICAL
-    if backup_content is not None and _text_equal(local.data, backup_content):
-        return RestoreStatus.IDENTICAL
-    return RestoreStatus.DIFFERENT
+        return DeployStatus.IDENTICAL
+    if clone_content is not None and _text_equal(local.data, clone_content):
+        return DeployStatus.IDENTICAL
+    return DeployStatus.DIFFERENT
 
 
-def _text_equal(local: bytes, backup: bytes) -> bool:
-    if b"\x00" in local or b"\x00" in backup:
+def _text_equal(local: bytes, clone: bytes) -> bool:
+    if b"\x00" in local or b"\x00" in clone:
         return False
     try:
         local_text = local.decode("utf-8")
-        backup_text = backup.decode("utf-8")
+        clone_text = clone.decode("utf-8")
     except UnicodeDecodeError:
         return False
-    return local_text.replace("\r\n", "\n") == backup_text.replace("\r\n", "\n")
+    return local_text.replace("\r\n", "\n") == clone_text.replace("\r\n", "\n")
 
 
 def _fingerprint(safe: SafeHome, rel: str) -> _DestinationFingerprint:
@@ -640,7 +640,7 @@ def _fingerprint(safe: SafeHome, rel: str) -> _DestinationFingerprint:
     return _DestinationFingerprint("special")
 
 
-def _validate_destinations(entries: Sequence[RestoreEntry], home: Path) -> None:
+def _validate_destinations(entries: Sequence[DeployEntry], home: Path) -> None:
     """Reject intermediate symlinks before creating the previous-state snapshot."""
     with SafeHome(home) as safe:
         for entry in entries:
@@ -665,28 +665,28 @@ def _validate_merges(entries: Sequence[_ResolvedFile]) -> None:
     for entry in entries:
         if not entry.write or entry.merged_text is None:
             continue
-        if entry.local_text is None or entry.backup_text is None:
+        if entry.local_text is None or entry.clone_text is None:
             continue
         validation = validate_merge(
-            entry.path, entry.local_text, entry.backup_text, entry.merged_text
+            entry.path, entry.local_text, entry.clone_text, entry.merged_text
         )
         if validation.status == "invalid":
             raise InvalidMergeError(f"la mezcla de {entry.path} no es válida: {validation.message}")
 
 
-def _classification(plan: RestorePlan, resolved: Sequence[_ResolvedFile]) -> RestoreClassification:
-    restored = [entry.path for entry in resolved if entry.category is ResultCategory.RESTORED]
+def _classification(plan: DeployPlan, resolved: Sequence[_ResolvedFile]) -> DeployClassification:
+    deployed = [entry.path for entry in resolved if entry.category is ResultCategory.DEPLOYED]
     merged = [entry.path for entry in resolved if entry.category is ResultCategory.MERGED]
     omitted = list(plan.omitted)
     omitted.extend(entry.path for entry in resolved if entry.category is ResultCategory.OMITTED)
-    return RestoreClassification(
-        restored=restored,
+    return DeployClassification(
+        deployed=deployed,
         merged=merged,
         omitted=list(dict.fromkeys(omitted)),
     )
 
 
-def _merged_paths(plan: RestorePlan, resolved: Sequence[_ResolvedFile]) -> list[str]:
+def _merged_paths(plan: DeployPlan, resolved: Sequence[_ResolvedFile]) -> list[str]:
     return _classification(plan, resolved).omitted
 
 
@@ -711,7 +711,7 @@ def _is_app_installed(
     )
 
 
-def _ghostty_portability_notices(manifest: Manifest, backup_file: Path, home: Path) -> list[str]:
+def _ghostty_portability_notices(manifest: Manifest, clone_file: Path, home: Path) -> list[str]:
     """Warn about absolute Ghostty paths that do not point to the target home."""
     notices: list[str] = []
     for app in manifest.apps:
@@ -720,7 +720,7 @@ def _ghostty_portability_notices(manifest: Manifest, backup_file: Path, home: Pa
         for file in app.files:
             if file.link is not None:
                 continue
-            content = read_file_from_archive(backup_file, app.id, file.path, limit=MAX_CONFIG_BYTES)
+            content = read_file_from_archive(clone_file, app.id, file.path, limit=MAX_CONFIG_BYTES)
             if content is None:
                 continue
             try:
@@ -733,7 +733,7 @@ def _ghostty_portability_notices(manifest: Manifest, backup_file: Path, home: Pa
                 except PathError:
                     notices.append(
                         "aviso: Ghostty conserva una ruta absoluta que puede "
-                        "requerir ajuste manual tras la restauración"
+                        "requerir ajuste manual tras el despliegue"
                     )
                     break
     return list(dict.fromkeys(notices))

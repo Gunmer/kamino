@@ -73,7 +73,7 @@ class FileEntry(BaseModel):
 
 
 class AppEntry(BaseModel):
-    """Una app del manifiesto con sus archivos respaldados."""
+    """Una app del manifiesto con sus archivos clonados."""
 
     id: str
     name: str
@@ -83,7 +83,7 @@ class AppEntry(BaseModel):
 
 
 class Manifest(BaseModel):
-    """Metadatos del respaldo (diseño técnico §4.2)."""
+    """Metadatos del clon (diseño técnico §4.2)."""
 
     format_version: int
     tool_version: str
@@ -148,7 +148,7 @@ def _commit(tmp: Path, output: Path, overwrite: bool) -> None:
     try:
         os.link(tmp, output)  # atómico: falla con FileExistsError si output ya existe
     except FileExistsError as exc:
-        raise ArchiveError(f"el archivo de respaldo ya existe: {output}") from exc
+        raise ArchiveError(f"el archivo del clon ya existe: {output}") from exc
     tmp.unlink()
 
 
@@ -176,7 +176,7 @@ def _add_file(
         except (PathError, OSError) as exc:
             raise ArchiveError(f"no se pudo leer {rel}: {exc}") from exc
         if entry.sha256 is None or hashlib.sha256(content).hexdigest() != entry.sha256:
-            raise ArchiveError(f"el archivo cambió durante el respaldo: {entry.path}")
+            raise ArchiveError(f"el archivo cambió durante la clonación: {entry.path}")
         tar.addfile(_tar_info(arcname, info, size=len(content)), io.BytesIO(content))
     elif stat.S_ISLNK(info.st_mode):
         if entry.link is None:
@@ -195,7 +195,7 @@ def _add_file(
         tar_info.size = 0
         tar.addfile(tar_info)
     else:
-        raise ArchiveError(f"tipo de archivo no soportado para respaldar: {rel}")
+        raise ArchiveError(f"tipo de archivo no soportado para clonar: {rel}")
 
 
 def _tar_info(arcname: str, info: os.stat_result, *, size: int = 0) -> tarfile.TarInfo:
@@ -219,15 +219,15 @@ def read_manifest(path: Path) -> Manifest:
             if handle is None:
                 raise ArchiveError(f"no se pudo leer {MANIFEST_NAME}")
             return _parse_manifest(handle.read())
-    raise ArchiveError(f"falta {MANIFEST_NAME} en el archivo de respaldo")
+    raise ArchiveError(f"falta {MANIFEST_NAME} en el archivo del clon")
 
 
 def read_file_from_archive(path: Path, app_id: str, rel: str, *, limit: int) -> bytes | None:
-    """Lee de forma acotada un archivo regular del respaldo, sin extraerlo.
+    """Lee de forma acotada un archivo regular del clon, sin extraerlo.
 
     Devuelve `None` si el miembro no existe, no es un archivo regular o supera
     `limit`. Se usa para avisos de portabilidad de Ghostty durante la
-    planificación de la restauración.
+    planificación del despliegue.
     """
     name = f"{APPS_DIR}/{app_id}/{rel}"
     with tarfile.open(path, "r:gz") as tar:
@@ -265,7 +265,7 @@ def verify_archive(path: Path, manifest: Manifest) -> None:
             if member.name == MANIFEST_NAME:
                 continue
             if member.name not in expected:
-                raise IntegrityError(f"archivo inesperado en el respaldo: {member.name}")
+                raise IntegrityError(f"archivo inesperado en el clon: {member.name}")
             entry = expected[member.name]
             if member.isfile():
                 if entry.link is not None:
@@ -281,7 +281,7 @@ def verify_archive(path: Path, manifest: Manifest) -> None:
                 raise IntegrityError(f"tipo de miembro no soportado: {member.name}")
             del expected[member.name]
     if expected:
-        raise IntegrityError(f"faltan archivos en el respaldo: {sorted(expected)}")
+        raise IntegrityError(f"faltan archivos en el clon: {sorted(expected)}")
 
 
 def _sha256_of(tar: tarfile.TarFile, member: tarfile.TarInfo) -> str:

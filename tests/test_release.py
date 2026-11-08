@@ -55,7 +55,7 @@ def repository(tmp_path, monkeypatch):
     )
     (path / "src/kamino").mkdir(parents=True)
     (path / "src/kamino/__init__.py").write_text(
-        '"""kamino: respaldo y restauración de configuraciones de aplicaciones en macOS."""\n\n'
+        '"""kamino: clonación y despliegue de configuraciones de aplicaciones en macOS."""\n\n'
         '__version__ = "0.1.0"\n',
         encoding="utf-8",
     )
@@ -138,7 +138,7 @@ def test_repository_base_is_coherent_and_independent_of_real_release_data(
 @pytest.mark.parametrize(
     ("message", "expected"),
     [
-        ("fix: corrige la restauración", "0.1.1"),
+        ("fix: corrige el despliegue", "0.1.1"),
         ("feat: añade una aplicación", "0.2.0"),
         ("feat!: cambia el formato", "0.2.0"),
         ("fix: cambia el formato\n\nBREAKING CHANGE: requiere migración", "0.2.0"),
@@ -445,7 +445,7 @@ def test_smoke_test_uses_temporary_home_and_stops_before_detection(monkeypatch, 
         calls.append(args)
         if "--version" in args:
             return SimpleNamespace(stdout="kamino 0.2.0\n")
-        if "backup" in args:
+        if "clone" in args:
             assert (home / ".config/kamino/apps/smoke.toml").read_text() == "invalid = ["
             return SimpleNamespace(returncode=1, stderr="TOML inválido en 'smoke.toml'")
         return SimpleNamespace()

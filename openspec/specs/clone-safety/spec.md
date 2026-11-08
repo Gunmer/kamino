@@ -1,4 +1,4 @@
-# backup-safety Specification
+# clone-safety Specification
 
 ## Purpose
 
@@ -13,20 +13,20 @@ Las nuevas definiciones integradas, las definiciones integradas ampliadas y las 
 #### Scenario: Credenciales en la configuración de plugins de Herdr
 
 - **GIVEN** la configuración global de plugins de Herdr contiene `.env` y un archivo de ajustes no excluido
-- **WHEN** se planifica y escribe el respaldo
+- **WHEN** se planifica y escribe el clon
 - **THEN** se excluye `.env` y se conserva el archivo de ajustes permitido.
 
 #### Scenario: Almacenes de autenticación de herramientas
 
 - **GIVEN** existen `auth.json` de Pi, `secrets.yaml` de Goose o `hosts.yml` de autenticación de GitHub CLI junto a configuraciones permitidas
-- **WHEN** se respaldan esas herramientas
+- **WHEN** se clonan esas herramientas
 - **THEN** se excluyen esos archivos de autenticación y se conservan las configuraciones permitidas.
 
 #### Scenario: Referencia explícita a una credencial
 
 - **GIVEN** un archivo de configuración de Ghostty referencia una credencial independiente conocida dentro del HOME
 - **WHEN** se descubren las referencias
-- **THEN** no se lee ni se incluye el contenido de esa credencial y se informa que la referencia no se respaldó.
+- **THEN** no se lee ni se incluye el contenido de esa credencial y se informa que la referencia no se clonó.
 
 ### Requirement: Exclusión de historiales y cachés
 
@@ -35,75 +35,75 @@ Las nuevas definiciones integradas y las rutas descubiertas NO DEBEN (`MUST NOT`
 #### Scenario: Configuración junto a historial
 
 - **GIVEN** una herramienta tiene un archivo de ajustes, un historial de conversaciones y una caché bajo su directorio global
-- **WHEN** se respalda esa herramienta
+- **WHEN** se clona esa herramienta
 - **THEN** se incluye el archivo de ajustes permitido y se excluyen el historial y la caché.
 
 ### Requirement: Aviso de contenido sensible
 
-Antes de ejecutar un respaldo, la CLI DEBE (`MUST`) advertir que el archivo no está cifrado y que las configuraciones incluidas pueden contener secretos. El aviso DEBE aparecer también en modo no interactivo y en simulación, sin mostrar valores secretos ni pedir confirmación adicional.
+Antes de ejecutar un clon, la CLI DEBE (`MUST`) advertir que el archivo no está cifrado y que las configuraciones incluidas pueden contener secretos. El aviso DEBE aparecer también en modo no interactivo y en simulación, sin mostrar valores secretos ni pedir confirmación adicional.
 
-#### Scenario: Respaldo no interactivo
+#### Scenario: Clonación no interactiva
 
-- **GIVEN** se ejecuta un respaldo sin terminal interactiva
-- **WHEN** se prepara el respaldo
+- **GIVEN** se ejecuta un clon sin terminal interactiva
+- **WHEN** se prepara el clon
 - **THEN** se muestra el aviso antes de crear el archivo y el comando conserva sus reglas de selección y códigos de salida.
 
 #### Scenario: Secreto incrustado en ajustes
 
 - **GIVEN** una configuración permitida contiene una clave incrustada y no es un archivo independiente excluido
-- **WHEN** se respalda la herramienta
+- **WHEN** se clona la herramienta
 - **THEN** se conserva el archivo íntegro y se advierte del riesgo sin imprimir ni redactar la clave.
 
-### Requirement: Confinamiento del respaldo al HOME
+### Requirement: Confinamiento del clon al HOME
 
-La detección por marcadores, la planificación y la lectura de configuraciones para respaldar NO DEBEN (`MUST NOT`) atravesar enlaces simbólicos en directorios intermedios bajo el HOME ni leer configuraciones fuera de este. Los enlaces finales solo se admiten con los destinos relativos seguros ya soportados.
+La detección por marcadores, la planificación y la lectura de configuraciones para clonar NO DEBEN (`MUST NOT`) atravesar enlaces simbólicos en directorios intermedios bajo el HOME ni leer configuraciones fuera de este. Los enlaces finales solo se admiten con los destinos relativos seguros ya soportados.
 
 #### Scenario: Enlace intermedio hacia fuera del HOME
 
 - **GIVEN** un directorio intermedio de una ruta seleccionada o referenciada es un enlace hacia una ubicación externa al HOME
-- **WHEN** se detecta o planifica el respaldo
-- **THEN** no se lee el destino externo y se informa de la ruta no respaldada.
+- **WHEN** se detecta o planifica el clon
+- **THEN** no se lee el destino externo y se informa de la ruta no clonada.
 
 #### Scenario: Enlace final relativo seguro
 
 - **GIVEN** una ruta seleccionada termina en un enlace relativo sin componentes `..`
-- **WHEN** se respalda
+- **WHEN** se clona
 - **THEN** se conserva el enlace sin seguirlo, como en el formato existente.
 
-### Requirement: Confinamiento de la restauración al HOME
+### Requirement: Confinamiento del despliegue al HOME
 
 La clasificación, instantánea y escritura de destinos NO DEBEN (`MUST NOT`) atravesar enlaces simbólicos en directorios intermedios bajo el HOME ni modificar archivos fuera de este, incluso si un directorio cambia durante la operación.
 
 #### Scenario: Destino con un enlace intermedio inseguro
 
-- **GIVEN** un respaldo válido apunta a un destino cuyo directorio intermedio es un enlace fuera del HOME
-- **WHEN** se solicita la restauración
+- **GIVEN** un clon válido apunta a un destino cuyo directorio intermedio es un enlace fuera del HOME
+- **WHEN** se solicita el despliegue
 - **THEN** se rechaza la operación antes de crear una instantánea o modificar destinos.
 
-#### Scenario: Cambio de directorio durante la restauración
+#### Scenario: Cambio de directorio durante el despliegue
 
-- **GIVEN** un directorio de destino se sustituye por un enlace después de planificar la restauración
-- **WHEN** la restauración intenta aplicarla
+- **GIVEN** un directorio de destino se sustituye por un enlace después de planificar el despliegue
+- **WHEN** el despliegue intenta aplicar los cambios
 - **THEN** no se lee ni se modifica ningún archivo fuera del HOME y se informa del fallo.
 
-### Requirement: Orden y compatibilidad de restauración
+### Requirement: Orden y compatibilidad del despliegue
 
-Kamino DEBE (`MUST`) conservar la validación del manifiesto, la verificación completa antes de escribir destinos, la instantánea previa y los reemplazos atómicos. Las simulaciones NO DEBEN escribir y los respaldos de formato 1 anteriores DEBEN seguir siendo legibles.
+Kamino DEBE (`MUST`) conservar la validación del manifiesto, la verificación completa antes de escribir destinos, la instantánea previa y los reemplazos atómicos. Las simulaciones NO DEBEN escribir y los clones de formato 1 anteriores DEBEN seguir siendo legibles.
 
-#### Scenario: Respaldo alterado
+#### Scenario: Clon alterado
 
-- **GIVEN** un respaldo tiene un checksum incorrecto para un archivo
-- **WHEN** se solicita una restauración real
+- **GIVEN** un clon tiene un checksum incorrecto para un archivo
+- **WHEN** se solicita un despliegue real
 - **THEN** se rechaza antes de crear una instantánea o modificar cualquier destino.
 
-#### Scenario: Simulación y respaldo anterior
+#### Scenario: Simulación y clon anterior
 
-- **GIVEN** un respaldo válido de formato 1 creado antes de este cambio
-- **WHEN** se simula su restauración
+- **GIVEN** un clon válido de formato 1 creado antes de este cambio
+- **WHEN** se simula su despliegue
 - **THEN** se genera el plan sin escribir destinos ni instantáneas.
 
-#### Scenario: Instantánea completa al restaurar un respaldo anterior
+#### Scenario: Instantánea completa al desplegar un clon anterior
 
-- **GIVEN** un respaldo anterior contiene un archivo que ahora se excluye de los nuevos respaldos y su destino actual existe
-- **WHEN** se restaura ese archivo
+- **GIVEN** un clon anterior contiene un archivo que ahora se excluye de los nuevos clones y su destino actual existe
+- **WHEN** se despliega ese archivo
 - **THEN** la instantánea previa conserva el contenido actual del destino antes de reemplazarlo.

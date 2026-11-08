@@ -20,13 +20,13 @@ class _FakeCheckbox:
 
 
 def test_select_command_returns_id(monkeypatch) -> None:
-    monkeypatch.setattr(ui.questionary, "select", lambda *a, **kw: _FakeCheckbox("backup"))
-    assert ui.select_command([("backup", "Respaldo", "desc")]) == "backup"
+    monkeypatch.setattr(ui.questionary, "select", lambda *a, **kw: _FakeCheckbox("clone"))
+    assert ui.select_command([("clone", "Clon", "desc")]) == "clone"
 
 
 def test_select_command_cancel_returns_none(monkeypatch) -> None:
     monkeypatch.setattr(ui.questionary, "select", lambda *a, **kw: _FakeCheckbox(None))
-    assert ui.select_command([("backup", "Respaldo", "desc")]) is None
+    assert ui.select_command([("clone", "Clon", "desc")]) is None
 
 
 def test_ask_path_returns_value(monkeypatch) -> None:
@@ -53,7 +53,7 @@ def test_select_apps_cancel_returns_none(monkeypatch) -> None:
     assert ui.select_apps([("git", "Git")]) is None
 
 
-def test_print_backup_summary_dry_run(monkeypatch) -> None:
+def test_print_clone_summary_dry_run(monkeypatch) -> None:
     console = Console(record=True)
     monkeypatch.setattr(ui, "_console", console)
     result = SimpleNamespace(
@@ -65,12 +65,12 @@ def test_print_backup_summary_dry_run(monkeypatch) -> None:
         manifest=SimpleNamespace(apps=[]),
         output=None,
     )
-    ui.print_backup_summary(result)
+    ui.print_clone_summary(result)
     text = console.export_text()
     assert "a" in text and "b" in text and "c" in text
 
 
-def test_print_backup_summary_verbose(monkeypatch) -> None:
+def test_print_clone_summary_verbose(monkeypatch) -> None:
     console = Console(record=True)
     monkeypatch.setattr(ui, "_console", console)
     result = SimpleNamespace(
@@ -79,51 +79,51 @@ def test_print_backup_summary_verbose(monkeypatch) -> None:
         manifest=SimpleNamespace(apps=[SimpleNamespace(name="Git", files=[1, 2])]),
         output="out.tar.gz",
     )
-    ui.print_backup_summary(result, verbose=True)
+    ui.print_clone_summary(result, verbose=True)
     text = console.export_text()
     assert "Git" in text and "a" in text and "s" in text
 
 
-def test_print_restore_summary(monkeypatch) -> None:
+def test_print_deploy_summary(monkeypatch) -> None:
     console = Console(record=True)
     monkeypatch.setattr(ui, "_console", console)
     result = SimpleNamespace(
         dry_run=False,
         plan=SimpleNamespace(entries=[], conflicts=[]),
         manifest=SimpleNamespace(apps=[]),
-        restored=["x"],
+        deployed=["x"],
         merged=["m"],
         omitted=["y"],
         snapshot="snap.tar.gz",
     )
-    ui.print_restore_summary(result)
+    ui.print_deploy_summary(result)
     text = console.export_text()
-    assert "Restauradas: 1" in text
+    assert "Desplegadas: 1" in text
     assert "Mezcladas: 1" in text
     assert "Omitidas: 1" in text
     assert "snap.tar.gz" in text
 
 
-def test_print_restore_summary_dry_run_with_diffs(monkeypatch) -> None:
+def test_print_deploy_summary_dry_run_with_diffs(monkeypatch) -> None:
     console = Console(record=True)
     monkeypatch.setattr(ui, "_console", console)
     text_conflict = SimpleNamespace(
         kind=ConflictKind.TEXT,
         path="cfg.toml",
         local_text="a = 1\n",
-        backup_text="a = 2\n",
+        clone_text="a = 2\n",
     )
     binary_conflict = SimpleNamespace(
         kind=ConflictKind.BINARY,
         path="blob.bin",
         local_size=4,
-        backup_size=5,
+        clone_size=5,
     )
     link_conflict = SimpleNamespace(
         kind=ConflictKind.SYMLINK,
         path="link",
         local_link="a",
-        backup_link="b",
+        clone_link="b",
     )
     result = SimpleNamespace(
         dry_run=True,
@@ -133,14 +133,14 @@ def test_print_restore_summary_dry_run_with_diffs(monkeypatch) -> None:
             notices=[],
         ),
         manifest=SimpleNamespace(apps=[]),
-        restored=[],
+        deployed=[],
         merged=[],
         omitted=["same.toml"],
     )
-    ui.print_restore_summary(result)
+    ui.print_deploy_summary(result)
     text = console.export_text()
     assert "--- local/cfg.toml" in text
-    assert "+++ respaldo/cfg.toml" in text
+    assert "+++ clon/cfg.toml" in text
     assert "a = 2" in text
     assert "binario" in text
     assert "enlace local -> a" in text

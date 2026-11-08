@@ -12,7 +12,7 @@ Mantener actualizado el binario autocontenido de kamino desde las releases ofici
 
 #### Scenario: Binario autocontenido
 
-- **WHEN** se ejecuta `kamino update` desde el binario autocontenido
+- **WHEN** se ejecuta `kamino update` desdel binario autocontenido
 - **THEN** el comando actualiza el archivo ejecutable en ejecución
 
 #### Scenario: Instalación desde código
@@ -34,7 +34,7 @@ La actualización DEBE (`MUST`) reemplazar el archivo ejecutable real del proces
 #### Scenario: Otros archivos de la instalación
 
 - **WHEN** termina una actualización correcta
-- **THEN** solo cambia el binario actualizado y no se modifican configuraciones, respaldos ni instantáneas
+- **THEN** solo cambia el binario actualizado y no se modifican configuraciones, clones ni instantáneas
 
 ### Requirement: Consulta de la última release y comparación de versiones
 

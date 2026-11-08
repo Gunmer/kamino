@@ -1,4 +1,4 @@
-"""Shared widgets and render helpers for the restore TUI."""
+"""Shared widgets and render helpers for the deploy TUI."""
 
 from __future__ import annotations
 
@@ -38,11 +38,11 @@ def conflict_kind_label(conflict: Conflict) -> str:
 
 def conflict_detail(conflict: Conflict) -> str:
     if conflict.kind is ConflictKind.SYMLINK:
-        return f"{conflict.local_link} → {conflict.backup_link}"
+        return f"{conflict.local_link} → {conflict.clone_link}"
     if conflict.kind is ConflictKind.TEXT:
         lines = row_count(conflict)
         return f"{len(conflict.hunks)} bloques · {lines} {'línea' if lines == 1 else 'líneas'}"
-    return f"{format_size(conflict.local_size)} / {format_size(conflict.backup_size)}"
+    return f"{format_size(conflict.local_size)} / {format_size(conflict.clone_size)}"
 
 
 def _display(line: str | None) -> str:
@@ -52,12 +52,12 @@ def _display(line: str | None) -> str:
 def hunk_header(hunk: Hunk) -> Text:
     """Render a non-decidable block header."""
     local_range = _range(hunk.local_start, hunk.local_end)
-    backup_range = _range(hunk.backup_start, hunk.backup_end)
+    clone_range = _range(hunk.clone_start, hunk.clone_end)
     changed = sum(1 for row in hunk.rows if row.kind is not RowKind.EQUAL)
     text = Text()
     text.append(f"Bloque {hunk.index}", style="bold")
     text.append(
-        f" · local {local_range} · respaldo {backup_range} · {changed} "
+        f" · local {local_range} · clon {clone_range} · {changed} "
         f"{'línea' if changed == 1 else 'líneas'}",
         style="cyan",
     )
@@ -80,23 +80,23 @@ def row_text(row: HunkRow, decision: RowDecision) -> Text:
     local_selected = decision is RowDecision.LOCAL
     text = Text()
     if row.kind is RowKind.REPLACE:
-        _append_pair(text, row.local, row.backup, local_selected)
+        _append_pair(text, row.local, row.clone, local_selected)
     elif row.kind is RowKind.LOCAL_ONLY:
         _append_single(text, "-", row.local, local_selected, "local", "red")
     else:
-        _append_single(text, "+", row.backup, not local_selected, "respaldo", "green")
+        _append_single(text, "+", row.clone, not local_selected, "clon", "green")
     return text
 
 
-def _append_pair(text: Text, local: str | None, backup: str | None, local_selected: bool) -> None:
+def _append_pair(text: Text, local: str | None, clone: str | None, local_selected: bool) -> None:
     if local_selected:
         text.append(f"* - {_display(local)}  [local]", style="bold red")
         text.append("\n")
-        text.append(f"  + {_display(backup)}", style="dim green")
+        text.append(f"  + {_display(clone)}", style="dim green")
     else:
         text.append(f"  - {_display(local)}", style="dim red")
         text.append("\n")
-        text.append(f"* + {_display(backup)}  [respaldo]", style="bold green")
+        text.append(f"* + {_display(clone)}  [clon]", style="bold green")
 
 
 def _append_single(

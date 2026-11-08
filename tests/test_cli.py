@@ -36,7 +36,7 @@ class _FakeSys:
         self.stdin = _FakeStdin(is_tty)
 
 
-def _fake_backup_result(*, skipped: tuple[str, ...] = ()) -> SimpleNamespace:
+def _fake_clone_result(*, skipped: tuple[str, ...] = ()) -> SimpleNamespace:
     return SimpleNamespace(
         plan=SimpleNamespace(operations=[], skipped=list(skipped)),
         manifest=SimpleNamespace(apps=[]),
@@ -45,7 +45,7 @@ def _fake_backup_result(*, skipped: tuple[str, ...] = ()) -> SimpleNamespace:
     )
 
 
-def _fake_restore_result(
+def _fake_deploy_result(
     *, omitted: tuple[str, ...] = (), merged: tuple[str, ...] = (), dry_run: bool = False
 ) -> SimpleNamespace:
     return SimpleNamespace(
@@ -54,15 +54,15 @@ def _fake_restore_result(
         output=None,
         dry_run=dry_run,
         snapshot=None,
-        restored=[],
+        deployed=[],
         merged=list(merged),
         omitted=list(omitted),
     )
 
 
-class _FakeRestoreSession:
-    def __init__(self, *, restorable: tuple[str, ...] = ("git",), omitted: tuple[str, ...] = ()):
-        self.restorable_apps = [SimpleNamespace(id=app_id, name=app_id) for app_id in restorable]
+class _FakeDeploySession:
+    def __init__(self, *, deployable: tuple[str, ...] = ("git",), omitted: tuple[str, ...] = ()):
+        self.deployable_apps = [SimpleNamespace(id=app_id, name=app_id) for app_id in deployable]
         self.omitted = omitted
         self.calls: list[tuple] = []
         self.closed = False
@@ -72,29 +72,29 @@ class _FakeRestoreSession:
         return SimpleNamespace(entries=[], conflicts=[], notices=[], omitted=list(self.omitted))
 
     def dry_run_result(self, plan):
-        return _fake_restore_result(omitted=tuple(plan.omitted), dry_run=True)
+        return _fake_deploy_result(omitted=tuple(plan.omitted), dry_run=True)
 
     def apply(self, decisions):
         self.calls.append(("apply", decisions))
-        return _fake_restore_result(omitted=self.omitted)
+        return _fake_deploy_result(omitted=self.omitted)
 
     def close(self):
         self.closed = True
 
 
-def test_backup_non_interactive(monkeypatch) -> None:
+def test_clone_non_interactive(monkeypatch) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
     calls: dict = {}
 
-    def fake_run_backup(**kwargs):
+    def fake_run_clone(**kwargs):
         calls.update(kwargs)
-        return _fake_backup_result()
+        return _fake_clone_result()
 
-    monkeypatch.setattr(cli, "run_backup", fake_run_backup)
-    result = runner.invoke(cli.app, ["backup", "--apps", "git"])
+    monkeypatch.setattr(cli, "run_clone", fake_run_clone)
+    result = runner.invoke(cli.app, ["clone", "--apps", "git"])
     assert result.exit_code == 0
     assert calls["selected"] == ["git"]
 
@@ -102,48 +102,48 @@ def test_backup_non_interactive(monkeypatch) -> None:
 @pytest.mark.parametrize(
     "args",
     [
-        ["backup", "--apps", "git", "--output", "respaldo.tar.gz"],
-        ["backup", "-a", "git", "-o", "respaldo.tar.gz"],
+        ["clone", "--apps", "git", "--output", "clon.tar.gz"],
+        ["clone", "-a", "git", "-o", "clon.tar.gz"],
     ],
 )
-def test_backup_apps_and_output_aliases(monkeypatch, args: list[str]) -> None:
+def test_clone_apps_and_output_aliases(monkeypatch, args: list[str]) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
     calls: dict = {}
 
-    def fake_run_backup(**kwargs):
+    def fake_run_clone(**kwargs):
         calls.update(kwargs)
-        return _fake_backup_result()
+        return _fake_clone_result()
 
-    monkeypatch.setattr(cli, "run_backup", fake_run_backup)
+    monkeypatch.setattr(cli, "run_clone", fake_run_clone)
     result = runner.invoke(cli.app, args)
     assert result.exit_code == 0
     assert calls["selected"] == ["git"]
-    assert calls["output"] == Path("respaldo.tar.gz")
+    assert calls["output"] == Path("clon.tar.gz")
 
 
 @pytest.mark.parametrize("flag", ["--dry-run", "-n"])
-def test_backup_dry_run_alias(monkeypatch, flag: str) -> None:
+def test_clone_dry_run_alias(monkeypatch, flag: str) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
     calls: dict = {}
 
-    def fake_run_backup(**kwargs):
+    def fake_run_clone(**kwargs):
         calls.update(kwargs)
-        return _fake_backup_result()
+        return _fake_clone_result()
 
-    monkeypatch.setattr(cli, "run_backup", fake_run_backup)
-    result = runner.invoke(cli.app, ["backup", "--apps", "git", "--output", "out.tar.gz", flag])
+    monkeypatch.setattr(cli, "run_clone", fake_run_clone)
+    result = runner.invoke(cli.app, ["clone", "--apps", "git", "--output", "out.tar.gz", flag])
     assert result.exit_code == 0
     assert calls["dry_run"] is True
 
 
 @pytest.mark.parametrize("flag", ["--verbose", "-v"])
-def test_backup_verbose_alias(monkeypatch, flag: str) -> None:
+def test_clone_verbose_alias(monkeypatch, flag: str) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
@@ -152,74 +152,74 @@ def test_backup_verbose_alias(monkeypatch, flag: str) -> None:
     def fake_print(result, **kwargs):
         summary.update(kwargs)
 
-    monkeypatch.setattr(cli.ui, "print_backup_summary", fake_print)
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: _fake_backup_result())
-    result = runner.invoke(cli.app, ["backup", "--apps", "git", flag])
+    monkeypatch.setattr(cli.ui, "print_clone_summary", fake_print)
+    monkeypatch.setattr(cli, "run_clone", lambda **kwargs: _fake_clone_result())
+    result = runner.invoke(cli.app, ["clone", "--apps", "git", flag])
     assert result.exit_code == 0
     assert summary["verbose"] is True
 
 
-def test_backup_alias_exit_3_when_skipped(monkeypatch) -> None:
+def test_clone_alias_exit_3_when_skipped(monkeypatch) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: _fake_backup_result(skipped=("x",)))
-    result = runner.invoke(cli.app, ["backup", "-a", "git", "-n"])
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli, "run_clone", lambda **kwargs: _fake_clone_result(skipped=("x",)))
+    result = runner.invoke(cli.app, ["clone", "-a", "git", "-n"])
     assert result.exit_code == 3
 
 
-def test_backup_unknown_app_exits_3(monkeypatch) -> None:
+def test_clone_unknown_app_exits_3(monkeypatch) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: _fake_backup_result())
-    result = runner.invoke(cli.app, ["backup", "--apps", "git,nope"])
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli, "run_clone", lambda **kwargs: _fake_clone_result())
+    result = runner.invoke(cli.app, ["clone", "--apps", "git,nope"])
     assert result.exit_code == 3
     assert "nope" in result.output
 
 
-def test_backup_non_tty_defaults_to_all(monkeypatch) -> None:
+def test_clone_non_tty_defaults_to_all(monkeypatch) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
     monkeypatch.setattr(cli, "sys", _FakeSys(False))
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
     calls: dict = {}
 
-    def fake_run_backup(**kwargs):
+    def fake_run_clone(**kwargs):
         calls.update(kwargs)
-        return _fake_backup_result()
+        return _fake_clone_result()
 
-    monkeypatch.setattr(cli, "run_backup", fake_run_backup)
-    result = runner.invoke(cli.app, ["backup"])
+    monkeypatch.setattr(cli, "run_clone", fake_run_clone)
+    result = runner.invoke(cli.app, ["clone"])
     assert result.exit_code == 0
     assert calls["selected"] == ["git"]
 
 
-def test_backup_interactive_selects_all(monkeypatch) -> None:
+def test_clone_interactive_selects_all(monkeypatch) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
     monkeypatch.setattr(cli, "load_catalog", lambda: {"git": fake_app})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
     monkeypatch.setattr(cli, "sys", _FakeSys(True))
     monkeypatch.setattr(cli.ui, "select_apps", lambda choices: [c[0] for c in choices])
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
     calls: dict = {}
 
-    def fake_run_backup(**kwargs):
+    def fake_run_clone(**kwargs):
         calls.update(kwargs)
-        return _fake_backup_result()
+        return _fake_clone_result()
 
-    monkeypatch.setattr(cli, "run_backup", fake_run_backup)
-    result = runner.invoke(cli.app, ["backup"])
+    monkeypatch.setattr(cli, "run_clone", fake_run_clone)
+    result = runner.invoke(cli.app, ["clone"])
     assert result.exit_code == 0
     assert calls["selected"] == ["git"]
 
 
 @pytest.mark.parametrize("is_tty", [False, True])
 @pytest.mark.parametrize("dry_run", [False, True])
-def test_backup_prints_privacy_warning_without_confirmation(
+def test_clone_prints_privacy_warning_without_confirmation(
     monkeypatch, is_tty: bool, dry_run: bool
 ) -> None:
     fake_app = SimpleNamespace(id="git", name="Git")
@@ -227,9 +227,9 @@ def test_backup_prints_privacy_warning_without_confirmation(
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
     monkeypatch.setattr(cli, "sys", _FakeSys(is_tty))
     monkeypatch.setattr(cli.ui, "select_apps", lambda choices: [c[0] for c in choices])
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: _fake_backup_result())
-    args = ["backup", "--apps", "git"]
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli, "run_clone", lambda **kwargs: _fake_clone_result())
+    args = ["clone", "--apps", "git"]
     if dry_run:
         args.append("--dry-run")
 
@@ -251,15 +251,15 @@ def test_user_catalog_definition_takes_precedence_in_cli(tmp_path, monkeypatch) 
     )
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
-    monkeypatch.setattr(cli.ui, "print_backup_summary", lambda result, **kw: None)
+    monkeypatch.setattr(cli.ui, "print_clone_summary", lambda result, **kw: None)
     calls: dict = {}
 
-    def fake_run_backup(**kwargs):
+    def fake_run_clone(**kwargs):
         calls.update(kwargs)
-        return _fake_backup_result()
+        return _fake_clone_result()
 
-    monkeypatch.setattr(cli, "run_backup", fake_run_backup)
-    result = runner.invoke(cli.app, ["backup", "--apps", "git"])
+    monkeypatch.setattr(cli, "run_clone", fake_run_clone)
+    result = runner.invoke(cli.app, ["clone", "--apps", "git"])
 
     assert result.exit_code == 0
     assert calls["catalog"]["git"].name == "Git personalizado"
@@ -275,37 +275,37 @@ def test_user_catalog_path_confinement_is_enforced_in_cli(tmp_path, monkeypatch)
     )
     monkeypatch.setenv("HOME", str(tmp_path))
     called: list[str] = []
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: called.append("backup"))
-    result = runner.invoke(cli.app, ["backup", "--apps", "git"])
+    monkeypatch.setattr(cli, "run_clone", lambda **kwargs: called.append("clone"))
+    result = runner.invoke(cli.app, ["clone", "--apps", "git"])
 
     assert result.exit_code == 1
     assert called == []
     assert "ruta absoluta" in result.output
 
 
-def test_backup_error_exit_1(monkeypatch) -> None:
+def test_clone_error_exit_1(monkeypatch) -> None:
     monkeypatch.setattr(cli, "load_catalog", lambda: {})
     monkeypatch.setattr(cli, "is_installed", lambda app: True)
 
     def boom(**kwargs):
-        raise ArchiveError("fallo de respaldo")
+        raise ArchiveError("fallo de clon")
 
-    monkeypatch.setattr(cli, "run_backup", boom)
-    result = runner.invoke(cli.app, ["backup", "--apps", "git"])
+    monkeypatch.setattr(cli, "run_clone", boom)
+    result = runner.invoke(cli.app, ["clone", "--apps", "git"])
     assert result.exit_code == 1
-    assert "fallo de respaldo" in result.output
+    assert "fallo de clon" in result.output
 
 
-def _install_restore(monkeypatch, session: _FakeRestoreSession) -> None:
-    monkeypatch.setattr(cli, "prepare_restore", lambda backup_file: session)
-    monkeypatch.setattr(cli.ui, "print_restore_summary", lambda result, **kw: None)
+def _install_deploy(monkeypatch, session: _FakeDeploySession) -> None:
+    monkeypatch.setattr(cli, "prepare_deploy", lambda clone_file: session)
+    monkeypatch.setattr(cli.ui, "print_deploy_summary", lambda result, **kw: None)
 
 
-def test_restore_yes(monkeypatch) -> None:
-    session = _FakeRestoreSession()
-    _install_restore(monkeypatch, session)
+def test_deploy_yes(monkeypatch) -> None:
+    session = _FakeDeploySession()
+    _install_deploy(monkeypatch, session)
 
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz", "--yes"])
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz", "--yes"])
 
     assert result.exit_code == 0
     assert session.calls[0] == ("plan", None, False)
@@ -320,27 +320,27 @@ def test_restore_yes(monkeypatch) -> None:
         ["-y", "-v"],
     ],
 )
-def test_restore_yes_and_verbose_aliases(monkeypatch, flags: list[str]) -> None:
+def test_deploy_yes_and_verbose_aliases(monkeypatch, flags: list[str]) -> None:
     summary: dict = {}
-    session = _FakeRestoreSession()
-    monkeypatch.setattr(cli, "prepare_restore", lambda backup_file: session)
+    session = _FakeDeploySession()
+    monkeypatch.setattr(cli, "prepare_deploy", lambda clone_file: session)
 
     def fake_print(result, **kwargs):
         summary.update(kwargs)
 
-    monkeypatch.setattr(cli.ui, "print_restore_summary", fake_print)
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz", *flags])
+    monkeypatch.setattr(cli.ui, "print_deploy_summary", fake_print)
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz", *flags])
     assert result.exit_code == 0
     assert summary["verbose"] is True
 
 
 @pytest.mark.parametrize("flag", ["--dry-run", "-n"])
-def test_restore_dry_run_alias(monkeypatch, flag: str) -> None:
+def test_deploy_dry_run_alias(monkeypatch, flag: str) -> None:
     monkeypatch.setattr(cli, "sys", _FakeSys(False))
-    session = _FakeRestoreSession()
-    _install_restore(monkeypatch, session)
+    session = _FakeDeploySession()
+    _install_deploy(monkeypatch, session)
 
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz", flag])
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz", flag])
 
     assert result.exit_code == 0
     assert session.calls[0] == ("plan", None, True)
@@ -348,42 +348,40 @@ def test_restore_dry_run_alias(monkeypatch, flag: str) -> None:
 
 
 @pytest.mark.parametrize("flag", ["--apps", "-a"])
-def test_restore_apps_alias(monkeypatch, flag: str) -> None:
-    session = _FakeRestoreSession(restorable=("git", "zsh"))
-    _install_restore(monkeypatch, session)
+def test_deploy_apps_alias(monkeypatch, flag: str) -> None:
+    session = _FakeDeploySession(deployable=("git", "zsh"))
+    _install_deploy(monkeypatch, session)
 
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz", "--yes", flag, "git"])
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz", "--yes", flag, "git"])
 
     assert result.exit_code == 0
     assert session.calls[0] == ("plan", ["git"], False)
 
 
-def test_restore_unknown_app_warns_and_exits_3(monkeypatch) -> None:
-    session = _FakeRestoreSession(restorable=("git",))
-    _install_restore(monkeypatch, session)
+def test_deploy_unknown_app_warns_and_exits_3(monkeypatch) -> None:
+    session = _FakeDeploySession(deployable=("git",))
+    _install_deploy(monkeypatch, session)
 
-    result = runner.invoke(
-        cli.app, ["restore", "backup.tar.gz", "--yes", "--apps", "git,no-existe"]
-    )
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz", "--yes", "--apps", "git,no-existe"])
 
     assert result.exit_code == 3
     assert "no-existe" in result.output
     assert session.calls[0] == ("plan", ["git"], False)
 
 
-def test_restore_interactive_opens_tui_without_apps(monkeypatch) -> None:
+def test_deploy_interactive_opens_tui_without_apps(monkeypatch) -> None:
     monkeypatch.setattr(cli, "sys", _FakeSys(True))
-    session = _FakeRestoreSession(restorable=("git",))
-    _install_restore(monkeypatch, session)
+    session = _FakeDeploySession(deployable=("git",))
+    _install_deploy(monkeypatch, session)
     calls: dict = {}
 
     def fake_tui(current, selected=None):
         calls["session"] = current
         calls["selected"] = selected
-        return _fake_restore_result()
+        return _fake_deploy_result()
 
-    monkeypatch.setattr(cli, "run_restore_tui", fake_tui)
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz"])
+    monkeypatch.setattr(cli, "run_deploy_tui", fake_tui)
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz"])
 
     assert result.exit_code == 0
     assert calls["session"] is session
@@ -391,50 +389,50 @@ def test_restore_interactive_opens_tui_without_apps(monkeypatch) -> None:
     assert all(call[0] != "plan" for call in session.calls)
 
 
-def test_restore_interactive_skips_selection_with_apps(monkeypatch) -> None:
+def test_deploy_interactive_skips_selection_with_apps(monkeypatch) -> None:
     monkeypatch.setattr(cli, "sys", _FakeSys(True))
-    session = _FakeRestoreSession(restorable=("git", "zsh"))
-    _install_restore(monkeypatch, session)
+    session = _FakeDeploySession(deployable=("git", "zsh"))
+    _install_deploy(monkeypatch, session)
     calls: dict = {}
 
     def fake_tui(current, selected=None):
         calls["selected"] = selected
-        return _fake_restore_result()
+        return _fake_deploy_result()
 
-    monkeypatch.setattr(cli, "run_restore_tui", fake_tui)
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz", "-a", "zsh"])
+    monkeypatch.setattr(cli, "run_deploy_tui", fake_tui)
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz", "-a", "zsh"])
 
     assert result.exit_code == 0
     assert calls["selected"] == ["zsh"]
 
 
-def test_restore_tui_cancel_exits_1(monkeypatch) -> None:
+def test_deploy_tui_cancel_exits_1(monkeypatch) -> None:
     monkeypatch.setattr(cli, "sys", _FakeSys(True))
-    session = _FakeRestoreSession()
-    _install_restore(monkeypatch, session)
-    monkeypatch.setattr(cli, "run_restore_tui", lambda current, selected=None: None)
+    session = _FakeDeploySession()
+    _install_deploy(monkeypatch, session)
+    monkeypatch.setattr(cli, "run_deploy_tui", lambda current, selected=None: None)
 
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz"])
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz"])
 
     assert result.exit_code == 1
-    assert "cancelada" in result.output
+    assert "cancelado" in result.output
 
 
-def test_restore_requires_yes_without_tty(monkeypatch) -> None:
+def test_deploy_requires_yes_without_tty(monkeypatch) -> None:
     monkeypatch.setattr(cli, "sys", _FakeSys(False))
     prepared: list[str] = []
-    monkeypatch.setattr(cli, "prepare_restore", lambda path: prepared.append("prepared"))
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz"])
+    monkeypatch.setattr(cli, "prepare_deploy", lambda path: prepared.append("prepared"))
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz"])
     assert result.exit_code == 1
     assert "--yes" in result.output
     assert prepared == []
 
 
 @pytest.mark.parametrize("flag", ["--yes", "-y"])
-def test_restore_exit_3_when_omitted(monkeypatch, flag: str) -> None:
-    session = _FakeRestoreSession(omitted=("x",))
-    _install_restore(monkeypatch, session)
-    result = runner.invoke(cli.app, ["restore", "backup.tar.gz", flag])
+def test_deploy_exit_3_when_omitted(monkeypatch, flag: str) -> None:
+    session = _FakeDeploySession(omitted=("x",))
+    _install_deploy(monkeypatch, session)
+    result = runner.invoke(cli.app, ["deploy", "clone.tar.gz", flag])
     assert result.exit_code == 3
 
 
@@ -443,16 +441,16 @@ def test_restore_exit_3_when_omitted(monkeypatch, flag: str) -> None:
     [
         (["-h"], ["--help", "-h", "--version", "-V"]),
         (["--help"], ["--help", "-h", "--version", "-V"]),
-        (["backup", "-h"], ["--help", "-h"]),
-        (["backup", "--help"], ["--help", "-h"]),
-        (["restore", "-h"], ["--help", "-h"]),
-        (["restore", "--help"], ["--help", "-h"]),
+        (["clone", "-h"], ["--help", "-h"]),
+        (["clone", "--help"], ["--help", "-h"]),
+        (["deploy", "-h"], ["--help", "-h"]),
+        (["deploy", "--help"], ["--help", "-h"]),
     ],
 )
 def test_help_aliases(monkeypatch, args: list[str], expected_names: list[str]) -> None:
     dispatched: list[str] = []
     monkeypatch.setattr(cli, "_run_menu", lambda ctx: dispatched.append("run_menu"))
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: dispatched.append("backup"))
+    monkeypatch.setattr(cli, "run_clone", lambda **kwargs: dispatched.append("clone"))
     result = runner.invoke(cli.app, args)
     assert result.exit_code == 0
     assert "Usage:" in Text.from_ansi(result.output).plain
@@ -465,7 +463,7 @@ def test_help_aliases(monkeypatch, args: list[str], expected_names: list[str]) -
     [
         ([], ["--help", "-h", "--version", "-V", "--install-completion", "--show-completion"]),
         (
-            ["backup"],
+            ["clone"],
             [
                 "--help",
                 "-h",
@@ -480,7 +478,7 @@ def test_help_aliases(monkeypatch, args: list[str], expected_names: list[str]) -
             ],
         ),
         (
-            ["restore"],
+            ["deploy"],
             [
                 "--help",
                 "-h",
@@ -501,7 +499,7 @@ def test_help_options_are_visible_with_ansi_color(
 ) -> None:
     dispatched: list[str] = []
     monkeypatch.setattr(cli, "_run_menu", lambda ctx: dispatched.append("run_menu"))
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: dispatched.append("backup"))
+    monkeypatch.setattr(cli, "run_clone", lambda **kwargs: dispatched.append("clone"))
     result = runner.invoke(cli.app, [*command, "-h"], env={"FORCE_COLOR": "1"})
     assert result.exit_code == 0
     assert "\x1b[" in result.output
@@ -523,7 +521,7 @@ def test_main_help_keeps_completion_option_names(monkeypatch) -> None:
 def test_version(monkeypatch, flag: str) -> None:
     dispatched: list[str] = []
     monkeypatch.setattr(cli, "_run_menu", lambda ctx: dispatched.append("run_menu"))
-    monkeypatch.setattr(cli, "run_backup", lambda **kwargs: dispatched.append("backup"))
+    monkeypatch.setattr(cli, "run_clone", lambda **kwargs: dispatched.append("clone"))
     result = runner.invoke(cli.app, [flag])
     assert result.exit_code == 0
     assert result.output == f"kamino {cli.__version__}\n"
@@ -534,8 +532,8 @@ def test_no_args_non_tty_shows_help(monkeypatch) -> None:
     monkeypatch.setattr(cli, "sys", _FakeSys(False))
     result = runner.invoke(cli.app, [])
     assert result.exit_code == 0
-    assert "backup" in result.output
-    assert "restore" in result.output
+    assert "clone" in result.output
+    assert "deploy" in result.output
 
 
 def test_no_args_tty_menu_dispatches_to_run_menu(monkeypatch) -> None:
@@ -547,19 +545,19 @@ def test_no_args_tty_menu_dispatches_to_run_menu(monkeypatch) -> None:
     assert dispatched == ["run_menu"]
 
 
-def test_run_menu_invokes_backup_via_ctx(monkeypatch) -> None:
-    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "backup")
+def test_run_menu_invokes_clone_via_ctx(monkeypatch) -> None:
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "clone")
     ctx = MagicMock()
     cli._run_menu(ctx)
-    ctx.invoke.assert_called_once_with(cli.backup)
+    ctx.invoke.assert_called_once_with(cli.clone)
 
 
-def test_run_menu_invokes_restore_via_ctx(monkeypatch) -> None:
-    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "restore")
-    monkeypatch.setattr(cli.ui, "ask_path", lambda prompt: "backup.tar.gz")
+def test_run_menu_invokes_deploy_via_ctx(monkeypatch) -> None:
+    monkeypatch.setattr(cli.ui, "select_command", lambda choices: "deploy")
+    monkeypatch.setattr(cli.ui, "ask_path", lambda prompt: "clone.tar.gz")
     ctx = MagicMock()
     cli._run_menu(ctx)
-    ctx.invoke.assert_called_once_with(cli.restore, backup_file=Path("backup.tar.gz"))
+    ctx.invoke.assert_called_once_with(cli.deploy, clone_file=Path("clone.tar.gz"))
 
 
 def test_no_args_tty_menu_cancel(monkeypatch) -> None:

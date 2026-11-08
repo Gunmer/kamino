@@ -22,14 +22,14 @@ def check_binary(binary: Path, version: str) -> None:
         if result.stdout.strip() != f"kamino {version}":
             raise RuntimeError("La versión del binario no coincide con la release")
 
-        # User definitions load after embedded ones, before detection or backup planning.
+        # User definitions load after embedded ones, before detection or clone planning.
         apps = home / ".config" / "kamino" / "apps"
         apps.mkdir(parents=True)
         invalid_definition = apps / "smoke.toml"
         invalid_definition.write_text("invalid = [", encoding="utf-8")
         before = set(home.rglob("*"))
         result = subprocess.run(
-            [str(binary), "backup", "--dry-run"],
+            [str(binary), "clone", "--dry-run"],
             env=env,
             stdin=subprocess.DEVNULL,
             capture_output=True,

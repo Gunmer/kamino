@@ -16,16 +16,16 @@ from rich.table import Table
 from rich.text import Text
 
 if TYPE_CHECKING:
-    from kamino.backup import BackupResult
+    from kamino.clone import CloneResult
     from kamino.conflicts import Conflict
-    from kamino.restore import RestoreResult
+    from kamino.deploy import DeployResult
     from kamino.update import UpdateResult
 
 _console = Console()
 
-#: Texto del aviso previo al respaldo. No se interpola ningún valor de archivo.
+#: Texto del aviso previo al clon. No se interpola ningún valor de archivo.
 PRIVACY_WARNING = (
-    "aviso: el archivo de respaldo no está cifrado y las configuraciones incluidas "
+    "aviso: el archivo del clon no está cifrado y las configuraciones incluidas "
     "pueden contener secretos. Los archivos de credenciales conocidos se excluyen, "
     "pero los ajustes permitidos se conservan íntegros."
 )
@@ -36,7 +36,7 @@ CommandChoice = tuple[str, str, str]
 
 
 def print_privacy_warning() -> None:
-    """Muestra el aviso de contenido sensible antes de respaldar."""
+    """Muestra el aviso de contenido sensible antes de clonar."""
     _console.print(f"[yellow]{PRIVACY_WARNING}[/yellow]")
 
 
@@ -102,10 +102,10 @@ def select_apps(choices: Sequence[tuple[str, str]]) -> list[str] | None:
     return selected
 
 
-def print_backup_summary(result: BackupResult, *, verbose: bool = False) -> None:
-    """Imprime el resumen del respaldo, o el plan en modo dry-run."""
+def print_clone_summary(result: CloneResult, *, verbose: bool = False) -> None:
+    """Imprime el resumen de la clonación, o el plan en modo dry-run."""
     if result.dry_run:
-        _console.print("[bold]Plan de respaldo (dry-run)[/bold]")
+        _console.print("[bold]Plan de clonación (dry-run)[/bold]")
         for op in result.plan.operations:
             _console.print(f"  + {op.path}")
         for skipped in result.plan.skipped:
@@ -113,7 +113,7 @@ def print_backup_summary(result: BackupResult, *, verbose: bool = False) -> None
         for notice in getattr(result.plan, "notices", []):
             _console.print(f"  ! {notice}")
         return
-    table = Table(title="Respaldo completado")
+    table = Table(title="Clonación completada")
     table.add_column("App", style="bold")
     table.add_column("Archivos", justify="right")
     for app in result.manifest.apps:
@@ -121,7 +121,7 @@ def print_backup_summary(result: BackupResult, *, verbose: bool = False) -> None
     _console.print(table)
     _console.print(f"Archivo: {result.output}")
     if verbose:
-        _console.print("[bold]Archivos respaldados[/bold]")
+        _console.print("[bold]Archivos clonados[/bold]")
         for op in result.plan.operations:
             _console.print(f"  + {op.path}")
         for skipped in result.plan.skipped:
@@ -130,10 +130,10 @@ def print_backup_summary(result: BackupResult, *, verbose: bool = False) -> None
             _console.print(f"  ! {notice}")
 
 
-def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> None:
-    """Print the restore summary, or the plan and diffs in dry-run mode."""
+def print_deploy_summary(result: DeployResult, *, verbose: bool = False) -> None:
+    """Print the deploy summary, or the plan and diffs in dry-run mode."""
     if result.dry_run:
-        _console.print("[bold]Plan de restauración (dry-run)[/bold]")
+        _console.print("[bold]Plan de despliegue (dry-run)[/bold]")
         for entry in result.plan.entries:
             _console.print(f"  [{entry.status}] {entry.path}")
         for conflict in result.plan.conflicts:
@@ -142,7 +142,7 @@ def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> No
         for notice in getattr(result.plan, "notices", []):
             _console.print(f"  ! {notice}")
         return
-    _console.print(f"Restauradas: {len(result.restored)}")
+    _console.print(f"Desplegadas: {len(result.deployed)}")
     _console.print(f"Mezcladas: {len(result.merged)}")
     _console.print(f"Omitidas: {len(result.omitted)}")
     if result.snapshot is not None:
@@ -151,7 +151,7 @@ def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> No
         _console.print(f"[yellow]! {notice}[/yellow]")
     if verbose:
         _console.print("[bold]Detalle[/bold]")
-        for path in result.restored:
+        for path in result.deployed:
             _console.print(f"  + {path}")
         for path in result.merged:
             _console.print(f"  * {path}")
@@ -162,13 +162,13 @@ def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> No
 def _print_conflict_diff(conflict: Conflict) -> None:
     """Write one conflict diff or a whole-file note to stdout."""
     if conflict.kind.value == "text":
-        if conflict.local_text is None or conflict.backup_text is None:
+        if conflict.local_text is None or conflict.clone_text is None:
             return
         diff = difflib.unified_diff(
             conflict.local_text.splitlines(),
-            conflict.backup_text.splitlines(),
+            conflict.clone_text.splitlines(),
             fromfile=f"local/{conflict.path}",
-            tofile=f"respaldo/{conflict.path}",
+            tofile=f"clon/{conflict.path}",
             lineterm="",
         )
         _console.print(Text("\n".join(diff)), markup=False, highlight=False)
@@ -176,7 +176,7 @@ def _print_conflict_diff(conflict: Conflict) -> None:
     if conflict.kind.value == "symlink":
         _console.print(
             f"  ! {conflict.path}: enlace local -> {conflict.local_link}, "
-            f"respaldo -> {conflict.backup_link}"
+            f"clon -> {conflict.clone_link}"
         )
         return
     reason = "binario" if conflict.kind.value == "binary" else "grande (>5 MB)"

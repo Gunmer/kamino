@@ -1,4 +1,4 @@
-"""Interactive restore application and its public entry point."""
+"""Interactive deploy application and its public entry point."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from textual.app import App
 from textual.binding import Binding
 
 from kamino.conflicts import ConflictDecisions
+from kamino.deploy import DeployPlan, DeployResult, DeploySession
 from kamino.errors import KaminoError
-from kamino.restore import RestorePlan, RestoreResult, RestoreSession
 from kamino.tui.screens import (
     AppSelectionScreen,
     ConflictSummaryScreen,
@@ -23,25 +23,25 @@ def _default_theme() -> str:
     return os.environ.get("TEXTUAL_THEME", "ansi-dark")
 
 
-class KaminoRestoreApp(App[RestoreResult | None]):
-    """Review conflicts, decide line by line and apply a restore."""
+class KaminoDeployApp(App[DeployResult | None]):
+    """Review conflicts, decide line by line and apply a deploy."""
 
     CSS_PATH = "styles.tcss"
-    TITLE = "kamino · restauración"
+    TITLE = "kamino · despliegue"
     theme = _default_theme()
     BINDINGS = [Binding("question_mark", "help", "Ayuda")]
 
-    def __init__(self, session: RestoreSession, selected: list[str] | None = None) -> None:
+    def __init__(self, session: DeploySession, selected: list[str] | None = None) -> None:
         super().__init__()
         self.session = session
         self.selected = selected
-        self.plan: RestorePlan | None = None
+        self.plan: DeployPlan | None = None
         self.error: KaminoError | None = None
         self.decisions = ConflictDecisions()
 
     def on_mount(self) -> None:
         if self.selected is None:
-            self.push_screen(AppSelectionScreen(self.session.restorable_apps), self._apps_chosen)
+            self.push_screen(AppSelectionScreen(self.session.deployable_apps), self._apps_chosen)
         else:
             self._start(self.selected)
 
@@ -65,11 +65,11 @@ class KaminoRestoreApp(App[RestoreResult | None]):
         self.push_screen(HelpScreen())
 
 
-def run_restore_tui(
-    session: RestoreSession, selected: list[str] | None = None
-) -> RestoreResult | None:
-    """Run the interactive restore and return its result (``None`` on cancel)."""
-    app = KaminoRestoreApp(session, selected)
+def run_deploy_tui(
+    session: DeploySession, selected: list[str] | None = None
+) -> DeployResult | None:
+    """Run the interactive deploy and return its result (``None`` on cancel)."""
+    app = KaminoDeployApp(session, selected)
     result = app.run()
     if app.error is not None:
         raise app.error

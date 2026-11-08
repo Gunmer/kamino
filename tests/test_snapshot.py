@@ -1,9 +1,9 @@
-"""Pruebas de `snapshot.py`: copia de seguridad previa a restaurar.
+"""Pruebas de `snapshot.py`: copia de seguridad previa a desplegar.
 
-El snapshot usa el mismo formato que un respaldo (§6: "Snapshots"): una única app
+El snapshot usa el mismo formato que un clon (§6: "Snapshots"): una única app
 sintética `snapshot`, rutas relativas al home y nombre `<timestamp>.tar.gz` en
 `~/Library/Application Support/kamino/snapshots/`, así el futuro `undo` es un
-`restore` del snapshot. Todo se inyecta (home, snapshots_dir, timestamp) para no
+`deploy` del snapshot. Todo se inyecta (home, snapshots_dir, timestamp) para no
 tocar el sistema real (§7).
 """
 

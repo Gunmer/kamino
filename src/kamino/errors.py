@@ -16,7 +16,7 @@ class DetectionError(KaminoError):
 
 
 class ArchiveError(KaminoError):
-    """No se pudo leer o escribir un archivo de respaldo."""
+    """No se pudo leer o escribir un archivo del clon."""
 
 
 class IntegrityError(KaminoError):
@@ -24,7 +24,7 @@ class IntegrityError(KaminoError):
 
 
 class VersionError(KaminoError):
-    """La versión del formato del respaldo no es soportada."""
+    """La versión del formato del clon no es soportada."""
 
 
 class PathError(KaminoError):
@@ -36,7 +36,7 @@ class UpdateError(KaminoError):
 
 
 class ConflictError(KaminoError):
-    """A restore conflict cannot be resolved with the given decisions."""
+    """A deploy conflict cannot be resolved with the given decisions."""
 
 
 class DecisionRequiredError(ConflictError):

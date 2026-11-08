@@ -21,5 +21,5 @@ htmlcov/
 # macOS
 .DS_Store
 
-# Respaldos generados localmente
+# Clones generados localmente
 *.tar.gz

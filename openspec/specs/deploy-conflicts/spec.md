@@ -1,63 +1,63 @@
-# restore-conflicts Specification
+# deploy-conflicts Specification
 
 ## Purpose
 
-Permitir que la restauración muestre los conflictos entre el destino y el respaldo y que la persona decida, línea a línea dentro de cada bloque, qué se restaura y qué se conserva, sin sobrescribir cambios locales en silencio.
+Permitir que el despliegue muestre los conflictos entre el destino y el clon y que la persona decida, línea a línea dentro de cada bloque, qué se despliega y qué se conserva, sin sobrescribir cambios locales en silencio.
 
 ## Requirements
 
 ### Requirement: Detección de conflictos de contenido
 
-La restauración DEBE (`MUST`) tratar como conflicto todo archivo regular existente cuyo contenido difiera del respaldo tras normalizar CRLF, y todo enlace simbólico cuyo destino difiera del enlace del respaldo. Los archivos nuevos, idénticos, no soportados, los cambios solo de modo y los cambios de tipo entre enlace y archivo regular NO DEBEN abrir la revisión de conflictos.
+El despliegue DEBE (`MUST`) tratar como conflicto todo archivo regular existente cuyo contenido difiera del clon tras normalizar CRLF, y todo enlace simbólico cuyo destino difiera del enlace del clon. Los archivos nuevos, idénticos, no soportados, los cambios solo de modo y los cambios de tipo entre enlace y archivo regular NO DEBEN abrir la revisión de conflictos.
 
 #### Scenario: Archivo regular con contenido distinto
 
-- **WHEN** el destino existe, es un archivo regular y su contenido difiere del respaldo
-- **THEN** el archivo se presenta como conflicto y requiere una decisión antes de aplicar la restauración.
+- **WHEN** el destino existe, es un archivo regular y su contenido difiere del clon
+- **THEN** el archivo se presenta como conflicto y requiere una decisión antes de aplicar el despliegue.
 
 #### Scenario: Diferencia solo de CRLF
 
-- **GIVEN** un destino y un respaldo con el mismo contenido pero finales de línea CRLF y LF
-- **WHEN** se planifica la restauración
+- **GIVEN** un destino y un clon con el mismo contenido pero finales de línea CRLF y LF
+- **WHEN** se planifica el despliegue
 - **THEN** el archivo se considera idéntico y no se presenta como conflicto.
 
 #### Scenario: Enlace con destino distinto
 
-- **GIVEN** un destino y un respaldo que son enlaces simbólicos con destinos distintos
-- **WHEN** se planifica la restauración
+- **GIVEN** un destino y un clon que son enlaces simbólicos con destinos distintos
+- **WHEN** se planifica el despliegue
 - **THEN** el enlace se presenta como conflicto de archivo entero.
 
 #### Scenario: Archivo nuevo
 
-- **GIVEN** un archivo del respaldo que no existe en el destino
-- **WHEN** se planifica la restauración
+- **GIVEN** un archivo del clon que no existe en el destino
+- **WHEN** se planifica el despliegue
 - **THEN** se crea sin pedir una decisión de conflicto.
 
 #### Scenario: Archivo idéntico
 
-- **GIVEN** un destino y un respaldo con el mismo contenido
-- **WHEN** se planifica la restauración
+- **GIVEN** un destino y un clon con el mismo contenido
+- **WHEN** se planifica el despliegue
 - **THEN** el archivo se omite sin pedir una decisión de conflicto.
 
 #### Scenario: Cambio solo de modo
 
-- **GIVEN** un destino y un respaldo con el mismo contenido pero modos distintos
-- **WHEN** se planifica la restauración
+- **GIVEN** un destino y un clon con el mismo contenido pero modos distintos
+- **WHEN** se planifica el despliegue
 - **THEN** el archivo no se presenta como conflicto y se mantiene el comportamiento existente.
 
 #### Scenario: Cambio de tipo entre enlace y archivo regular
 
-- **GIVEN** un destino que es un enlace simbólico y un respaldo que es un archivo regular, o al contrario
-- **WHEN** se planifica la restauración
+- **GIVEN** un destino que es un enlace simbólico y un clon que es un archivo regular, o al contrario
+- **WHEN** se planifica el despliegue
 - **THEN** el archivo no se presenta como conflicto y se mantiene el comportamiento de sobrescritura existente.
 
-### Requirement: Selección de apps en la restauración interactiva
+### Requirement: Selección de apps en el despliegue interactivo
 
-La restauración interactiva DEBE (`MUST`) integrar la selección de apps en la misma interfaz que la revisión de conflictos. Por defecto NO DEBE (`MUST NOT`) seleccionar ninguna app, DEBE (`MUST`) permitir seleccionar todas o ninguna y DEBE (`MUST`) omitir la pantalla de selección cuando se proporciona `--apps`.
+El despliegue interactivo DEBE (`MUST`) integrar la selección de apps en la misma interfaz que la revisión de conflictos. Por defecto NO DEBE (`MUST NOT`) seleccionar ninguna app, DEBE (`MUST`) permitir seleccionar todas o ninguna y DEBE (`MUST`) omitir la pantalla de selección cuando se proporciona `--apps`.
 
 #### Scenario: Selección inicial vacía
 
-- **GIVEN** una restauración interactiva con apps instaladas en el manifiesto
+- **GIVEN** un despliegue interactivo con apps instaladas en el manifiesto
 - **WHEN** se abre la pantalla de selección
 - **THEN** ninguna app aparece seleccionada.
 
@@ -68,7 +68,7 @@ La restauración interactiva DEBE (`MUST`) integrar la selección de apps en la 
 
 #### Scenario: Selección explícita con --apps
 
-- **GIVEN** una restauración interactiva con `--apps zsh,git`
+- **GIVEN** un despliegue interactivo con `--apps zsh,git`
 - **WHEN** se inicia el flujo
 - **THEN** la pantalla de selección de apps no se muestra y se usan `zsh` y `git`.
 
@@ -78,7 +78,7 @@ La tabla de conflictos DEBE (`MUST`) listar solo los archivos en conflicto y mos
 
 #### Scenario: Tabla con solo conflictos y conteos
 
-- **GIVEN** una restauración con tres conflictos, cuatro archivos nuevos y diez idénticos
+- **GIVEN** un despliegue con tres conflictos, cuatro archivos nuevos y diez idénticos
 - **WHEN** se muestra la tabla
 - **THEN** la tabla lista solo los tres conflictos y muestra los conteos de nuevos, idénticos y no soportados.
 
@@ -86,35 +86,35 @@ La tabla de conflictos DEBE (`MUST`) listar solo los archivos en conflicto y mos
 
 - **GIVEN** un archivo en conflicto en la tabla
 - **WHEN** la persona selecciona una acción
-- **THEN** puede elegir revisar el detalle, aplicar el respaldo completo u omitir el archivo.
+- **THEN** puede elegir revisar el detalle, aplicar el clon completo u omitir el archivo.
 
 #### Scenario: Detalle de un conflicto de texto
 
 - **WHEN** la tabla muestra un conflicto de texto
-- **THEN** la fila indica el número de bloques y de líneas cambiadas, y la decisión de revisión cuenta las líneas del respaldo.
+- **THEN** la fila indica el número de bloques y de líneas cambiadas, y la decisión de revisión cuenta las líneas del clon.
 
 ### Requirement: Decisión por línea dentro del bloque
 
-En la vista de detalle, cada bloque DEBE (`MUST`) mostrar el contexto una sola vez y cada línea cambiada DEBE (`MUST`) ser una fila con la versión local y la del respaldo. Cada fila DEBE (`MUST`) alternar entre local y respaldo. El contexto y la cabecera NO DEBEN (`MUST NOT`) ser decidibles. NO DEBE (`MUST NOT`) existir un estado sin decidir: lo mostrado DEBE (`MUST`) ser la decisión. La vista NO DEBE (`MUST NOT`) mostrar una previsualización completa del archivo.
+En la vista de detalle, cada bloque DEBE (`MUST`) mostrar el contexto una sola vez y cada línea cambiada DEBE (`MUST`) ser una fila con la versión local y la del clon. Cada fila DEBE (`MUST`) alternar entre local y clon. El contexto y la cabecera NO DEBEN (`MUST NOT`) ser decidibles. NO DEBE (`MUST NOT`) existir un estado sin decidir: lo mostrado DEBE (`MUST`) ser la decisión. La vista NO DEBE (`MUST NOT`) mostrar una previsualización completa del archivo.
 
 #### Scenario: Estado inicial del bloque
 
 - **WHEN** se abre el detalle de un archivo en conflicto
-- **THEN** todas las líneas cambiadas de sus bloques muestran la versión del respaldo como decisión inicial.
+- **THEN** todas las líneas cambiadas de sus bloques muestran la versión del clon como decisión inicial.
 
 #### Scenario: Alternar un bloque
 
-- **WHEN** la persona aplica una acción de bloque al respaldo o al local
+- **WHEN** la persona aplica una acción de bloque al clon o al local
 - **THEN** todas las líneas cambiadas del bloque actual toman ese lado y los demás bloques conservan sus decisiones.
 
 #### Scenario: Alternar una línea
 
 - **WHEN** la persona alterna una línea cambiada
-- **THEN** esa línea pasa de la versión del respaldo a la local, o viceversa, y el resto del bloque conserva sus decisiones.
+- **THEN** esa línea pasa de la versión del clon a la local, o viceversa, y el resto del bloque conserva sus decisiones.
 
 #### Scenario: Filas de inserción y eliminación
 
-- **GIVEN** un bloque con una línea que solo existe en el local o solo en el respaldo
+- **GIVEN** un bloque con una línea que solo existe en el local o solo en el clon
 - **WHEN** la persona alterna esa fila
 - **THEN** la línea se conserva o se omite según el lado elegido.
 
@@ -125,22 +125,22 @@ En la vista de detalle, cada bloque DEBE (`MUST`) mostrar el contexto una sola v
 
 ### Requirement: Acciones globales y por bloque en el detalle
 
-La vista de detalle DEBE (`MUST`) ofrecer acciones para aplicar todas las líneas del archivo o solo las del bloque actual al respaldo o al local. Las acciones por bloque NO DEBEN (`MUST NOT`) modificar las decisiones de otros bloques.
+La vista de detalle DEBE (`MUST`) ofrecer acciones para aplicar todas las líneas del archivo o solo las del bloque actual al clon o al local. Las acciones por bloque NO DEBEN (`MUST NOT`) modificar las decisiones de otros bloques.
 
-#### Scenario: Todo el archivo al respaldo
+#### Scenario: Todo el archivo al clon
 
-- **WHEN** la persona elige la acción global de respaldo
-- **THEN** todas las líneas cambiadas del archivo quedan en respaldo.
+- **WHEN** la persona elige la acción global de clon
+- **THEN** todas las líneas cambiadas del archivo quedan en clon.
 
 #### Scenario: Todo el archivo al local
 
 - **WHEN** la persona elige la acción global de local
 - **THEN** todas las líneas cambiadas del archivo quedan en local.
 
-#### Scenario: Bloque actual al respaldo
+#### Scenario: Bloque actual al clon
 
-- **WHEN** la persona elige la acción de bloque para el respaldo
-- **THEN** todas las líneas cambiadas del bloque actual quedan en respaldo y los demás bloques conservan sus decisiones.
+- **WHEN** la persona elige la acción de bloque para el clon
+- **THEN** todas las líneas cambiadas del bloque actual quedan en clon y los demás bloques conservan sus decisiones.
 
 #### Scenario: Bloque actual al local
 
@@ -149,18 +149,18 @@ La vista de detalle DEBE (`MUST`) ofrecer acciones para aplicar todas las línea
 
 ### Requirement: Decisión obligatoria y acciones globales
 
-La restauración NO DEBE (`MUST NOT`) aplicarse mientras algún conflicto carezca de decisión. La tabla DEBE (`MUST`) ofrecer acciones globales para aplicar u omitir todos los conflictos, y cada archivo DEBE (`MUST`) poder cambiarse individualmente antes de la confirmación final.
+El despliegue NO DEBE (`MUST NOT`) aplicarse mientras algún conflicto carezca de decisión. La tabla DEBE (`MUST`) ofrecer acciones globales para aplicar u omitir todos los conflictos, y cada archivo DEBE (`MUST`) poder cambiarse individualmente antes de la confirmación final.
 
 #### Scenario: Confirmación bloqueada
 
 - **GIVEN** una tabla con un conflicto sin decisión
-- **WHEN** la persona intenta confirmar la restauración
+- **WHEN** la persona intenta confirmar el despliegue
 - **THEN** la confirmación no está disponible y se indica qué archivo falta por decidir.
 
 #### Scenario: Aplicar todo
 
 - **WHEN** la persona elige aplicar todo en la tabla
-- **THEN** todos los conflictos quedan decididos para aplicar el respaldo y se pueden cambiar individualmente antes de confirmar.
+- **THEN** todos los conflictos quedan decididos para aplicar el clon y se pueden cambiar individualmente antes de confirmar.
 
 #### Scenario: Omitir todo
 
@@ -175,7 +175,7 @@ Cuando todos los conflictos tengan decisión, el sistema DEBE (`MUST`) mostrar u
 
 - **GIVEN** todos los conflictos decididos
 - **WHEN** se muestra la confirmación final
-- **THEN** se informa de los conteos de restaurados, mezclados y omitidos y del directorio del snapshot.
+- **THEN** se informa de los conteos de desplegados, mezclados y omitidos y del directorio del snapshot.
 
 #### Scenario: Cancelar en la confirmación final
 
@@ -184,25 +184,25 @@ Cuando todos los conflictos tengan decisión, el sistema DEBE (`MUST`) mostrar u
 
 ### Requirement: Composición del archivo por líneas
 
-El archivo resultante DEBE (`MUST`) componerse con las líneas elegidas del respaldo y las conservadas del local, permitiendo mezclar líneas dentro de un mismo bloque. DEBE (`MUST`) conservar el estilo de final de línea local y normalizar CRLF solo para comparar.
+El archivo resultante DEBE (`MUST`) componerse con las líneas elegidas del clon y las conservadas del local, permitiendo mezclar líneas dentro de un mismo bloque. DEBE (`MUST`) conservar el estilo de final de línea local y normalizar CRLF solo para comparar.
 
 #### Scenario: Mezcla de bloques
 
 - **GIVEN** un archivo con dos bloques en conflicto
-- **WHEN** la persona elige líneas del respaldo en el primero y conserva líneas locales en el segundo
+- **WHEN** la persona elige líneas del clon en el primero y conserva líneas locales en el segundo
 - **THEN** el archivo resultante contiene las líneas elegidas de cada bloque en el orden original.
 
 #### Scenario: Mezcla de líneas dentro de un mismo bloque
 
 - **GIVEN** un bloque con dos líneas cambiadas
-- **WHEN** la persona elige el respaldo para una y conserva el local para la otra
-- **THEN** el archivo resultante contiene una línea del respaldo y la otra del local, en el orden del bloque.
+- **WHEN** la persona elige el clon para una y conserva el local para la otra
+- **THEN** el archivo resultante contiene una línea del clon y la otra del local, en el orden del bloque.
 
-#### Scenario: Todos los bloques del respaldo
+#### Scenario: Todos los bloques del clon
 
-- **GIVEN** un archivo con todas sus líneas decididas como respaldo
+- **GIVEN** un archivo con todas sus líneas decididas como clon
 - **WHEN** se compone el resultado
-- **THEN** el archivo resultante coincide con el respaldo.
+- **THEN** el archivo resultante coincide con el clon.
 
 #### Scenario: Todos los bloques locales
 
@@ -212,8 +212,8 @@ El archivo resultante DEBE (`MUST`) componerse con las líneas elegidas del resp
 
 #### Scenario: Estilo de final de línea local
 
-- **GIVEN** un archivo local con finales CRLF y un respaldo con finales LF
-- **WHEN** se toma una línea del respaldo
+- **GIVEN** un archivo local con finales CRLF y un clon con finales LF
+- **WHEN** se toma una línea del clon
 - **THEN** la línea añadida usa el estilo de final de línea local.
 
 #### Scenario: Salto de línea final en una mezcla
@@ -224,31 +224,31 @@ El archivo resultante DEBE (`MUST`) componerse con las líneas elegidas del resp
 
 ### Requirement: Modo y clasificación del resultado
 
-Si el contenido final difiere del local, el archivo DEBE (`MUST`) recibir el modo del respaldo. Si la composición queda idéntica al local, NO DEBE (`MUST NOT`) escribirse ni cambiar permisos. El resultado DEBE (`MUST`) clasificar cada archivo como restaurado, mezclado u omitido.
+Si el contenido final difiere del local, el archivo DEBE (`MUST`) recibir el modo del clon. Si la composición queda idéntica al local, NO DEBE (`MUST NOT`) escribirse ni cambiar permisos. El resultado DEBE (`MUST`) clasificar cada archivo como despliegado, mezclado u omitido.
 
 #### Scenario: Mezcla que cambia el contenido
 
-- **GIVEN** una mezcla que difiere del local y del respaldo
-- **WHEN** se aplica la restauración
-- **THEN** el archivo se escribe con el modo del respaldo y se clasifica como mezclado.
+- **GIVEN** una mezcla que difiere del local y del clon
+- **WHEN** se aplica el despliegue
+- **THEN** el archivo se escribe con el modo del clon y se clasifica como mezclado.
 
 #### Scenario: Mezcla idéntica al local
 
 - **GIVEN** una composición que coincide con el contenido local
-- **WHEN** se aplica la restauración
+- **WHEN** se aplica el despliegue
 - **THEN** el archivo no se escribe, sus permisos no cambian y se clasifica como omitido.
 
-#### Scenario: Aplicación completa del respaldo
+#### Scenario: Aplicación completa del clon
 
-- **GIVEN** un archivo decidido para aplicar el respaldo completo
-- **WHEN** se aplica la restauración
-- **THEN** el archivo se escribe con el modo del respaldo y se clasifica como restaurado.
+- **GIVEN** un archivo decidido para aplicar el clon completo
+- **WHEN** se aplica el despliegue
+- **THEN** el archivo se escribe con el modo del clon y se clasifica como despliegado.
 
-#### Scenario: Revisión con todas las líneas en respaldo
+#### Scenario: Revisión con todas las líneas en clon
 
-- **GIVEN** un archivo revisado línea a línea con todas sus líneas decididas como respaldo
-- **WHEN** se aplica la restauración
-- **THEN** el archivo se escribe con el modo del respaldo y se clasifica como restaurado.
+- **GIVEN** un archivo revisado línea a línea con todas sus líneas decididas como clon
+- **WHEN** se aplica el despliegue
+- **THEN** el archivo se escribe con el modo del clon y se clasifica como despliegado.
 
 ### Requirement: Validación del resultado
 
@@ -258,7 +258,7 @@ Antes de aplicar una mezcla, el sistema DEBE (`MUST`) validar TOML, JSON, INI y 
 
 - **GIVEN** un archivo TOML, JSON, INI o plist cuyos originales y mezcla son válidos
 - **WHEN** se valida la mezcla
-- **THEN** la validación pasa y la restauración puede continuar.
+- **THEN** la validación pasa y el despliegue puede continuar.
 
 #### Scenario: Mezcla inválida con originales válidos
 
@@ -268,7 +268,7 @@ Antes de aplicar una mezcla, el sistema DEBE (`MUST`) validar TOML, JSON, INI y 
 
 #### Scenario: Original inválido
 
-- **GIVEN** un archivo cuyo original local o cuyo respaldo ya era inválido
+- **GIVEN** un archivo cuyo original local o cuyo clon ya era inválido
 - **WHEN** se valida la mezcla
 - **THEN** se muestra un aviso y se permite aplicar la mezcla.
 
@@ -280,11 +280,11 @@ Antes de aplicar una mezcla, el sistema DEBE (`MUST`) validar TOML, JSON, INI y 
 
 ### Requirement: Conflictos sin diff de líneas
 
-Los archivos binarios, los archivos de texto de más de 5 MB y los enlaces con enlace DEBEN resolverse como archivo entero: aplicar el respaldo u omitir. NO DEBEN mostrar un diff de líneas. La fila DEBE (`MUST`) indicar el motivo y los datos disponibles del destino y del respaldo.
+Los archivos binarios, los archivos de texto de más de 5 MB y los enlaces con enlace DEBEN resolverse como archivo entero: aplicar el clon u omitir. NO DEBEN mostrar un diff de líneas. La fila DEBE (`MUST`) indicar el motivo y los datos disponibles del destino y del clon.
 
 #### Scenario: Archivo binario
 
-- **GIVEN** un conflicto entre un archivo binario local y uno del respaldo
+- **GIVEN** un conflicto entre un archivo binario local y uno del clon
 - **WHEN** se muestra la tabla
 - **THEN** el archivo se resuelve con aplicar u omitir y no ofrece revisión por líneas.
 
@@ -298,16 +298,16 @@ Los archivos binarios, los archivos de texto de más de 5 MB y los enlaces con e
 
 - **GIVEN** un conflicto entre dos enlaces simbólicos con destinos distintos
 - **WHEN** se muestra la tabla
-- **THEN** la fila muestra el destino local y el del respaldo y se resuelve con aplicar u omitir.
+- **THEN** la fila muestra el destino local y el del clon y se resuelve con aplicar u omitir.
 
 ### Requirement: Seguridad y cancelación
 
-La restauración DEBE (`MUST`) verificar el archivo antes de extraerlo, extraer solo en un directorio temporal, crear un snapshot antes de escribir y abortar toda la operación si un destino cambia mientras la revisión está abierta. Cancelar en cualquier pantalla NO DEBE (`MUST NOT`) escribir ni crear snapshot.
+El despliegue DEBE (`MUST`) verificar el archivo antes de extraerlo, extraer solo en un directorio temporal, crear un snapshot antes de escribir y abortar toda la operación si un destino cambia mientras la revisión está abierta. Cancelar en cualquier pantalla NO DEBE (`MUST NOT`) escribir ni crear snapshot.
 
 #### Scenario: Destino cambiado durante la revisión
 
 - **GIVEN** un destino que cambia después de planificar y antes de aplicar
-- **WHEN** se intenta aplicar la restauración
+- **WHEN** se intenta aplicar el despliegue
 - **THEN** se aborta toda la operación, no se escribe ningún destino y no se crea ningún snapshot.
 
 #### Scenario: Cancelar durante la revisión
@@ -317,28 +317,28 @@ La restauración DEBE (`MUST`) verificar el archivo antes de extraerlo, extraer 
 
 #### Scenario: Snapshot del estado anterior
 
-- **GIVEN** una restauración que va a modificar un archivo existente
-- **WHEN** se aplica la restauración
+- **GIVEN** un despliegue que va a modificar un archivo existente
+- **WHEN** se aplica el despliegue
 - **THEN** el snapshot contiene el contenido y el modo anteriores del archivo.
 
-#### Scenario: Archivo de respaldo corrupto
+#### Scenario: Archivo de clon corrupto
 
-- **GIVEN** un archivo de respaldo cuya verificación de integridad falla
-- **WHEN** se intenta restaurar
+- **GIVEN** un archivo de clon cuya verificación de integridad falla
+- **WHEN** se intenta desplegar
 - **THEN** se aborta antes de extraer o escribir y no se crea ningún snapshot.
 
 ### Requirement: Resumen del resultado
 
-El resultado DEBE (`MUST`) informar de los archivos restaurados, mezclados y omitidos y de la ruta del snapshot creado. Un archivo mezclado DEBE (`MUST`) contar como éxito.
+El resultado DEBE (`MUST`) informar de los archivos desplegados, mezclados y omitidos y de la ruta del snapshot creado. Un archivo mezclado DEBE (`MUST`) contar como éxito.
 
 #### Scenario: Resumen con mezclas
 
-- **GIVEN** una restauración que aplica dos archivos completos, mezcla dos y omite uno
-- **WHEN** termina la restauración
-- **THEN** el resumen informa de dos restaurados, dos mezclados y uno omitido.
+- **GIVEN** un despliegue que aplica dos archivos completos, mezcla dos y omite uno
+- **WHEN** termina el despliegue
+- **THEN** el resumen informa de dos desplegados, dos mezclados y uno omitido.
 
 #### Scenario: Ruta del snapshot
 
-- **GIVEN** una restauración que modificó al menos un archivo
-- **WHEN** termina la restauración
+- **GIVEN** un despliegue que modificó al menos un archivo
+- **WHEN** termina el despliegue
 - **THEN** el resumen muestra la ruta del snapshot creado.

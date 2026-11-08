@@ -1,0 +1,6 @@
+schema: spec-driven
+created: 2026-11-08
+skip_specs: true
+goal: Renombrar los comandos backup/restore a clone/deploy y unificar el
+  vocabulario de clonación/despliegue sin cambiar el comportamiento del archivo,
+  las opciones ni los códigos de salida.

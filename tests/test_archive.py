@@ -92,7 +92,7 @@ def test_roundtrip(tmp_path: Path) -> None:
         )
     ]
     manifest = _manifest(apps)
-    output = tmp_path / "backup.tar.gz"
+    output = tmp_path / "clone.tar.gz"
 
     write_archive(output, manifest, source_root=source_root)
 

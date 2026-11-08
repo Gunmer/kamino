@@ -1,4 +1,4 @@
-"""Plan y Operation, compartidos por `backup` y `restore`.
+"""Plan y Operation, compartidos por `clone` y `deploy`.
 
 Principio (diseño técnico §1): planificar y luego ejecutar. `--dry-run` solo
 imprime el plan, así simulación y ejecución comparten el mismo código.
@@ -100,7 +100,7 @@ class Operation:
 
 @dataclass(frozen=True)
 class Plan:
-    """El plan de un respaldo: operaciones, rutas omitidas y avisos.
+    """El plan de una clonación: operaciones, rutas omitidas y avisos.
 
     `skipped` registra las rutas obligatorias ausentes, las opcionales
     existentes pero inseguras y las referencias que no se pueden incluir.

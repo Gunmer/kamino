@@ -1,6 +1,6 @@
-"""Pruebas de `backup.py`: orquestación del respaldo sin interfaz.
+"""Pruebas de `clone.py`: orquestación del clon sin interfaz.
 
-Cubre el flujo del respaldo (diseño técnico §5.1): cargar catálogo, detectar
+Cubre el flujo del clon (diseño técnico §5.1): cargar catálogo, detectar
 instaladas, cruzar con la selección, construir el plan, montar el manifiesto
 (§4.2) y escribir el archivo (§4.3). Todo se inyecta (home falso, catálogo,
 metadatos, detección) para no tocar el sistema real (§7).
@@ -17,9 +17,9 @@ import pytest
 
 from kamino import __version__
 from kamino.archive import FORMAT_VERSION, read_manifest, verify_archive
-from kamino.backup import BackupResult, run_backup
 from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
+from kamino.clone import CloneResult, run_clone
 from kamino.errors import ArchiveError
 from kamino.plan import Plan
 
@@ -109,9 +109,9 @@ def _metadata(**overrides: str) -> dict[str, str]:
 def test_dry_run_returns_plan_and_manifest_without_writing(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_config(home, ".config/foo/config.toml")
-    output = tmp_path / "backup.tar.gz"
+    output = tmp_path / "clone.tar.gz"
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=output,
         dry_run=True,
@@ -121,7 +121,7 @@ def test_dry_run_returns_plan_and_manifest_without_writing(tmp_path: Path) -> No
         metadata=_metadata(),
     )
 
-    assert isinstance(result, BackupResult)
+    assert isinstance(result, CloneResult)
     assert isinstance(result.plan, Plan)
     assert result.dry_run is True
     assert result.output is None
@@ -137,9 +137,9 @@ def test_run_writes_archive_with_manifest_and_files(tmp_path: Path) -> None:
     home = tmp_path / "home"
     content = b"[user]\nname=Test\n"
     _write_config(home, ".config/foo/config.toml", content)
-    output = tmp_path / "backup.tar.gz"
+    output = tmp_path / "clone.tar.gz"
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=output,
         catalog=_catalog(_app()),
@@ -164,7 +164,7 @@ def test_manifest_header_fields(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_config(home, ".config/foo/config.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(_app()),
@@ -187,7 +187,7 @@ def test_manifest_defaults_come_from_platform(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_config(home, ".config/foo/config.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(_app()),
@@ -210,7 +210,7 @@ def test_app_entry_includes_detected_version(tmp_path: Path) -> None:
     apps_dir = tmp_path / "Applications"
     _make_app_bundle(apps_dir, "Foo", bundle_id="com.example.foo", version="1.95.0")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(_app(bundle_id="com.example.foo")),
@@ -230,7 +230,7 @@ def test_command_app_version_is_none(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_config(home, ".config/foo/config.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(_app(command="foo")),
@@ -247,7 +247,7 @@ def test_manifest_files_carry_checksum_size_and_mode(tmp_path: Path) -> None:
     content = b"abc"
     _write_config(home, ".config/foo/config.toml", content)
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(_app()),
@@ -268,7 +268,7 @@ def test_manifest_includes_link_entries_for_symlinks(tmp_path: Path) -> None:
     _write_config(home, "real.txt")
     (home / "enlace.txt").symlink_to("real.txt")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(_app(paths=["real.txt", "enlace.txt"])),
@@ -287,7 +287,7 @@ def test_missing_paths_are_skipped_and_absent_from_manifest(tmp_path: Path) -> N
     home = tmp_path / "home"
     _write_config(home, "existe.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(_app(paths=["existe.toml", "falta.toml"])),
@@ -308,7 +308,7 @@ def test_selected_none_backs_up_all_installed(tmp_path: Path) -> None:
     _write_config(home, "a.toml")
     _write_config(home, "b.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         selected=None,
@@ -329,7 +329,7 @@ def test_selected_filters_installed_apps(tmp_path: Path) -> None:
     _write_config(home, "a.toml")
     _write_config(home, "b.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         selected=["beta"],
@@ -346,12 +346,12 @@ def test_selected_filters_installed_apps(tmp_path: Path) -> None:
 
 
 def test_not_installed_apps_are_excluded(tmp_path: Path) -> None:
-    """Una app seleccionada pero no instalada no se respalda (§5.1)."""
+    """Una app seleccionada pero no instalada no se clona (§5.1)."""
     home = tmp_path / "home"
     _write_config(home, "a.toml")
     _write_config(home, "b.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         selected=["alpha", "beta"],
@@ -371,7 +371,7 @@ def test_unknown_selected_ids_are_ignored(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_config(home, "a.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         selected=["no-existe", "alpha"],
@@ -384,12 +384,12 @@ def test_unknown_selected_ids_are_ignored(tmp_path: Path) -> None:
     assert [entry.id for entry in result.manifest.apps] == ["alpha"]
 
 
-def test_apps_are_backed_up_in_id_order(tmp_path: Path) -> None:
+def test_apps_are_cloned_in_id_order(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_config(home, "a.toml")
     _write_config(home, "b.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(
@@ -404,7 +404,7 @@ def test_apps_are_backed_up_in_id_order(tmp_path: Path) -> None:
     assert [entry.id for entry in result.manifest.apps] == ["alfa", "zeta"]
 
 
-# --- ubicación y nombre del respaldo (§6) ---
+# --- ubicación y nombre del clon (§6) ---
 
 
 def test_default_output_name_in_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -414,7 +414,7 @@ def test_default_output_name_in_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     home = tmp_path / "home"
     _write_config(home, "a.toml")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=None,
         catalog=_catalog(_app(paths=["a.toml"])),
@@ -445,8 +445,8 @@ def test_default_output_name_adds_suffix_if_it_exists(
         "metadata": _metadata(),
     }
 
-    first = run_backup(**kwargs)
-    second = run_backup(**kwargs)
+    first = run_clone(**kwargs)
+    second = run_clone(**kwargs)
 
     assert first.output == workdir / "kamino-mac-test-2026-10-28.tar.gz"
     assert second.output == workdir / "kamino-mac-test-2026-10-28-1.tar.gz"
@@ -467,9 +467,9 @@ def test_explicit_output_is_never_overwritten(tmp_path: Path) -> None:
         "metadata": _metadata(),
     }
 
-    run_backup(**kwargs)
+    run_clone(**kwargs)
     with pytest.raises(ArchiveError):
-        run_backup(**kwargs)
+        run_clone(**kwargs)
 
 
 # --- privacidad y marcadores ---
@@ -491,7 +491,7 @@ def test_marker_uses_injected_home_and_not_real_home(tmp_path: Path, monkeypatch
         paths=[".zshrc"],
     )
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(app),
@@ -514,7 +514,7 @@ def test_known_credentials_are_excluded_before_reading(tmp_path: Path) -> None:
         exclude=["**/.env", "**/.env.*", "**/auth.json", "**/secrets.yaml"],
     )
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(app),
@@ -573,7 +573,7 @@ def test_new_definition_only_backs_up_when_installed_without_executing(
     binary.write_text(f"#!/bin/sh\ntouch {marker}\n", encoding="utf-8")
     binary.chmod(0o755)
 
-    absent = run_backup(
+    absent = run_clone(
         home=home,
         output=tmp_path / "absent.tar.gz",
         catalog=catalog,
@@ -584,7 +584,7 @@ def test_new_definition_only_backs_up_when_installed_without_executing(
     )
     assert absent.manifest.apps == []
 
-    present = run_backup(
+    present = run_clone(
         home=home,
         output=tmp_path / f"{app_id}.tar.gz",
         catalog=catalog,
@@ -603,10 +603,10 @@ def test_micro_does_not_include_editor_backups_or_buffers(tmp_path: Path) -> Non
     catalog = load_catalog(user_dir=tmp_path / "no-user-catalog")
     home = tmp_path / "home"
     _write_config(home, ".config/micro/settings.json", b"{}\n")
-    _write_config(home, ".config/micro/backups/old.txt", b"backup\n")
+    _write_config(home, ".config/micro/clones/old.txt", b"clone\n")
     _write_config(home, ".config/micro/buffers/buffer.txt", b"buffer\n")
 
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "micro.tar.gz",
         catalog=catalog,
@@ -627,7 +627,7 @@ def test_git_shared_config_is_optional(tmp_path: Path) -> None:
     _write_config(home, ".gitconfig", b"[user]\nname=Test\n")
     _write_config(home, ".config/git/ignore", b"*.log\n")
 
-    absent = run_backup(
+    absent = run_clone(
         home=home,
         output=tmp_path / "git-absent.tar.gz",
         catalog=catalog,
@@ -640,7 +640,7 @@ def test_git_shared_config_is_optional(tmp_path: Path) -> None:
     assert ".config/git/config" not in [entry.path for entry in absent.manifest.apps[0].files]
 
     _write_config(home, ".config/git/config", b"[core]\n")
-    present = run_backup(
+    present = run_clone(
         home=home,
         output=tmp_path / "git-present.tar.gz",
         catalog=catalog,
@@ -656,7 +656,7 @@ def test_allowed_config_with_embedded_secret_is_preserved(tmp_path: Path) -> Non
     home = tmp_path / "home"
     content = b'api_key = "secreto-incrustado"\n'
     _write_config(home, ".config/foo/config.toml", content)
-    result = run_backup(
+    result = run_clone(
         home=home,
         output=tmp_path / "b.tar.gz",
         catalog=_catalog(_app()),
