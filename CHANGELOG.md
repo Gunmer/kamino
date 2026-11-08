@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-11-08)
+
+### Documentación
+
+- archive expanded catalog change ([`79469a1`](https://github.com/Gunmer/kamino/commit/79469a11665e37b848d9bfd3285e04b7cb8a7073))
+
+### Funcionalidades
+
+- add block-level conflict resolution and TUI ([`b57168e`](https://github.com/Gunmer/kamino/commit/b57168e9ac4fd7da8970df9a71bfded0dffaae8b))
+
+
 ## v0.4.0 (2026-11-07)
 
 ### Funcionalidades
