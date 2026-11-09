@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v0.7.0 (2026-11-09)
+
+### Mantenimiento
+
+- rename backup-safety and restore-conflicts capabilities ([`04d398b`](https://github.com/Gunmer/kamino/commit/04d398b1134ae332add1124d6eb080f12798f041))
+
+### Documentación
+
+- archive renombrar-clone-deploy ([`2b092c9`](https://github.com/Gunmer/kamino/commit/2b092c9ad65c92f9379ac0b69110172532001755))
+
+### Funcionalidades
+
+- unify interactive flows with keyboard navigation ([`9809d1c`](https://github.com/Gunmer/kamino/commit/9809d1cdd4fa6cf1bde47cb76898989f1908dbb6))
+- rename backup/restore to clone/deploy ([`8e5e5c3`](https://github.com/Gunmer/kamino/commit/8e5e5c39e2f239f0eeaabd1041d4ebb125b65596))
+
+  **Cambio incompatible.** `kamino backup` and `kamino restore` are removed; use `kamino clone` and `kamino deploy` instead.
+
+### Pruebas
+
+- stub update query for up-to-date result ([`2f31690`](https://github.com/Gunmer/kamino/commit/2f316901db4d7b3daf86cd26b198ff114d80ec0d))
+
+
 ## v0.6.0 (2026-11-08)
 
 
