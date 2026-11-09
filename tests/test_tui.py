@@ -1142,7 +1142,18 @@ def _release() -> ReleaseInfo:
 def test_u1_shows_up_to_date_result(tmp_path: Path, monkeypatch) -> None:
     target = tmp_path / "kamino"
     target.write_bytes(b"actual")
-    screen = UpdateScreen(current_version="0.5.0", target=target, release=_release())
+    monkeypatch.setattr(
+        update_tui,
+        "query_update",
+        lambda *a, **k: SimpleNamespace(
+            should_update=False,
+            current_version="0.5.0",
+            release=_release(),
+            target=target,
+            outcome=UpdateOutcome.UP_TO_DATE,
+        ),
+    )
+    screen = UpdateScreen(current_version="0.5.0", target=target)
     app = KaminoApp(mode="direct", initial=screen, phrase="frase")
 
     async def scenario() -> None:
