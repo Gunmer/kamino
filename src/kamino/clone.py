@@ -1,20 +1,20 @@
-"""Caso de uso de clonación: construir el plan y ejecutarlo.
+"""Caso de uso de clonación: planificar y escribir son pasos separados.
 
-Flujo (diseño técnico §5.1): cargar catálogo, detectar apps instaladas, cruzar
-la selección, expandir paths aplicando exclusiones, construir el plan y
-escribir el archivo en un temporal para renombrarlo al nombre final.
+`plan_clone` construye el plan, el manifiesto y la ruta de destino sin escribir
+nada. `write_clone` escribe el temporal con progreso y cancelación cooperativa y
+solo entonces lo renombra al destino, de forma atómica. `run_clone` es la
+fachada que conserva la vía de la CLI y las pruebas.
 
 Módulo sin interfaz (§1): no imprime ni pregunta. Todas las dependencias se
-inyectan (home, catálogo, detección y metadatos) para que las pruebas usen un
-HOME falso y no toquen el sistema real (§7).
+inyectan (home, catálogo, detección, metadatos y reloj) para que las pruebas
+usen un HOME falso y no toquen el sistema real (§7).
 """
 
 from __future__ import annotations
 
 import platform
-import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,9 +25,29 @@ from kamino.catalog.models import AppDefinition
 from kamino.detect import detect_version, is_installed
 from kamino.errors import ArchiveError
 from kamino.plan import Plan, build_plan
+from kamino.progress import CancelCallback, ProgressCallback
 
-_DATE_PREFIX = re.compile(r"\d{4}-\d{2}-\d{2}")
-_MAX_SUFFIX = 1000
+
+@dataclass(frozen=True)
+class ClonePlan:
+    """Plan completo de una clonación, todavía sin escribir en disco."""
+
+    plan: Plan
+    manifest: Manifest
+    output: Path
+    apps: list[AppDefinition] = field(default_factory=list)
+
+    @property
+    def file_count(self) -> int:
+        return len(self.plan.operations)
+
+    @property
+    def size(self) -> int:
+        return sum(operation.size for operation in self.plan.operations)
+
+    @property
+    def skipped(self):
+        return self.plan.skipped
 
 
 @dataclass(frozen=True)
@@ -42,6 +62,75 @@ class CloneResult:
     manifest: Manifest
     output: Path | None
     dry_run: bool
+    plan_output: Path | None = None
+
+
+def plan_clone(
+    *,
+    home: Path | None = None,
+    selected: list[str] | None = None,
+    output: Path | None = None,
+    catalog: dict[str, AppDefinition] | None = None,
+    application_dirs: Sequence[Path] | None = None,
+    path: str | None = None,
+    metadata: dict[str, str] | None = None,
+    now: datetime | None = None,
+    progress: ProgressCallback | None = None,
+    cancelled: CancelCallback | None = None,
+) -> ClonePlan:
+    """Construye el plan, el manifiesto y la ruta de destino sin escribir.
+
+    - `selected`: ids a clonar; `None` usa todas las instaladas. Los ids
+      desconocidos o no instalados se ignoran (cruce de conjuntos).
+    - `output`: archivo destino; por defecto `clone-yyyyMMdd.tar.gz` con la
+      fecha local en el directorio actual.
+    - `now`: reloj inyectable para la fecha del nombre por defecto.
+    """
+    root = home if home is not None else Path.home()
+    definitions = (
+        catalog
+        if catalog is not None
+        else load_catalog(user_dir=root / ".config" / "kamino" / "apps")
+    )
+
+    apps = _select_installed(definitions, selected, application_dirs, path, root)
+    plan = build_plan(apps, home=root, progress=progress, cancelled=cancelled)
+    manifest = _build_manifest(apps, plan, application_dirs, metadata, root)
+    target = output if output is not None else _default_output(root, now)
+    return ClonePlan(plan=plan, manifest=manifest, output=target, apps=apps)
+
+
+def write_clone(
+    planned: ClonePlan,
+    *,
+    home: Path | None = None,
+    force: bool = False,
+    expected_state: tuple[int, int, int] | None = None,
+    progress: ProgressCallback | None = None,
+    cancelled: CancelCallback | None = None,
+) -> CloneResult:
+    """Escribe el plan en un temporal y lo renombra al destino.
+
+    Sin `force` nunca sobrescribe. Con `force`, `write_archive` revalida el
+    destino antes del renombrado y usa `os.replace`.
+    """
+    root = home if home is not None else Path.home()
+    write_archive(
+        planned.output,
+        planned.manifest,
+        source_root=root,
+        overwrite=force,
+        expected_state=expected_state,
+        progress=progress,
+        cancelled=cancelled,
+    )
+    return CloneResult(
+        plan=planned.plan,
+        manifest=planned.manifest,
+        output=planned.output,
+        dry_run=False,
+        plan_output=planned.output,
+    )
 
 
 def run_clone(
@@ -54,39 +143,37 @@ def run_clone(
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
     metadata: dict[str, str] | None = None,
+    force: bool = False,
+    now: datetime | None = None,
+    progress: ProgressCallback | None = None,
+    cancelled: CancelCallback | None = None,
 ) -> CloneResult:
-    """Ejecuta el flujo completo de clonación y devuelve el resultado tipado.
-
-    - `home`: home falso para las pruebas; por defecto el del usuario.
-    - `selected`: ids a clonar; `None` usa todas las instaladas. Los ids
-      desconocidos o no instalados se ignoran (cruce de conjuntos).
-    - `output`: archivo destino; por defecto `kamino-<hostname>-<fecha>.tar.gz`
-      en el directorio actual, añadiendo un sufijo numérico si ya existe para
-      no sobrescribir nunca (§6).
-    - `dry_run`: construye plan y manifiesto sin escribir el archivo.
-    - `catalog`: catálogo inyectado; por defecto se carga con `load_catalog`.
-    - `application_dirs` y `path`: se pasan a la detección (`is_installed` y
-      `detect_version`) para no tocar las ubicaciones reales en las pruebas.
-    - `metadata`: sobrescribe `macos_version`, `arch`, `hostname` o
-      `created_at`; por defecto salen de `platform` y de la hora actual.
-    """
-    root = home if home is not None else Path.home()
-    definitions = (
-        catalog
-        if catalog is not None
-        else load_catalog(user_dir=root / ".config" / "kamino" / "apps")
+    """Fachada de clonación para la CLI: planifica y, si no es simulación, escribe."""
+    planned = plan_clone(
+        home=home,
+        selected=selected,
+        output=output,
+        catalog=catalog,
+        application_dirs=application_dirs,
+        path=path,
+        metadata=metadata,
+        now=now,
     )
-
-    apps = _select_installed(definitions, selected, application_dirs, path, root)
-    plan = build_plan(apps, home=root)
-    manifest = _build_manifest(apps, plan, application_dirs, metadata, root)
-
     if dry_run:
-        return CloneResult(plan=plan, manifest=manifest, output=None, dry_run=True)
-
-    target = output if output is not None else _default_output(manifest)
-    write_archive(target, manifest, source_root=root)
-    return CloneResult(plan=plan, manifest=manifest, output=target, dry_run=False)
+        return CloneResult(
+            plan=planned.plan,
+            manifest=planned.manifest,
+            output=None,
+            dry_run=True,
+            plan_output=planned.output,
+        )
+    return write_clone(
+        planned,
+        home=home,
+        force=force,
+        progress=progress,
+        cancelled=cancelled,
+    )
 
 
 def _select_installed(
@@ -155,14 +242,39 @@ def _now_iso() -> str:
     return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def _default_output(manifest: Manifest) -> Path:
-    """`kamino-<hostname>-<fecha>.tar.gz` en el cwd, con sufijo si ya existe (§6)."""
-    date = _DATE_PREFIX.search(manifest.created_at)
-    day = date.group() if date else datetime.now(UTC).strftime("%Y-%m-%d")
-    base = f"kamino-{manifest.hostname}-{day}"
-    for index in range(_MAX_SUFFIX + 1):
-        name = f"{base}.tar.gz" if index == 0 else f"{base}-{index}.tar.gz"
-        candidate = Path.cwd() / name
+def default_name(now: datetime | None = None) -> str:
+    """Nombre estable del clon con la fecha local: `clone-yyyyMMdd.tar.gz`."""
+    moment = now if now is not None else datetime.now()
+    return f"clone-{moment.strftime('%Y%m%d')}.tar.gz"
+
+
+def _default_output(root: Path, now: datetime | None) -> Path:
+    """`clone-yyyyMMdd.tar.gz` en el cwd, sin sufijos automáticos."""
+    del root  # el destino por defecto es el directorio actual, no el home
+    return Path.cwd() / default_name(now)
+
+
+def free_suffix(output: Path) -> Path:
+    """Primer nombre libre para el mismo base: `clone-yyyyMMdd-1.tar.gz`, etc."""
+    stem = output.name.removesuffix(".tar.gz")
+    for index in range(1, 1001):
+        candidate = output.with_name(f"{stem}-{index}.tar.gz")
         if not candidate.exists():
             return candidate
-    raise ArchiveError(f"no se pudo elegir un nombre libre para {base}.tar.gz")
+    raise ArchiveError(f"no se pudo elegir un nombre libre para {output.name}")
+
+
+def validate_destination(output: Path) -> str | None:
+    """Valida el destino sin crear nada; devuelve el error visible o `None`."""
+    if not output.name or output.name in {".", ".."}:
+        return "el nombre del clon no es válido"
+    if output.name.endswith("/"):
+        return "el nombre del clon no es válido"
+    parent = output.parent if output.parent != Path("") else Path.cwd()
+    if not parent.exists():
+        return f"el directorio no existe: {parent}"
+    if not parent.is_dir():
+        return f"la ruta del directorio no es válida: {parent}"
+    if output.exists() and output.is_dir():
+        return f"el destino es un directorio: {output}"
+    return None

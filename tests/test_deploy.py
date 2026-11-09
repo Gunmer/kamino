@@ -48,6 +48,7 @@ from kamino.errors import (
     DecisionRequiredError,
     IntegrityError,
     InvalidMergeError,
+    PartialApplyError,
     PathError,
     VersionError,
 )
@@ -198,7 +199,8 @@ def test_dry_run_classifies_plan_without_writing(tmp_path: Path) -> None:
     assert result.output is None
     assert result.snapshot is None
     assert result.deployed == []
-    assert result.omitted == ["igual.toml"]
+    assert result.omitted == []
+    assert result.unchanged == ["igual.toml"]
     assert [(entry.path, entry.status) for entry in result.plan.entries] == [
         ("nuevo.toml", DeployStatus.NEW),
         ("igual.toml", DeployStatus.IDENTICAL),
@@ -244,7 +246,7 @@ def test_deploy_overwrites_different_file(tmp_path: Path) -> None:
     assert result.omitted == []
 
 
-def test_identical_file_is_omitted_and_not_deployed(tmp_path: Path) -> None:
+def test_identical_file_is_unchanged_and_not_deployed(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_file(home, "cfg.toml", b"igual\n")
     clone, catalog = _clone(tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"igual\n"})
@@ -252,7 +254,8 @@ def test_identical_file_is_omitted_and_not_deployed(tmp_path: Path) -> None:
     result = _run(tmp_path, clone, home, catalog)
 
     assert result.deployed == []
-    assert result.omitted == ["cfg.toml"]
+    assert result.omitted == []
+    assert result.unchanged == ["cfg.toml"]
     assert (home / "cfg.toml").read_bytes() == b"igual\n"
 
 
@@ -291,29 +294,23 @@ def test_no_snapshot_when_nothing_changes(tmp_path: Path) -> None:
     assert not (tmp_path / "snapshots").exists()
 
 
-def test_snapshot_is_created_even_when_only_new_files(tmp_path: Path) -> None:
-    """Con cambios que son solo archivos nuevos el snapshot no tiene nada que conservar.
-
-    `create_snapshot` solo devuelve `None` con `paths` vacío; aquí los destinos que
-    van a cambiar no existen todavía y el snapshot queda sin archivos.
-    """
+def test_snapshot_is_omitted_when_only_new_files(tmp_path: Path) -> None:
+    """Sin destinos existentes no se crea un holocrón vacío."""
     home = tmp_path / "home"
     clone, catalog = _clone(tmp_path, apps={"foo": ["cfg.toml"]}, files={"cfg.toml": b"nuevo\n"})
 
     result = _run(tmp_path, clone, home, catalog)
 
     assert result.deployed == ["cfg.toml"]
-    snapshot = result.snapshot
-    assert snapshot is not None
-    snapshot_manifest = read_manifest(snapshot)
-    (app,) = snapshot_manifest.apps
-    assert app.files == []
+    assert result.snapshot is None
+    assert result.snapshot_files == 0
+    assert not (tmp_path / "snapshots").exists()
 
 
 # --- cruce de apps instaladas y selección (§5.2.2-3) ---
 
 
-def test_not_installed_app_and_its_files_are_omitted(tmp_path: Path) -> None:
+def test_not_installed_app_and_its_files_are_reported(tmp_path: Path) -> None:
     home = tmp_path / "home"
     clone, catalog = _clone(
         tmp_path,
@@ -324,13 +321,14 @@ def test_not_installed_app_and_its_files_are_omitted(tmp_path: Path) -> None:
     result = _run(tmp_path, clone, home, catalog, installed=("alpha",))
 
     assert result.deployed == ["a.toml"]
-    assert result.omitted == ["b.toml"]
+    assert result.omitted == []
+    assert result.not_installed == ["b.toml"]
     assert (home / "a.toml").read_bytes() == b"a\n"
     assert not (home / "b.toml").exists()
 
 
-def test_not_installed_apps_are_omitted_even_when_not_selected(tmp_path: Path) -> None:
-    """Las apps no instaladas se listan como omitidas antes de la selección (§5.2.2)."""
+def test_not_installed_apps_are_reported_even_when_not_selected(tmp_path: Path) -> None:
+    """Las apps no instaladas se informan sin contar como omitidas."""
     home = tmp_path / "home"
     clone, catalog = _clone(
         tmp_path,
@@ -341,7 +339,8 @@ def test_not_installed_apps_are_omitted_even_when_not_selected(tmp_path: Path) -
     result = _run(tmp_path, clone, home, catalog, installed=("alpha",), selected=["alpha"])
 
     assert result.deployed == ["a.toml"]
-    assert result.omitted == ["b.toml"]
+    assert result.omitted == []
+    assert result.not_installed == ["b.toml"]
 
 
 def test_selected_limits_deploy_and_deselected_apps_are_ignored(tmp_path: Path) -> None:
@@ -420,7 +419,7 @@ def test_symlink_is_recreated_when_missing(tmp_path: Path) -> None:
     assert result.deployed == ["enlace.txt"]
 
 
-def test_identical_symlink_is_omitted(tmp_path: Path) -> None:
+def test_identical_symlink_is_unchanged(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_file(home, "real.txt")
     (home / "enlace.txt").symlink_to("real.txt")
@@ -434,7 +433,8 @@ def test_identical_symlink_is_omitted(tmp_path: Path) -> None:
     result = _run(tmp_path, clone, home, catalog)
 
     assert result.deployed == []
-    assert result.omitted == ["enlace.txt"]
+    assert result.omitted == []
+    assert result.unchanged == ["enlace.txt"]
 
 
 def test_directory_destination_is_omitted(tmp_path: Path) -> None:
@@ -567,7 +567,7 @@ def test_directory_replaced_by_symlink_during_deploy_is_rejected(
 
     monkeypatch.setattr(deploy_module, "create_snapshot", swap_after_snapshot)
 
-    with pytest.raises(PathError):
+    with pytest.raises(PartialApplyError):
         _run(tmp_path, clone, home, catalog)
 
     assert not (external / "foo" / "config.toml").exists()
@@ -630,7 +630,8 @@ def test_deploy_marker_uses_injected_home_not_real_home(tmp_path: Path, monkeypa
         path=bin_path,
         snapshots_dir=tmp_path / "snapshots",
     )
-    assert omitted.omitted == [".zshrc"]
+    assert omitted.omitted == []
+    assert omitted.not_installed == [".zshrc"]
     assert not (target / ".zshrc").exists()
 
     _write_file(target, ".oh-my-zsh/oh-my-zsh.sh", b"")
@@ -1015,3 +1016,204 @@ def test_dry_run_does_not_verify_the_archive(tmp_path: Path) -> None:
     assert result.plan.conflicts
     assert (home / "cfg.toml").read_bytes() == b"a = 1\n"
     assert not (tmp_path / "snapshots").exists()
+
+
+# --- cancelación, parciales y código por categorías ---
+
+
+def test_partial_apply_reports_applied_failed_and_snapshot(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "a.toml", b"viejo a\n")
+    _write_file(home, "b.toml", b"viejo b\n")
+    clone, catalog = _clone(
+        tmp_path,
+        apps={"foo": ["a.toml", "b.toml"]},
+        files={"a.toml": b"nuevo a\n", "b.toml": b"nuevo b\n"},
+    )
+    from kamino.paths import SafeHome
+
+    original = SafeHome.write_file
+
+    def fail_second(self, rel, data, *, mode=0o644):
+        if str(rel) == "b.toml":
+            raise OSError("sin espacio")
+        return original(self, rel, data, mode=mode)
+
+    monkeypatch.setattr(SafeHome, "write_file", fail_second)
+
+    with pytest.raises(PartialApplyError) as caught:
+        _run(tmp_path, clone, home, catalog)
+
+    error = caught.value
+    assert error.applied == ["a.toml"]
+    assert error.failed == "b.toml"
+    assert error.snapshot is not None
+    assert (home / "a.toml").read_bytes() == b"nuevo a\n"
+    assert (home / "b.toml").read_bytes() == b"viejo b\n"
+
+
+def test_missing_requested_app_produces_code_3(tmp_path: Path) -> None:
+    from kamino.conflicts import apply_all
+    from kamino.deploy import result_code
+
+    home = tmp_path / "home"
+    clone, catalog = _clone(tmp_path, apps={"foo": ["a.toml"]}, files={"a.toml": b"a\n"})
+    session = prepare_deploy(
+        clone,
+        home=home,
+        catalog=catalog,
+        application_dirs=[],
+        path=_fake_path(tmp_path / "target-path", "foo"),
+        snapshots_dir=tmp_path / "snapshots",
+    )
+    try:
+        plan = session.plan(["foo"], requested=["foo", "no-existe"])
+        result = session.apply(apply_all(plan.conflicts))
+    finally:
+        session.close()
+
+    assert result.missing_requested == ["no-existe"]
+    assert result_code(result) == 3
+
+
+def test_only_perfect_clones_produce_code_0(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    _write_file(home, "a.toml", b"igual\n")
+    clone, catalog = _clone(tmp_path, apps={"foo": ["a.toml"]}, files={"a.toml": b"igual\n"})
+
+    result = _run(tmp_path, clone, home, catalog)
+
+    assert result.unchanged == ["a.toml"]
+    assert result.omitted == []
+    from kamino.deploy import result_code
+
+    assert result_code(result) == 0
+
+
+def test_not_installed_only_produces_code_0(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    clone, catalog = _clone(
+        tmp_path,
+        apps={"alpha": ["a.toml"], "beta": ["b.toml"]},
+        files={"a.toml": b"a\n", "b.toml": b"b\n"},
+    )
+
+    result = _run(tmp_path, clone, home, catalog, installed=("alpha",))
+
+    assert result.not_installed == ["b.toml"]
+    from kamino.deploy import result_code
+
+    assert result_code(result) == 0
+
+
+def test_platform_warnings_are_exposed_without_blocking(tmp_path: Path, monkeypatch) -> None:
+    import kamino.deploy as deploy_module
+
+    home = tmp_path / "home"
+    clone, catalog = _clone(tmp_path, apps={"foo": ["a.toml"]}, files={"a.toml": b"a\n"})
+    monkeypatch.setattr(deploy_module.platform, "machine", lambda: "x86_64")
+    monkeypatch.setattr(deploy_module.platform, "mac_ver", lambda: ("14.0", "", ""))
+    session = prepare_deploy(
+        clone,
+        home=home,
+        catalog=catalog,
+        application_dirs=[],
+        path=_fake_path(tmp_path / "target-path", "foo"),
+        snapshots_dir=tmp_path / "snapshots",
+    )
+    try:
+        assert any("x86_64" in warning for warning in session.warnings)
+        assert any("14.0" in warning for warning in session.warnings)
+        plan = session.plan(["foo"])
+        result = session.apply(apply_all(plan.conflicts))
+    finally:
+        session.close()
+
+    assert result.deployed == ["a.toml"]
+    from kamino.deploy import result_code
+
+    assert result_code(result) == 0
+
+
+def test_verify_and_extract_cancellation(tmp_path: Path) -> None:
+    from kamino.archive import extract_archive, verify_archive
+    from kamino.errors import OperationCancelled
+
+    clone, catalog = _clone(tmp_path, apps={"foo": ["a.toml"]}, files={"a.toml": b"a\n"})
+    manifest = read_manifest(clone)
+    with pytest.raises(OperationCancelled):
+        verify_archive(clone, manifest, cancelled=lambda: True)
+    staging = tmp_path / "staging"
+    with pytest.raises(OperationCancelled):
+        extract_archive(clone, staging, cancelled=lambda: True)
+    assert not list(staging.rglob("a.toml"))
+
+
+def test_plan_cancellation_cleans_staging(tmp_path: Path) -> None:
+    from kamino.errors import OperationCancelled
+    from kamino.progress import Phase
+
+    clone, catalog = _clone(tmp_path, apps={"foo": ["a.toml"]}, files={"a.toml": b"a\n"})
+    session = prepare_deploy(
+        clone,
+        home=tmp_path / "home",
+        catalog=catalog,
+        application_dirs=[],
+        path=_fake_path(tmp_path / "target-path", "foo"),
+        snapshots_dir=tmp_path / "snapshots",
+    )
+    cancelled = {"value": False}
+
+    def progress(event):
+        if event.phase is Phase.CLASSIFYING:
+            cancelled["value"] = True
+
+    try:
+        with pytest.raises(OperationCancelled):
+            session.plan(
+                ["foo"],
+                progress=progress,
+                cancelled=lambda: cancelled["value"],
+            )
+        assert session.staging is None
+    finally:
+        session.close()
+
+
+def test_old_snapshot_manifest_with_synthetic_id_is_readable(tmp_path: Path) -> None:
+    from kamino.archive import FORMAT_VERSION, AppEntry, FileEntry, Manifest, write_archive
+    from kamino.snapshot import SNAPSHOT_APP_ID
+
+    home = tmp_path / "home"
+    _write_file(home, "viejo.toml", b"actual\n")
+    source = tmp_path / "source"
+    _write_file(source, "viejo.toml", b"viejo\n")
+    old = tmp_path / "old-snapshot.tar.gz"
+    manifest = Manifest(
+        format_version=FORMAT_VERSION,
+        tool_version="0.1.0",
+        created_at="2026-01-01T00:00:00Z",
+        macos_version="15.1",
+        arch="arm64",
+        hostname="mac-test",
+        apps=[
+            AppEntry(
+                id=SNAPSHOT_APP_ID,
+                name=SNAPSHOT_APP_ID,
+                files=[
+                    FileEntry(
+                        path="viejo.toml",
+                        sha256=hashlib.sha256(b"viejo\n").hexdigest(),
+                        size=7,
+                        mode="0644",
+                    )
+                ],
+            )
+        ],
+    )
+    write_archive(old, manifest, source_root=source)
+
+    result = _run(tmp_path, old, home, {})
+
+    assert result.deployed == ["viejo.toml"]
+    assert result.snapshot is not None

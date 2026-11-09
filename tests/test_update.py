@@ -372,3 +372,87 @@ def test_install_script_uses_same_repository_and_asset() -> None:
 
     assert f'REPO="{update.REPOSITORY}"' in script
     assert f'ASSET="{update.ASSET_NAME}"' in script
+
+
+# --- consulta, descarga y clasificación de errores ---
+
+
+def test_query_update_reports_updated_up_to_date_and_newer(tmp_path: Path) -> None:
+    target = tmp_path / "kamino"
+    target.write_bytes(b"actual")
+    newer = _release()
+
+    updated = update.query_update("0.4.0", target=target, release=newer)
+    current = update.query_update("0.5.0", target=target, release=newer)
+    installed = update.query_update("0.6.0", target=target, release=newer)
+
+    assert updated.should_update is True
+    assert updated.outcome is update.UpdateOutcome.UPDATED
+    assert current.should_update is False
+    assert current.outcome is update.UpdateOutcome.UP_TO_DATE
+    assert installed.should_update is False
+    assert installed.outcome is update.UpdateOutcome.NEWER
+
+
+def test_download_update_cancels_and_removes_temp(tmp_path: Path, monkeypatch) -> None:
+    from kamino.errors import OperationCancelled
+
+    monkeypatch.setattr(update, "_open_url", lambda request, **kwargs: io.BytesIO(NEW_BINARY))
+    target = tmp_path / "kamino"
+    target.write_bytes(b"actual")
+
+    with pytest.raises(OperationCancelled):
+        update.download_update(_release(), target, cancelled=lambda: True)
+
+    assert target.read_bytes() == b"actual"
+    assert not list(tmp_path.glob(".kamino-update-*"))
+
+
+def test_download_update_reports_progress(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(update, "_open_url", lambda request, **kwargs: io.BytesIO(NEW_BINARY))
+    target = tmp_path / "kamino"
+    target.write_bytes(b"actual")
+    events = []
+
+    temp = update.download_update(_release(), target, progress=events.append)
+
+    assert temp.read_bytes() == NEW_BINARY
+    assert events[-1].phase.value == "downloading"
+    assert events[-1].current == len(NEW_BINARY)
+    temp.unlink()
+
+
+def test_update_error_kinds_are_stable(tmp_path: Path, monkeypatch) -> None:
+    from kamino.errors import UpdateErrorKind
+
+    monkeypatch.setattr(update.sys, "frozen", False, raising=False)
+    with pytest.raises(UpdateError) as not_frozen:
+        update.installed_binary_path()
+    assert not_frozen.value.kind is UpdateErrorKind.NOT_SELF_CONTAINED
+
+    monkeypatch.setattr(update.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(update.platform, "machine", lambda: "x86_64")
+    with pytest.raises(UpdateError) as platform_error:
+        _ORIGINAL_ENSURE_PLATFORM()
+    assert platform_error.value.kind is UpdateErrorKind.PLATFORM
+
+    target = tmp_path / "kamino"
+    target.write_bytes(b"actual")
+    monkeypatch.setattr(update, "_open_url", lambda request, **kwargs: io.BytesIO(NEW_BINARY))
+    with pytest.raises(UpdateError) as digest_error:
+        update.run_update("0.4.0", target=target, release=_release(digest="sha256:" + "0" * 64))
+    assert digest_error.value.kind is UpdateErrorKind.INTEGRITY
+
+
+def test_run_update_cancel_before_replace_keeps_binary(tmp_path: Path, monkeypatch) -> None:
+    from kamino.errors import OperationCancelled
+
+    target = tmp_path / "kamino"
+    target.write_bytes(b"actual")
+    monkeypatch.setattr(update, "_open_url", lambda request, **kwargs: io.BytesIO(NEW_BINARY))
+
+    with pytest.raises(OperationCancelled):
+        update.run_update("0.4.0", target=target, release=_release(), cancelled=lambda: True)
+
+    assert target.read_bytes() == b"actual"
+    assert not list(tmp_path.glob(".kamino-update-*"))

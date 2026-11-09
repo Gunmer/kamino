@@ -20,6 +20,7 @@ Classification of every manifest file against its destination:
 from __future__ import annotations
 
 import hashlib
+import platform
 import shutil
 import stat
 import tempfile
@@ -61,11 +62,20 @@ from kamino.errors import (
     ConflictError,
     DecisionRequiredError,
     InvalidMergeError,
+    OperationCancelled,
+    PartialApplyError,
     PathError,
 )
 from kamino.ghostty import GHOSTTY_APP_ID, MAX_CONFIG_BYTES, absolute_references
 from kamino.paths import SafeHome, to_absolute, to_relative
-from kamino.snapshot import SNAPSHOT_APP_ID, create_snapshot
+from kamino.progress import (
+    CancelCallback,
+    Phase,
+    ProgressCallback,
+    emit,
+    ensure_not_cancelled,
+)
+from kamino.snapshot import SNAPSHOT_APP_ID, create_snapshot, snapshot_files
 
 
 class DeployStatus(StrEnum):
@@ -83,6 +93,7 @@ class ResultCategory(StrEnum):
     DEPLOYED = "deployed"
     MERGED = "merged"
     OMITTED = "omitted"
+    UNCHANGED = "unchanged"
 
 
 @dataclass(frozen=True)
@@ -101,12 +112,19 @@ class DeployEntry:
 
 @dataclass(frozen=True)
 class DeployPlan:
-    """The deploy plan: active manifest files, conflicts and omissions."""
+    """The deploy plan: active manifest files, conflicts and categories."""
 
     entries: list[DeployEntry] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
     conflicts: list[Conflict] = field(default_factory=list)
+    #: Archivos no soportados o conservados en el original: producen código 3.
     omitted: list[str] = field(default_factory=list)
+    #: Clones perfectos: no se escriben y no producen código 3.
+    unchanged: list[str] = field(default_factory=list)
+    #: Apps del manifiesto que no están instaladas en este Mac.
+    not_installed: list[str] = field(default_factory=list)
+    #: Ids pedidos con `--apps` que no se pueden cumplir: producen código 3.
+    missing_requested: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
@@ -114,9 +132,9 @@ class DeployResult:
     """Result of a deploy (§5.2.9).
 
     ``deployed`` contains files written with the clone content, ``merged``
-    contains real block mixes and ``omitted`` contains everything left
-    untouched (not installed, identical, unsupported, omitted by decision and
-    all-local reviews).
+    contains real block mixes, ``omitted`` contains conflicts kept on the
+    original and unsupported files, ``unchanged`` contains perfect clones and
+    ``not_installed`` contains manifest apps with no base on this Mac.
     """
 
     plan: DeployPlan
@@ -127,6 +145,10 @@ class DeployResult:
     deployed: list[str]
     merged: list[str]
     omitted: list[str]
+    unchanged: list[str] = field(default_factory=list)
+    not_installed: list[str] = field(default_factory=list)
+    missing_requested: list[str] = field(default_factory=list)
+    snapshot_files: int = 0
 
 
 @dataclass(frozen=True)
@@ -136,6 +158,19 @@ class DeployClassification:
     deployed: list[str]
     merged: list[str]
     omitted: list[str]
+    unchanged: list[str] = field(default_factory=list)
+    not_installed: list[str] = field(default_factory=list)
+    missing_requested: list[str] = field(default_factory=list)
+
+
+def classification_code(classification: DeployClassification) -> int:
+    """Código de salida: 3 solo por omitidos o `--apps` no cumplidos."""
+    return 3 if (classification.omitted or classification.missing_requested) else 0
+
+
+def result_code(result: DeployResult) -> int:
+    """Código de salida de un despliegue terminado."""
+    return 3 if (result.omitted or result.missing_requested) else 0
 
 
 @dataclass(frozen=True)
@@ -179,6 +214,7 @@ class DeploySession:
         self.not_installed_apps = list(not_installed_apps)
         self.snapshots_dir = snapshots_dir
         self.notices = _ghostty_portability_notices(manifest, clone_file, home)
+        self.warnings = _platform_warnings(manifest)
         self._staging: Path | None = None
         self._plan: DeployPlan | None = None
         self._fingerprints: dict[str, _DestinationFingerprint] = {}
@@ -195,7 +231,15 @@ class DeploySession:
             return self.snapshots_dir
         return self.home / "Library" / "Application Support" / "kamino" / "snapshots"
 
-    def plan(self, selected: list[str] | None = None, *, dry_run: bool = False) -> DeployPlan:
+    def plan(
+        self,
+        selected: list[str] | None = None,
+        *,
+        dry_run: bool = False,
+        requested: list[str] | None = None,
+        progress: ProgressCallback | None = None,
+        cancelled: CancelCallback | None = None,
+    ) -> DeployPlan:
         """Classify the chosen apps and build every content conflict.
 
         With ``dry_run`` the archive is neither verified nor extracted; the
@@ -204,73 +248,94 @@ class DeploySession:
         """
         self._require_open()
         if not dry_run:
-            verify_archive(self.clone_file, self.manifest)
+            verify_archive(self.clone_file, self.manifest, progress=progress, cancelled=cancelled)
+            ensure_not_cancelled(cancelled)
             self.home.mkdir(parents=True, exist_ok=True)
-            self._reset_staging()
+            self._reset_staging(progress=progress, cancelled=cancelled)
 
-        entries: list[DeployEntry] = []
-        conflicts: list[Conflict] = []
-        omitted: list[str] = list(
-            file.path for app in self.not_installed_apps for file in app.files
-        )
-        seen_conflicts: set[str] = set()
-        fingerprints: dict[str, _DestinationFingerprint] = {}
-        safe = SafeHome(self.home) if self.home.exists() else None
         try:
-            for app, file in self._active_files(selected):
-                destination = to_absolute(file.path, home=self.home)
-                try:
-                    local = _read_local(safe, file.path) if safe is not None else None
-                except FileNotFoundError:
-                    local = None
-                if local is None:
-                    status = DeployStatus.NEW
-                else:
-                    clone_for_classification = self._clone_content(app.id, file, dry_run=dry_run)
-                    status = _classify_local(local, file, clone_for_classification)
-                entries.append(
-                    DeployEntry(
-                        app_id=app.id,
-                        path=file.path,
-                        destination=destination,
-                        size=file.size,
-                        sha256=file.sha256,
-                        mode=file.mode,
-                        link=file.link,
-                        status=status,
+            entries: list[DeployEntry] = []
+            conflicts: list[Conflict] = []
+            unchanged: list[str] = []
+            omitted: list[str] = []
+            not_installed = [file.path for app in self.not_installed_apps for file in app.files]
+            deployable_ids = {app.id for app in self.deployable_apps}
+            missing_requested = [
+                app_id for app_id in (requested or []) if app_id not in deployable_ids
+            ]
+            active_files = list(self._active_files(selected))
+            total = len(active_files)
+            seen_conflicts: set[str] = set()
+            fingerprints: dict[str, _DestinationFingerprint] = {}
+            safe = SafeHome(self.home) if self.home.exists() else None
+            try:
+                for index, (app, file) in enumerate(active_files, start=1):
+                    ensure_not_cancelled(cancelled)
+                    emit(progress, Phase.CLASSIFYING, index, total, file.path)
+                    destination = to_absolute(file.path, home=self.home)
+                    try:
+                        local = _read_local(safe, file.path) if safe is not None else None
+                    except FileNotFoundError:
+                        local = None
+                    if local is None:
+                        status = DeployStatus.NEW
+                    else:
+                        clone_for_classification = self._clone_content(
+                            app.id, file, dry_run=dry_run
+                        )
+                        status = _classify_local(local, file, clone_for_classification)
+                    entries.append(
+                        DeployEntry(
+                            app_id=app.id,
+                            path=file.path,
+                            destination=destination,
+                            size=file.size,
+                            sha256=file.sha256,
+                            mode=file.mode,
+                            link=file.link,
+                            status=status,
+                        )
                     )
-                )
-                if status in (DeployStatus.IDENTICAL, DeployStatus.UNSUPPORTED):
-                    omitted.append(file.path)
-                if status is DeployStatus.DIFFERENT and file.path not in seen_conflicts:
-                    conflict = self._build_conflict(app.id, file, destination, local, dry_run)
-                    if conflict is not None:
-                        conflicts.append(conflict)
-                        seen_conflicts.add(file.path)
-                if status in (DeployStatus.NEW, DeployStatus.DIFFERENT) and safe is not None:
-                    if file.path not in fingerprints:
-                        fingerprints[file.path] = _fingerprint(safe, file.path)
-                elif status is DeployStatus.NEW and file.path not in fingerprints:
-                    fingerprints[file.path] = _DestinationFingerprint("missing")
-        finally:
-            if safe is not None:
-                safe.close()
+                    if status is DeployStatus.IDENTICAL:
+                        unchanged.append(file.path)
+                    elif status is DeployStatus.UNSUPPORTED:
+                        omitted.append(file.path)
+                    if status is DeployStatus.DIFFERENT and file.path not in seen_conflicts:
+                        conflict = self._build_conflict(app.id, file, destination, local, dry_run)
+                        if conflict is not None:
+                            conflicts.append(conflict)
+                            seen_conflicts.add(file.path)
+                    if status in (DeployStatus.NEW, DeployStatus.DIFFERENT) and safe is not None:
+                        if file.path not in fingerprints:
+                            fingerprints[file.path] = _fingerprint(safe, file.path)
+                    elif status is DeployStatus.NEW and file.path not in fingerprints:
+                        fingerprints[file.path] = _DestinationFingerprint("missing")
+            finally:
+                if safe is not None:
+                    safe.close()
 
-        changed = [entry for entry in entries if entry.status is not DeployStatus.UNSUPPORTED]
-        if changed and self.home.exists():
-            _validate_destinations(
-                [entry for entry in changed if entry.status is not DeployStatus.IDENTICAL],
-                self.home,
+            ensure_not_cancelled(cancelled)
+            changed = [entry for entry in entries if entry.status is not DeployStatus.UNSUPPORTED]
+            if changed and self.home.exists():
+                _validate_destinations(
+                    [entry for entry in changed if entry.status is not DeployStatus.IDENTICAL],
+                    self.home,
+                )
+            plan = DeployPlan(
+                entries=entries,
+                notices=self.notices,
+                conflicts=conflicts,
+                omitted=list(dict.fromkeys(omitted)),
+                unchanged=list(dict.fromkeys(unchanged)),
+                not_installed=list(dict.fromkeys(not_installed)),
+                missing_requested=missing_requested,
             )
-        plan = DeployPlan(
-            entries=entries,
-            notices=self.notices,
-            conflicts=conflicts,
-            omitted=list(dict.fromkeys(omitted)),
-        )
-        self._plan = plan
-        self._fingerprints = fingerprints
-        return plan
+            self._plan = plan
+            self._fingerprints = fingerprints
+            return plan
+        except OperationCancelled:
+            self._clear_staging()
+            raise
 
     def preview(self, decisions: ConflictDecisions) -> DeployClassification:
         """Return the categories that applying ``decisions`` would produce."""
@@ -288,10 +353,24 @@ class DeploySession:
             deployed=[],
             merged=[],
             omitted=plan.omitted,
+            unchanged=plan.unchanged,
+            not_installed=plan.not_installed,
+            missing_requested=plan.missing_requested,
         )
 
-    def apply(self, decisions: ConflictDecisions) -> DeployResult:
-        """Apply the decisions with a snapshot and atomic per-file writes."""
+    def apply(
+        self,
+        decisions: ConflictDecisions,
+        *,
+        progress: ProgressCallback | None = None,
+        cancelled: CancelCallback | None = None,
+    ) -> DeployResult:
+        """Apply the decisions with a snapshot and atomic per-file writes.
+
+        Cancellation works until the holocrón is created and is ignored once
+        writing destinations starts. A write failure raises
+        :class:`PartialApplyError` with the applied files and the snapshot.
+        """
         self._require_open()
         plan, resolved = self._resolve(decisions)
         _validate_merges(resolved)
@@ -308,19 +387,30 @@ class DeploySession:
                 deployed=[],
                 merged=[],
                 omitted=_merged_paths(plan, resolved),
+                unchanged=plan.unchanged,
+                not_installed=plan.not_installed,
+                missing_requested=plan.missing_requested,
             )
 
         with SafeHome(self.home) as safe:
             for path in paths:
+                ensure_not_cancelled(cancelled)
                 current = _fingerprint(safe, path)
                 expected = self._fingerprints.get(path)
                 if expected is None or current != expected:
                     raise ConcurrentChangeError(f"el destino cambió durante la revisión: {path}")
 
+        protected = snapshot_files([item.destination for item in writes], home=self.home)
+        ensure_not_cancelled(cancelled)
         snapshot = create_snapshot(
             [item.destination for item in writes], home=self.home, snapshots_dir=self.snapshots_dir
         )
-        _write_resolved(writes, home=self.home)
+        _write_resolved(
+            writes,
+            home=self.home,
+            snapshot=snapshot,
+            progress=progress,
+        )
         classification = _classification(plan, resolved)
         return DeployResult(
             plan=plan,
@@ -331,13 +421,20 @@ class DeploySession:
             deployed=classification.deployed,
             merged=classification.merged,
             omitted=classification.omitted,
+            unchanged=classification.unchanged,
+            not_installed=classification.not_installed,
+            missing_requested=classification.missing_requested,
+            snapshot_files=protected,
         )
 
-    def close(self) -> None:
-        """Remove the staging directory, if any."""
+    def _clear_staging(self) -> None:
         if self._staging is not None:
             shutil.rmtree(self._staging, ignore_errors=True)
             self._staging = None
+
+    def close(self) -> None:
+        """Remove the staging directory, if any."""
+        self._clear_staging()
         self._closed = True
 
     def __enter__(self) -> DeploySession:
@@ -350,11 +447,21 @@ class DeploySession:
         if self._closed:
             raise RuntimeError("deploy session is closed")
 
-    def _reset_staging(self) -> None:
+    def _reset_staging(
+        self,
+        *,
+        progress: ProgressCallback | None = None,
+        cancelled: CancelCallback | None = None,
+    ) -> None:
         if self._staging is not None:
             shutil.rmtree(self._staging, ignore_errors=True)
         self._staging = Path(tempfile.mkdtemp(prefix="kamino-deploy-"))
-        extract_archive(self.clone_file, self._staging)
+        try:
+            extract_archive(self.clone_file, self._staging, progress=progress, cancelled=cancelled)
+        except Exception:
+            shutil.rmtree(self._staging, ignore_errors=True)
+            self._staging = None
+            raise
 
     def _active_files(self, selected: list[str] | None) -> Sequence[tuple[AppEntry, FileEntry]]:
         active: list[tuple[AppEntry, FileEntry]] = []
@@ -419,6 +526,11 @@ class DeploySession:
                 continue
             done.add(entry.path)
             if entry.status in (DeployStatus.IDENTICAL, DeployStatus.UNSUPPORTED):
+                category = (
+                    ResultCategory.UNCHANGED
+                    if entry.status is DeployStatus.IDENTICAL
+                    else ResultCategory.OMITTED
+                )
                 resolved.append(
                     _ResolvedFile(
                         entry.path,
@@ -426,7 +538,7 @@ class DeploySession:
                         None,
                         None,
                         entry.mode,
-                        ResultCategory.OMITTED,
+                        category,
                         False,
                     )
                 )
@@ -650,15 +762,33 @@ def _validate_destinations(entries: Sequence[DeployEntry], home: Path) -> None:
                 continue
 
 
-def _write_resolved(entries: Sequence[_ResolvedFile], *, home: Path) -> None:
+def _write_resolved(
+    entries: Sequence[_ResolvedFile],
+    *,
+    home: Path,
+    snapshot: Path | None,
+    progress: ProgressCallback | None = None,
+) -> None:
+    applied: list[str] = []
+    total = len(entries)
     with SafeHome(home) as safe:
-        for entry in entries:
-            if entry.link is not None:
-                safe.replace_with_symlink(entry.path, entry.link)
-            else:
-                if entry.content is None:
-                    raise RuntimeError(f"missing content for {entry.path}")
-                safe.write_file(entry.path, entry.content, mode=int(entry.mode, 8))
+        for index, entry in enumerate(entries, start=1):
+            try:
+                if entry.link is not None:
+                    safe.replace_with_symlink(entry.path, entry.link)
+                else:
+                    if entry.content is None:
+                        raise RuntimeError(f"missing content for {entry.path}")
+                    safe.write_file(entry.path, entry.content, mode=int(entry.mode, 8))
+            except Exception as exc:
+                raise PartialApplyError(
+                    f"despliegue incompleto en {entry.path}: {exc}",
+                    applied=applied,
+                    failed=entry.path,
+                    snapshot=snapshot,
+                ) from exc
+            applied.append(entry.path)
+            emit(progress, Phase.WRITING, index, total, entry.path)
 
 
 def _validate_merges(entries: Sequence[_ResolvedFile]) -> None:
@@ -671,7 +801,9 @@ def _validate_merges(entries: Sequence[_ResolvedFile]) -> None:
             entry.path, entry.local_text, entry.clone_text, entry.merged_text
         )
         if validation.status == "invalid":
-            raise InvalidMergeError(f"la mezcla de {entry.path} no es válida: {validation.message}")
+            raise InvalidMergeError(
+                f"el híbrido de {entry.path} no es válido: {validation.message}"
+            )
 
 
 def _classification(plan: DeployPlan, resolved: Sequence[_ResolvedFile]) -> DeployClassification:
@@ -679,10 +811,15 @@ def _classification(plan: DeployPlan, resolved: Sequence[_ResolvedFile]) -> Depl
     merged = [entry.path for entry in resolved if entry.category is ResultCategory.MERGED]
     omitted = list(plan.omitted)
     omitted.extend(entry.path for entry in resolved if entry.category is ResultCategory.OMITTED)
+    unchanged = list(plan.unchanged)
+    unchanged.extend(entry.path for entry in resolved if entry.category is ResultCategory.UNCHANGED)
     return DeployClassification(
         deployed=deployed,
         merged=merged,
         omitted=list(dict.fromkeys(omitted)),
+        unchanged=list(dict.fromkeys(unchanged)),
+        not_installed=list(plan.not_installed),
+        missing_requested=list(plan.missing_requested),
     )
 
 
@@ -709,6 +846,24 @@ def _is_app_installed(
     return definition is not None and is_installed(
         definition, home=home, application_dirs=application_dirs, path=path
     )
+
+
+def _platform_warnings(manifest: Manifest) -> list[str]:
+    """Avisos no bloqueantes si el clon viene de otra arquitectura o macOS."""
+    warnings: list[str] = []
+    current_arch = platform.machine()
+    if manifest.arch and current_arch and manifest.arch != current_arch:
+        warnings.append(
+            f"el clon se creó en {manifest.arch} y este Mac es {current_arch}; "
+            "el despliegue puede requerir ajustes"
+        )
+    current_macos = platform.mac_ver()[0]
+    if manifest.macos_version and current_macos and manifest.macos_version != current_macos:
+        warnings.append(
+            f"el clon se creó con macOS {manifest.macos_version} y este Mac usa "
+            f"{current_macos}; el despliegue puede requerir ajustes"
+        )
+    return warnings
 
 
 def _ghostty_portability_notices(manifest: Manifest, clone_file: Path, home: Path) -> list[str]:

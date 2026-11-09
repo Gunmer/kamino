@@ -57,13 +57,10 @@ def create_snapshot(
     when = timestamp if timestamp is not None else datetime.now(UTC).strftime(_DATE_FORMAT)
     _check_timestamp(when)
 
-    definition = AppDefinition(
-        id=SNAPSHOT_APP_ID,
-        name=SNAPSHOT_APP_ID,
-        command=SNAPSHOT_APP_ID,
-        paths=_relative_targets(paths, root),
-    )
+    definition = _snapshot_definition(paths, root)
     plan = build_plan([definition], home=root)
+    if not plan.operations:
+        return None
     files = [
         FileEntry(path=op.path, sha256=op.sha256, size=op.size, mode=op.mode, link=op.link)
         for op in plan.operations
@@ -82,6 +79,24 @@ def create_snapshot(
     output = _output_path(directory, when)
     write_archive(output, manifest, source_root=root)
     return output
+
+
+def snapshot_files(paths: Sequence[Path], *, home: Path | None = None) -> int:
+    """Cuenta los archivos que protegería el holocrón, sin escribir nada."""
+    root = home if home is not None else Path.home()
+    if not paths:
+        return 0
+    definition = _snapshot_definition(paths, root)
+    return len(build_plan([definition], home=root).operations)
+
+
+def _snapshot_definition(paths: Sequence[Path], root: Path) -> AppDefinition:
+    return AppDefinition(
+        id=SNAPSHOT_APP_ID,
+        name=SNAPSHOT_APP_ID,
+        command=SNAPSHOT_APP_ID,
+        paths=_relative_targets(paths, root),
+    )
 
 
 def _default_dir(root: Path) -> Path:

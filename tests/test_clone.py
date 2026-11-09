@@ -11,6 +11,7 @@ from __future__ import annotations
 import plistlib
 import re
 import tarfile
+from datetime import datetime
 from pathlib import Path
 
 import pytest
@@ -296,7 +297,7 @@ def test_missing_paths_are_skipped_and_absent_from_manifest(tmp_path: Path) -> N
         metadata=_metadata(),
     )
 
-    assert result.plan.skipped == ["falta.toml"]
+    assert [item.path for item in result.plan.skipped] == ["falta.toml"]
     assert [entry.path for entry in result.manifest.apps[0].files] == ["existe.toml"]
 
 
@@ -421,14 +422,15 @@ def test_default_output_name_in_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         application_dirs=[],
         path=_fake_path(tmp_path, "foo"),
         metadata=_metadata(),
+        now=datetime(2026, 10, 28, 12, 0),
     )
 
-    expected = workdir / "kamino-mac-test-2026-10-28.tar.gz"
+    expected = workdir / "clone-20261028.tar.gz"
     assert result.output == expected
     assert expected.exists()
 
 
-def test_default_output_name_adds_suffix_if_it_exists(
+def test_default_output_existing_requires_force(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     workdir = tmp_path / "workdir"
@@ -443,15 +445,18 @@ def test_default_output_name_adds_suffix_if_it_exists(
         "application_dirs": [],
         "path": _fake_path(tmp_path, "foo"),
         "metadata": _metadata(),
+        "now": datetime(2026, 10, 28, 12, 0),
     }
 
     first = run_clone(**kwargs)
-    second = run_clone(**kwargs)
+    with pytest.raises(ArchiveError):
+        run_clone(**kwargs)
+    second = run_clone(**kwargs, force=True)
 
-    assert first.output == workdir / "kamino-mac-test-2026-10-28.tar.gz"
-    assert second.output == workdir / "kamino-mac-test-2026-10-28-1.tar.gz"
+    assert first.output == workdir / "clone-20261028.tar.gz"
+    assert second.output == first.output
     assert first.output is not None and first.output.exists()
-    assert second.output is not None and second.output.exists()
+    assert not list(workdir.glob(".*.tmp"))
 
 
 def test_explicit_output_is_never_overwritten(tmp_path: Path) -> None:
@@ -636,7 +641,7 @@ def test_git_shared_config_is_optional(tmp_path: Path) -> None:
         path=_fake_path(tmp_path, "git"),
         metadata=_metadata(),
     )
-    assert absent.plan.skipped == []
+    assert [item.path for item in absent.plan.skipped] == []
     assert ".config/git/config" not in [entry.path for entry in absent.manifest.apps[0].files]
 
     _write_config(home, ".config/git/config", b"[core]\n")
@@ -669,3 +674,148 @@ def test_allowed_config_with_embedded_secret_is_preserved(tmp_path: Path) -> Non
         member = tar.extractfile("apps/foo/.config/foo/config.toml")
         assert member is not None
         assert member.read() == content
+
+
+# --- cancelación y revalidación de --force ---
+
+
+def test_cancel_before_writing_leaves_no_archive(tmp_path: Path) -> None:
+    from kamino.clone import plan_clone, write_clone
+    from kamino.errors import OperationCancelled
+
+    home = tmp_path / "home"
+    _write_config(home, ".config/foo/config.toml")
+    planned = plan_clone(
+        home=home,
+        catalog=_catalog(_app()),
+        application_dirs=[],
+        path=_fake_path(tmp_path, "foo"),
+        output=tmp_path / "clone.tar.gz",
+    )
+
+    with pytest.raises(OperationCancelled):
+        write_clone(planned, home=home, cancelled=lambda: True)
+
+    assert not (tmp_path / "clone.tar.gz").exists()
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_cancel_during_write_keeps_previous_clone_and_removes_temp(tmp_path: Path) -> None:
+    from kamino.clone import plan_clone, write_clone
+    from kamino.errors import OperationCancelled
+
+    home = tmp_path / "home"
+    _write_config(home, ".config/foo/a.toml", b"a\n")
+    _write_config(home, ".config/foo/b.toml", b"b\n")
+    app = _app(paths=[".config/foo"])
+    output = tmp_path / "clone.tar.gz"
+    output.write_bytes(b"clon anterior")
+    planned = plan_clone(
+        home=home,
+        catalog=_catalog(app),
+        application_dirs=[],
+        path=_fake_path(tmp_path, "foo"),
+        output=output,
+    )
+    events: list[str] = []
+
+    def progress(event):
+        events.append(event.path or "")
+        planned_cancel["value"] = True
+
+    planned_cancel = {"value": False}
+
+    with pytest.raises(OperationCancelled):
+        write_clone(
+            planned,
+            home=home,
+            force=True,
+            progress=progress,
+            cancelled=lambda: planned_cancel["value"],
+        )
+
+    assert events == [".config/foo/a.toml"]
+    assert output.read_bytes() == b"clon anterior"
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_force_revalidates_destination_before_rename(tmp_path: Path, monkeypatch) -> None:
+    import kamino.archive as archive
+    from kamino.clone import plan_clone, write_clone
+    from kamino.errors import ArchiveError
+
+    home = tmp_path / "home"
+    _write_config(home, ".config/foo/config.toml")
+    output = tmp_path / "clone.tar.gz"
+    output.write_bytes(b"anterior")
+    planned = plan_clone(
+        home=home,
+        catalog=_catalog(_app()),
+        application_dirs=[],
+        path=_fake_path(tmp_path, "foo"),
+        output=output,
+    )
+    original = archive._add_file
+
+    def mutate(tar, safe, rel, arcname, entry):
+        output.write_bytes(b"cambiado durante la escritura")
+        return original(tar, safe, rel, arcname, entry)
+
+    monkeypatch.setattr(archive, "_add_file", mutate)
+
+    with pytest.raises(ArchiveError, match="cambió antes del renombrado"):
+        write_clone(planned, home=home, force=True)
+
+    assert output.read_bytes() == b"cambiado durante la escritura"
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
+def test_cancel_during_planning_writes_nothing(tmp_path: Path) -> None:
+    from kamino.clone import plan_clone
+    from kamino.errors import OperationCancelled
+    from kamino.progress import Phase
+
+    home = tmp_path / "home"
+    for index in range(5):
+        _write_config(home, f".config/foo/{index}.toml", b"x\n")
+    cancelled = {"value": False}
+
+    def progress(event):
+        if event.phase is Phase.PLANNING:
+            cancelled["value"] = True
+
+    with pytest.raises(OperationCancelled):
+        plan_clone(
+            home=home,
+            catalog=_catalog(_app(paths=[".config/foo"])),
+            application_dirs=[],
+            path=_fake_path(tmp_path, "foo"),
+            output=tmp_path / "clone.tar.gz",
+            progress=progress,
+            cancelled=lambda: cancelled["value"],
+        )
+
+    assert not (tmp_path / "clone.tar.gz").exists()
+
+
+def test_force_expected_state_mismatch_aborts_before_writing(tmp_path: Path) -> None:
+    from kamino.clone import plan_clone, write_clone
+    from kamino.errors import ArchiveError
+
+    home = tmp_path / "home"
+    _write_config(home, ".config/foo/config.toml")
+    output = tmp_path / "clone.tar.gz"
+    output.write_bytes(b"anterior")
+    planned = plan_clone(
+        home=home,
+        catalog=_catalog(_app()),
+        application_dirs=[],
+        path=_fake_path(tmp_path, "foo"),
+        output=output,
+    )
+
+    with pytest.raises(ArchiveError, match="cambió antes de escribir"):
+        write_clone(planned, home=home, force=True, expected_state=(1, 2, 3))
+
+    assert output.read_bytes() == b"anterior"
+    assert not list(tmp_path.glob(".*.tmp"))

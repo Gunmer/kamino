@@ -466,7 +466,7 @@ def validate_merge(
     if local_error is not None or clone_error is not None:
         return MergeValidation(
             _MergeStatus.WARNING,
-            "uno de los originales ya era inválido; se permite aplicar la mezcla",
+            "uno de los originales ya era inválido; se permite aplicar el híbrido",
         )
     merged_error = parser(merged_text)
     if merged_error is not None:

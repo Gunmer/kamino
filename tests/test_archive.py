@@ -519,3 +519,63 @@ def test_app_entry_and_manifest_models() -> None:
     manifest = _manifest([app.model_dump()])
     assert manifest.format_version == FORMAT_VERSION
     assert manifest.apps[0].id == "git"
+
+
+# --- manifiesto endurecido (D0) ---
+
+
+def _write_tar(path: Path, members: list[tuple[str, bytes | None, bytes]]) -> None:
+    with tarfile.open(path, "w:gz") as tar:
+        for name, link, data in members:
+            info = tarfile.TarInfo(name)
+            if link is not None:
+                info.type = tarfile.SYMTYPE
+                info.linkname = link.decode()
+                tar.addfile(info)
+            else:
+                info.size = len(data)
+                tar.addfile(info, io.BytesIO(data))
+
+
+def test_read_manifest_wraps_corrupt_archives(tmp_path: Path) -> None:
+    broken = tmp_path / "broken.tar.gz"
+    broken.write_bytes(b"no es un tar.gz")
+
+    with pytest.raises(ArchiveError, match="no se pudo leer"):
+        read_manifest(broken)
+
+
+def test_read_manifest_rejects_duplicate_manifest(tmp_path: Path) -> None:
+    clone = tmp_path / "dup.tar.gz"
+    manifest = _manifest([]).model_dump_json().encode()
+    _write_tar(clone, [("manifest.json", None, manifest), ("manifest.json", None, manifest)])
+
+    with pytest.raises(ArchiveError, match="más de un"):
+        read_manifest(clone)
+
+
+def test_read_manifest_rejects_non_regular_manifest(tmp_path: Path) -> None:
+    clone = tmp_path / "link.tar.gz"
+    _write_tar(clone, [("manifest.json", b"otro", b"")])
+
+    with pytest.raises(ArchiveError, match="archivo regular"):
+        read_manifest(clone)
+
+
+def test_read_manifest_rejects_giant_manifest(tmp_path: Path) -> None:
+    from kamino.archive import MAX_MANIFEST_BYTES
+
+    clone = tmp_path / "giant.tar.gz"
+    _write_tar(clone, [("manifest.json", None, b" " * (MAX_MANIFEST_BYTES + 1))])
+
+    with pytest.raises(ArchiveError, match="supera el tope"):
+        read_manifest(clone)
+
+
+def test_read_manifest_newer_format_delta(tmp_path: Path) -> None:
+    clone = tmp_path / "newer.tar.gz"
+    raw = _manifest([], format_version=FORMAT_VERSION + 1).model_dump_json().encode()
+    _write_tar(clone, [("manifest.json", None, raw)])
+
+    with pytest.raises(VersionError):
+        read_manifest(clone)

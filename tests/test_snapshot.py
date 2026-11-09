@@ -203,10 +203,8 @@ def test_intermediate_symlink_is_not_read_or_snapshotted(tmp_path: Path) -> None
         timestamp=TIMESTAMP,
     )
 
-    assert snapshot is not None
-    manifest = read_manifest(snapshot)
-    (app,) = manifest.apps
-    assert app.files == []
+    assert snapshot is None
+    assert not snapshots.exists()
 
 
 # --- validación de entradas ---

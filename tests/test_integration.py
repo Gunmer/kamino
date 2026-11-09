@@ -322,7 +322,7 @@ def test_cli_dry_run_prints_diff_without_writing(tmp_path: Path) -> None:
     result = runner.invoke(cli.app, ["deploy", str(clone), "--dry-run"], env=env)
 
     assert result.exit_code == 0, result.output
-    assert "--- local/.config/foo/config.conf" in result.output
+    assert "--- original/.config/foo/config.conf" in result.output
     assert "+++ clon/.config/foo/config.conf" in result.output
     assert "LINE ONE" in result.output
     assert (target / ".config/foo/config.conf").read_text() == local

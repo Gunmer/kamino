@@ -1,5 +1,5 @@
-"""Textual user interface for the interactive deploy."""
+"""Interfaz interactiva de Kamino."""
 
-from kamino.tui.app import KaminoDeployApp, run_deploy_tui
+from kamino.tui.app import KaminoApp, run_app
 
-__all__ = ["KaminoDeployApp", "run_deploy_tui"]
+__all__ = ["KaminoApp", "run_app"]
