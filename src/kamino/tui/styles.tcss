@@ -1,4 +1,6 @@
 Screen {
+    width: 100%;
+    height: 100%;
     background: $surface;
 }
 
@@ -7,22 +9,108 @@ Screen {
     text-style: bold;
 }
 
+#step {
+    padding: 0 2;
+    color: $primary;
+    text-style: bold;
+}
+
+#wordmark {
+    color: $primary;
+    text-style: bold;
+    padding: 1 2 0 2;
+}
+
+#subtitle,
+#phrase {
+    padding: 0 2;
+    color: $text;
+    text-style: italic;
+}
+
+#capsules {
+    padding: 1 2;
+    color: $warning;
+}
+
+#menu {
+    padding: 1 2;
+    width: 42;
+    height: auto;
+}
+
+#menu-options {
+    width: 38;
+    height: 4;
+    background: transparent;
+}
+
+#last-mission {
+    padding: 0 2;
+    color: $success;
+}
+
+#menu-footer {
+    padding: 0 2;
+    color: $success;
+}
+
 #counts,
 #status,
 #warning,
+#secrets,
 #snapshot,
 #snapshot-dir,
+#snapshot-label,
 #help-body,
-#error {
+#error-what,
+#error-safety,
+#error-action,
+#error-detail,
+#summary,
+#skipped,
+#files,
+#not-detected,
+#not-installed,
+#warnings,
+#protected,
+#open-apps,
+#undo,
+#exit-line,
+#block-header,
+#block-footer,
+#detail-error,
+#hint,
+#force-note,
+#defaults,
+#dialog-body,
+#small-title,
+#small-body,
+#result,
+#state {
     padding: 0 2;
 }
 
 #status {
     color: $warning;
+    min-height: 1;
 }
 
-#error {
-    color: $error;
+#warning,
+#secrets,
+#warnings,
+#detail-error {
+    color: $warning;
+}
+
+#not-detected,
+#not-installed {
+    opacity: 60%;
+}
+
+#skipped,
+#files {
+    color: $text;
 }
 
 #hunk-error {
@@ -31,26 +119,69 @@ Screen {
     padding: 0 2;
 }
 
-DataTable {
-    height: 1fr;
+#result {
+    color: $success;
+    text-style: bold;
 }
 
-ListView {
+#protected,
+#snapshot,
+#snapshot-dir,
+#undo {
+    color: $success;
+}
+
+#block-header {
+    color: $primary;
+    text-style: bold;
+}
+
+#block-body {
+    width: auto;
+}
+
+#block-scroll {
     height: 1fr;
     border: round $primary;
     margin: 0 2;
 }
 
-#buttons,
-#actions {
+DataTable {
+    height: 1fr;
+}
+
+#apps,
+#conflicts {
+    margin: 0 2;
+}
+
+#dialog-options,
+#warning-options,
+#confirm-options {
+    margin: 0 2;
     height: auto;
+    max-height: 6;
+}
+
+ShortcutBar {
+    dock: bottom;
+    width: 100%;
+    height: auto;
+    max-height: 3;
+    padding: 0 2;
+    color: $text-muted;
+    background: $panel;
+}
+
+ProgressBar {
+    padding: 0 2;
+}
+
+#size-guard {
+    dock: top;
+    width: 100%;
+    height: 100%;
     padding: 1 2;
-}
-
-Button {
-    margin-right: 1;
-}
-
-.action-row {
-    height: auto;
+    background: $surface;
+    color: $warning;
 }

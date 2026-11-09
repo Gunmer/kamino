@@ -1,182 +1,140 @@
-"""Interfaz con el usuario: selección interactiva, tablas y progreso.
-
-Usa `questionary` y `rich`. Es la única capa que imprime o pregunta;
-el resto del núcleo no habla con el usuario (diseño técnico §1).
-"""
+"""Salida no interactiva: avisos, resúmenes y diffs con Rich."""
 
 from __future__ import annotations
 
 import difflib
-from collections.abc import Sequence
-from typing import TYPE_CHECKING
 
-import questionary
 from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-if TYPE_CHECKING:
-    from kamino.backup import BackupResult
-    from kamino.conflicts import Conflict
-    from kamino.restore import RestoreResult
-    from kamino.update import UpdateResult
+from kamino import texts
+from kamino.update import UpdateOutcome
 
 _console = Console()
 
-#: Texto del aviso previo al respaldo. No se interpola ningún valor de archivo.
-PRIVACY_WARNING = (
-    "aviso: el archivo de respaldo no está cifrado y las configuraciones incluidas "
-    "pueden contener secretos. Los archivos de credenciales conocidos se excluyen, "
-    "pero los ajustes permitidos se conservan íntegros."
-)
-
-
-#: Tripletas ``(id, title, description)`` para el menú de comandos.
-CommandChoice = tuple[str, str, str]
-
 
 def print_privacy_warning() -> None:
-    """Muestra el aviso de contenido sensible antes de respaldar."""
-    _console.print(f"[yellow]{PRIVACY_WARNING}[/yellow]")
+    """Muestra el aviso de contenido sensible antes de clonar."""
+    _console.print(f"[yellow]{texts.PRIVACY_WARNING}[/yellow]")
 
 
 def print_update_start() -> None:
     """Muestra que comienza la comprobación de la última versión."""
-    _console.print("Comprobando la última versión publicada...")
+    _console.print(texts.UPDATE_CHECKING)
 
 
-def print_update_result(result: UpdateResult) -> None:
+def print_update_result(result) -> None:
     """Imprime el resultado de la actualización o de la consulta."""
-    if result.updated:
-        _console.print(f"kamino {result.current_version} -> {result.latest_version}")
-        _console.print(f"Actualizado: {result.target}")
+    if result.outcome is UpdateOutcome.UPDATED:
+        _console.print(
+            texts.UPDATE_UPDATED.format(
+                current=result.current_version,
+                latest=result.latest_version,
+                path=result.target,
+            )
+        )
+        _console.print(texts.UPDATE_RESTART)
         return
-    if result.current_version == result.latest_version:
-        _console.print(f"kamino {result.current_version} ya es la última versión disponible.")
+    if result.outcome is UpdateOutcome.NEWER:
+        _console.print(
+            texts.UPDATE_NEWER.format(current=result.current_version, latest=result.latest_version)
+        )
         return
-    _console.print(
-        f"kamino {result.current_version} es más reciente que la última publicada "
-        f"({result.latest_version}); no se modifica."
-    )
+    _console.print(texts.UPDATE_UP_TO_DATE.format(current=result.current_version))
 
 
-def select_command(choices: Sequence[CommandChoice]) -> str | None:
-    """Selección simple de un comando.
-
-    :param choices: Tripletas ``(id, title, description)``.
-    :returns: El ``id`` elegido o ``None`` si se cancela.
-    """
-    options = [
-        questionary.Choice(title=f"{title}: {description}", value=command_id)
-        for command_id, title, description in choices
-    ]
-    try:
-        return questionary.select("¿Qué quieres hacer?", choices=options).ask()
-    except (KeyboardInterrupt, EOFError):
-        return None
-
-
-def ask_path(prompt: str) -> str | None:
-    """Pide una ruta de archivo; devuelve `None` si el usuario cancela."""
-    try:
-        return questionary.text(prompt).ask()
-    except (KeyboardInterrupt, EOFError):
-        return None
-
-
-def select_apps(choices: Sequence[tuple[str, str]]) -> list[str] | None:
-    """Selección múltiple interactiva; devuelve `None` si el usuario cancela.
-
-    `choices` son pares `(id, nombre)`. Con lista vacía devuelve `[]`. La
-    decisión sobre entorno sin TTY la toma la capa CLI, no esta función.
-    """
-    if not choices:
-        return []
-    options = [
-        questionary.Choice(title=f"{name} ({app_id})", value=app_id) for app_id, name in choices
-    ]
-    try:
-        selected = questionary.checkbox("Selecciona las apps:", choices=options).ask()
-    except (KeyboardInterrupt, EOFError):
-        return None
-    return selected
-
-
-def print_backup_summary(result: BackupResult, *, verbose: bool = False) -> None:
-    """Imprime el resumen del respaldo, o el plan en modo dry-run."""
+def print_clone_summary(result, *, verbose: bool = False) -> None:
+    """Imprime el resumen de la clonación, o el plan en modo dry-run."""
     if result.dry_run:
-        _console.print("[bold]Plan de respaldo (dry-run)[/bold]")
-        for op in result.plan.operations:
-            _console.print(f"  + {op.path}")
+        _console.print(f"[bold]{texts.CLONE_DRY_RUN_TITLE}[/bold]")
+        for operation in result.plan.operations:
+            _console.print(f"  + {operation.path}")
         for skipped in result.plan.skipped:
-            _console.print(f"  ~ {skipped} (omitido)")
-        for notice in getattr(result.plan, "notices", []):
+            _console.print(f"  ~ {skipped.path} ({skipped.reason})")
+        for notice in result.plan.notices:
             _console.print(f"  ! {notice}")
+        if result.plan_output is not None:
+            _console.print(texts.CLONE_DESTINATION.format(path=result.plan_output))
         return
-    table = Table(title="Respaldo completado")
-    table.add_column("App", style="bold")
-    table.add_column("Archivos", justify="right")
+    table = Table(title=texts.CLONE_SUMMARY_TITLE)
+    table.add_column(texts.CLONE_APPS_LABEL, style="bold")
+    table.add_column(texts.CLONE_FILES_LABEL, justify="right")
     for app in result.manifest.apps:
         table.add_row(app.name, str(len(app.files)))
     _console.print(table)
-    _console.print(f"Archivo: {result.output}")
+    _console.print(texts.CLONE_DESTINATION.format(path=result.output))
     if verbose:
-        _console.print("[bold]Archivos respaldados[/bold]")
-        for op in result.plan.operations:
-            _console.print(f"  + {op.path}")
+        _console.print(f"[bold]{texts.CLONE_INCLUDED_TITLE}[/bold]")
+        for operation in result.plan.operations:
+            _console.print(f"  + {operation.path}")
         for skipped in result.plan.skipped:
-            _console.print(f"  ~ {skipped} (omitido)")
-        for notice in getattr(result.plan, "notices", []):
+            _console.print(f"  ~ {skipped.path} ({skipped.reason})")
+        for notice in result.plan.notices:
             _console.print(f"  ! {notice}")
 
 
-def print_restore_summary(result: RestoreResult, *, verbose: bool = False) -> None:
-    """Print the restore summary, or the plan and diffs in dry-run mode."""
+def print_deploy_summary(result, *, verbose: bool = False) -> None:
+    """Print the deploy summary, or the plan and diffs in dry-run mode."""
     if result.dry_run:
-        _console.print("[bold]Plan de restauración (dry-run)[/bold]")
+        _console.print(f"[bold]{texts.TITLE_DEPLOY_DRY_RUN}[/bold]")
         for entry in result.plan.entries:
             _console.print(f"  [{entry.status}] {entry.path}")
         for conflict in result.plan.conflicts:
             _print_conflict_diff(conflict)
-        _console.print(f"Omitidas: {len(result.omitted)}")
-        for notice in getattr(result.plan, "notices", []):
+        _console.print(texts.DEPLOY_OMITTED.format(count=len(result.omitted)))
+        _console.print(texts.DEPLOY_UNCHANGED.format(count=len(result.unchanged)))
+        _console.print(texts.NOT_INSTALLED + f": {len(result.not_installed)}")
+        for notice in result.plan.notices:
             _console.print(f"  ! {notice}")
         return
-    _console.print(f"Restauradas: {len(result.restored)}")
-    _console.print(f"Mezcladas: {len(result.merged)}")
-    _console.print(f"Omitidas: {len(result.omitted)}")
+    _console.print(texts.DEPLOY_DEPLOYED.format(count=len(result.deployed)))
+    _console.print(texts.DEPLOY_HYBRIDS.format(count=len(result.merged)))
+    _console.print(texts.DEPLOY_OMITTED.format(count=len(result.omitted)))
+    _console.print(texts.DEPLOY_UNCHANGED.format(count=len(result.unchanged)))
+    _console.print(texts.NOT_INSTALLED + f": {len(result.not_installed)}")
     if result.snapshot is not None:
-        _console.print(f"Snapshot: {result.snapshot}")
-    for notice in getattr(result.plan, "notices", []):
+        _console.print(texts.DEPLOY_SNAPSHOT_PATH.format(path=result.snapshot))
+        _console.print(texts.DEPLOY_UNDO.format(path=result.snapshot))
+    else:
+        _console.print(texts.DEPLOY_NO_SNAPSHOT)
+    for notice in result.plan.notices:
         _console.print(f"[yellow]! {notice}[/yellow]")
     if verbose:
-        _console.print("[bold]Detalle[/bold]")
-        for path in result.restored:
+        _console.print(f"[bold]{texts.TITLE_DETAIL}[/bold]")
+        for path in result.deployed:
             _console.print(f"  + {path}")
         for path in result.merged:
             _console.print(f"  * {path}")
         for path in result.omitted:
             _console.print(f"  ~ {path}")
+        for path in result.unchanged:
+            _console.print(f"  = {path}")
 
 
-def _print_conflict_diff(conflict: Conflict) -> None:
+def _print_conflict_diff(conflict) -> None:
     """Write one conflict diff or a whole-file note to stdout."""
     if conflict.kind.value == "text":
-        if conflict.local_text is None or conflict.backup_text is None:
+        if conflict.local_text is None or conflict.clone_text is None:
             return
         diff = difflib.unified_diff(
             conflict.local_text.splitlines(),
-            conflict.backup_text.splitlines(),
-            fromfile=f"local/{conflict.path}",
-            tofile=f"respaldo/{conflict.path}",
+            conflict.clone_text.splitlines(),
+            fromfile=f"{texts.ORIGINAL}/{conflict.path}",
+            tofile=f"clon/{conflict.path}",
             lineterm="",
         )
         _console.print(Text("\n".join(diff)), markup=False, highlight=False)
         return
     if conflict.kind.value == "symlink":
         _console.print(
-            f"  ! {conflict.path}: enlace local -> {conflict.local_link}, "
-            f"respaldo -> {conflict.backup_link}"
+            "  ! "
+            + texts.CONFLICT_SYMLINK.format(
+                path=conflict.path,
+                original=texts.ORIGINAL,
+                local=conflict.local_link,
+                clone=conflict.clone_link,
+            )
         )
         return
     reason = "binario" if conflict.kind.value == "binary" else "grande (>5 MB)"

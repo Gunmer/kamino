@@ -1,12 +1,12 @@
 # kamino
 
-CLI para macOS que respalda las configuraciones de las aplicaciones elegidas en **un único
-archivo portable** (`tar.gz` con `manifest.json`) y las restaura después, aplicando solo lo que
+CLI para macOS que clona las configuraciones de las aplicaciones elegidas en **un único
+archivo portable** (`tar.gz` con `manifest.json`) y las despliega después, aplicando solo lo que
 corresponda a las apps que estén instaladas.
 
 ## Estado
 
-MVP v1 implementado: `backup` y `restore` funcionales con catálogo declarativo, detección de
+MVP v1 implementado: `clone` y `deploy` funcionales con catálogo declarativo, detección de
 apps, archivado `tar.gz` con manifiesto y checksums, CLI interactiva y revisión de conflictos por
 líneas dentro de cada bloque en una TUI de `textual`.
 
@@ -73,7 +73,7 @@ kamino update
 
 El comando consulta la última release, compara su versión con `kamino --version` y, si hay una
 más nueva, descarga `kamino-arm64`, verifica su tamaño y SHA-256 y reemplaza el binario en
-ejecución de forma atómica. No requiere `sudo` y no toca configuraciones, respaldos ni
+ejecución de forma atómica. No requiere `sudo` y no toca configuraciones, clones ni
 instantáneas. Si ya estás en la última versión, o tienes una más reciente, no descarga ni escribe
 nada.
 
@@ -130,7 +130,7 @@ El versionado sigue [SemVer](https://semver.org/) y se automatiza con
    (PyInstaller `onefile`, Apple Silicon), incluido el catálogo de aplicaciones. No se distribuye
    actualmente un binario Intel. La release permanece en borrador hasta subir el binario.
 
-Por ejemplo, desde `0.1.0`, `fix: corrige la restauración` produce `0.1.1`, mientras que
+Por ejemplo, desde `0.1.0`, `fix: corrige el despliegue` produce `0.1.1`, mientras que
 `feat: añade una aplicación` o `feat!: cambia el formato` produce `0.2.0`. Un merge que solo
 contenga `ci: ajusta el workflow` no publica nada.
 
@@ -158,91 +158,141 @@ El Homebrew tap se publicará tras la primera versión etiquetada.
 ## Uso
 
 ```bash
-kamino                       # TUI: lista interactiva con los comandos disponibles
+kamino                       # TUI: menú Clonar, Desplegar, Actualizar y Abandonar
 kamino --help
-kamino backup --apps vscode,iterm2,git
-kamino restore kamino-<equipo>-<fecha>.tar.gz
-kamino update                # actualiza el binario a la última release
+kamino clone                 # TUI: elige apps, destino y revisa el plan
+kamino deploy clone-<aaaammdd>.tar.gz   # TUI: apps, conflictos y confirmación
+kamino update                # TUI: consulta, descarga y reemplazo
 ```
 
-`-h` es alias de `--help` en el nivel principal y en `backup`, `restore` y `update`, y `-V` es
+`-h` es alias de `--help` en el nivel principal y en `clone`, `deploy` y `update`, y `-V` es
 alias de `--version`:
 
 ```bash
 kamino -h
-kamino backup -h
-kamino restore -h
+kamino clone -h
+kamino deploy -h
 kamino update -h
 kamino -V
 ```
 
-En `backup`, `-a` equivale a `--apps`, `-o` a `--output`, `-n` a `--dry-run` y `-v` a `--verbose`:
+En `clone`, `-a` equivale a `--apps`, `-o` a `--output`, `-n` a `--dry-run`, `-v` a `--verbose`
+y `-f` a `--force`:
 
 ```bash
-kamino backup -a vscode,iterm2,git -o respaldo.tar.gz -v
-kamino backup -a vscode,iterm2,git -o respaldo.tar.gz -n   # simulación: no crea el archivo
+kamino clone -a vscode,iterm2,git -o clon.tar.gz -v
+kamino clone -a vscode,iterm2,git -o clon.tar.gz -n   # simulación: no crea el archivo
+kamino clone -f                                      # reemplaza clone-<aaaammdd>.tar.gz
 ```
 
-En `restore`, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes` y `-v` a `--verbose`; el archivo de respaldo sigue siendo un argumento posicional:
+Sin `--output`, el nombre por defecto es `clone-<aaaammdd>.tar.gz` con la fecha local en el
+directorio actual. Sin `--force`, un clon existente es un error y no se sobrescribe; con `--force`
+se reemplaza de forma atómica. `--dry-run --force` no modifica nada.
+
+Con terminal interactiva, `clone` abre la TUI si no se definió `KAMINO_PLAIN`. `--apps` omite C1,
+`--output` omite C2 y ambos juntos pasan directamente a la revisión C3. Un valor inválido abre la
+pantalla correspondiente precargada con el error. `--dry-run` termina en C3 sin acción de clonar.
+
+En `deploy`, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes` y `-v` a `--verbose`; el archivo del clon sigue siendo un argumento posicional:
 
 ```bash
-kamino restore respaldo.tar.gz               # TUI: elige apps y revisa conflictos
-kamino restore respaldo.tar.gz -a git,zsh    # sin selección de apps; revisa conflictos
-kamino restore respaldo.tar.gz -y -v         # aplica todo sin preguntar
-kamino restore respaldo.tar.gz -n            # simulación: imprime diffs, no escribe
+kamino deploy clone-20261109.tar.gz            # TUI: apps, conflictos, confirmación
+kamino deploy clone-20261109.tar.gz -a git,zsh # sin selección de apps
+kamino deploy clone-20261109.tar.gz -y -v      # aplica todo sin preguntar
+kamino deploy clone-20261109.tar.gz -n         # simulación: imprime diffs, no escribe
 ```
 
-Sin terminal interactiva, una restauración real requiere `-y` o `--yes`; la simulación con `-n`
-no lo requiere. `-a` valida los ids contra las apps restaurables: los desconocidos o no instalados
-se avisan y cuentan como omitidos (código de salida 3).
+Sin terminal interactiva, un despliegue real requiere `-y` o `--yes`; la simulación con `-n`
+no lo requiere. `deploy -n` y `deploy --yes` no abren la TUI aunque haya terminal. `-a` valida los
+ids contra las apps desplegables: los desconocidos o no instalados se avisan y cuentan como
+omitidos (código de salida 3). Las apps del manifiesto no instaladas se informan como “sin base en
+este Mac” y no alteran el código.
 
-### Conflictos en la restauración
+### Glosario visible
 
-- En una terminal interactiva, `restore` abre una TUI. La primera pantalla elige apps (ninguna
-  marcada por defecto); después aparece solo la tabla de archivos en conflicto, con los conteos de
-  nuevos, idénticos y no soportados.
-- Cada conflicto de texto se revisa por líneas dentro de cada bloque: la cabecera y el contexto no
-  son decidibles y cada línea cambiada empieza en la versión del respaldo. `Espacio` o `Enter`
-  alterna la línea resaltada, `A`/`L` toman todo el archivo del respaldo o del local, y `Shift+A`/
-  `Shift+L` solo el bloque actual; `n`/`p` saltan entre bloques. La composición puede mezclar líneas
-  de un mismo bloque y no se muestra una vista previa completa del archivo.
-- Si una línea sin salto final queda antes de otra línea elegida, la composición le añade el final
-  de línea dominante local; solo la última línea puede conservar la ausencia de salto final.
-- Los binarios, los textos de más de 5 MB y los enlaces con enlace se resuelven como archivo entero:
-  aplicar el respaldo u omitir.
-- Antes de aplicar una mezcla se valida TOML, JSON, INI y plist con la biblioteca estándar. Si ambos
-  originales eran válidos y la mezcla no, se bloquea y se vuelve al detalle; si algún original ya
-  era inválido, se avisa y se permite aplicar. YAML y shell no se validan.
-- La confirmación final muestra los conteos de restaurados, mezclados y omitidos y el directorio
-  del snapshot; hay que confirmar explícitamente antes de escribir. Volver o cancelar no escribe ni
-  crea snapshot. El resumen final incluye la ruta del snapshot creado.
-- Si un destino cambia mientras la revisión está abierta, se aborta toda la operación antes de
-  escribir y no se crea snapshot.
-- `--yes` no abre la TUI y resuelve todos los conflictos aplicando el respaldo. `--dry-run` tampoco
-  abre la TUI: usa `--apps` o todas las apps instaladas y vuelca los diffs a la salida estándar.
+| Nombre visible | Significado |
+| --- | --- |
+| original | configuración actual del Mac; antes “local” |
+| holocrón de seguridad | copia previa a desplegar; antes “snapshot” |
+| híbrido | archivo compuesto con líneas del original y del clon |
+| clon perfecto | archivo idéntico al clon; no se escribe ni cuenta como omitido |
+| sin base en este Mac | app del manifiesto que no está instalada aquí |
+| perturbación en la Fuerza | el destino cambió durante la revisión |
+| clon con mutaciones | la integridad del clon no coincide con el manifiesto |
+| registro de los kaminoanos | manifiesto `manifest.json` del clon |
+
+Los identificadores internos (`LocalFile`, `RowDecision.LOCAL`, `snapshot`, `SNAPSHOT_APP_ID`)
+no cambian: el formato del archivo y los holocrones antiguos siguen siendo compatibles.
+
+### La TUI
+
+Una sola app de Textual reúne menú, clonación, despliegue y actualización. El menú muestra el
+wordmark KAMINO, ocho cápsulas con la última marcada como el original, una frase fija por sesión y
+las opciones Clonar (`c`), Desplegar (`d`), Actualizar (`u`) y Abandonar Kamino (`q`). Las flechas
+mueven la selección y `Enter` acepta la opción seleccionada. `q` solo sale desde el menú; Escape
+nunca cierra. La línea de última misión aparece tras el primer flujo de la sesión y no se persiste.
+
+Todas las pantallas se manejan con teclado y muestran al pie una leyenda de las teclas activas, sin
+botoneras inferiores: `Esc` retrocede, `Enter` continúa o acepta y las flechas mueven el foco. En
+C1, `Espacio` marca o desmarca una app sin perder el cursor ni el foco.
+
+Cada flujo muestra el paso actual y el total visible. Los argumentos reducen el total cuando omiten
+pantallas. La ayuda contextual se abre con `?` y, en campos de texto, también con `F1`. Todo error
+usa cuatro partes —qué pasó, estado de seguridad, qué hacer y acciones— con el detalle plegado
+(`t`) y copiable (`c`). Por debajo de 80×24 aparece un aviso que conserva el estado y bloquea la
+salida; al redimensionar de vuelta se recupera la pantalla.
+
+`Ctrl+C` cancela antes del punto de no retorno: en clonar, antes de renombrar el temporal; en
+desplegar, antes de crear el holocrón; en actualizar, antes de `os.replace`. Después de ese punto
+se ignora con aviso. La barra de progreso avanza por archivos y `Ctrl+C` elimina el temporal.
 
 La TUI usa la paleta ANSI del terminal: el tema por defecto es `ansi-dark` y `TEXTUAL_THEME`
-permite elegir otro tema válido de Textual, por ejemplo `ansi-light`. Así el fondo, el texto, los
-bordes y los botones siguen el esquema de colores de la terminal.
+permite elegir otro tema válido de Textual, por ejemplo `ansi-light`. Con `NO_COLOR` se muestra en
+monocromo y cada estado conserva icono y palabra. El wordmark se oculta sin UTF-8 o con
+`KAMINO_NO_LOGO`. `KAMINO_PLAIN` fuerza la salida de texto para scripting.
 
-Al ejecutar `kamino` sin comandos (en una terminal interactiva) se muestra una lista con los
-comandos disponibles (`backup`, `restore` y `update`) para elegir uno. Sin terminal, se muestra la
-ayuda.
+### Conflictos en el despliegue
+
+- D0 valida solo el manifiesto: rechaza un `tar.gz` dañado, con más de un `manifest.json`, con un
+  manifiesto de más de 4 MiB o con un formato más nuevo. Los avisos de arquitectura o macOS no
+  bloquean. La integridad completa se comprueba en D1 antes de extraer.
+- D1 lista solo las apps instaladas con su número de archivos; las no instaladas aparecen aparte
+  como “sin base en este Mac”. Ninguna está marcada por defecto y `--apps` omite esta pantalla.
+- D2 lista solo los conflictos y muestra los conteos de nuevos, clones perfectos, no soportados y
+  avisos. `r` revisa, `c` aplica el clon y `o` conserva el original; `C`/`O` actúan sobre todos.
+  Confirmar queda bloqueado hasta que todos tengan decisión. Sin conflictos se pasa directo a D4.
+- D3 muestra un bloque a la vez: el contexto se ve una vez y cada línea cambiada ofrece la versión
+  del original y la del clon. `●` marca lo que irá al archivo final y `○` lo que no. `c`/`o` actúan
+  sobre el bloque, `C`/`O` sobre todo el archivo y `Tab`/`Mayús+Tab` cambian de bloque. `Esc` vuelve
+  y valida el híbrido.
+- Antes de aplicar un híbrido se validan TOML, JSON, INI y plist con la biblioteca estándar. Si
+  ambos originales eran válidos y el híbrido no, se bloquea; si alguno ya era inválido, se avisa y
+  se permite aplicar. YAML y shell no se validan.
+- D4 muestra los conteos antes de escribir, el número de archivos protegidos y el directorio del
+  holocrón. Retirada está preseleccionada; las flechas recorren las acciones, `Enter` acepta la
+  elegida y no hay atajo de una tecla para desplegar. Volver o cancelar no escribe ni crea holocrón.
+  Si no hay destinos existentes, no se crea un holocrón vacío.
+- D5 distingue desplegados, híbridos, omitidos y sin cambios, muestra la ruta del holocrón y la
+  orden `kamino deploy <ruta>` para deshacer. Solo los conservados en el original, los no soportados
+  y los `--apps` no cumplidos producen código 3. Un fallo después del holocrón se presenta como
+  “Despliegue incompleto” con los aplicados, el fallido y el holocrón, y termina con código 1.
+- `--yes` no abre la TUI y resuelve todos los conflictos aplicando el clon. `--dry-run` tampoco
+  abre la TUI: usa `--apps` o todas las apps instaladas y vuelca los diffs a la salida estándar.
 
 ## Privacidad y aviso previo
 
-- Los respaldos (`tar.gz`) y las instantáneas **no están cifrados**. Trátalos como datos
+- Los clones (`tar.gz`) y los holocrones de seguridad **no están cifrados**. Trátalos como datos
   sensibles y guárdalos en una ubicación protegida.
-- Antes de `backup`, incluso sin terminal interactiva y con `--dry-run`, la CLI muestra un aviso
+- Antes de `clone`, incluso sin terminal interactiva y con `--dry-run`, la CLI muestra un aviso
   en español: los ajustes incluidos pueden contener secretos incrustados. No se pide confirmación
   adicional ni se imprimen valores.
-- Los respaldos nuevos excluyen archivos de credenciales conocidos (`.env`, `.env.*`, `auth.json`,
+- Los clones nuevos excluyen archivos de credenciales conocidos (`.env`, `.env.*`, `auth.json`,
   `.credentials.json`, `secrets.yaml`, `secrets.yml` y `hosts.yml` de GitHub CLI), historiales,
   sesiones, cachés, registros y metadatos `.git`. El filtro se aplica antes de leer el contenido.
 - Los archivos de configuración permitidos se conservan byte a byte, aunque contengan claves
   incrustadas: Kamino no redacta ni modifica ajustes.
-- Las exclusiones rigen la creación de respaldos nuevos. Al restaurar un respaldo anterior, sus
-  archivos se aplican igual y la instantánea previa conserva completos los destinos que cambian,
+- Las exclusiones rigen la creación de clones nuevos. Al desplegar un clon anterior, sus
+  archivos se aplican igual y el holocrón previo conserva completos los destinos que cambian,
   aunque ahora estén excluidos.
 
 ## Catálogo de aplicaciones
@@ -258,8 +308,8 @@ el identificador de la aplicación; nunca ejecuta la herramienta.
 Ejemplo:
 
 ```bash
-kamino backup --apps opencode,claude-code,herdr,ghostty,oh-my-zsh -o respaldo.tar.gz
-kamino restore respaldo.tar.gz --yes
+kamino clone --apps opencode,claude-code,herdr,ghostty,oh-my-zsh -o clon.tar.gz
+kamino deploy clon.tar.gz --yes
 ```
 
 Límites del catálogo:
@@ -307,9 +357,9 @@ plugins.
 - Los temas integrados de Ghostty no se copian. Las referencias a credenciales conocidas o a rutas
   fuera del HOME se omiten antes de leer su contenido.
 - Los atajos globales viven en las configuraciones incluidas. Si un ajuste conserva una ruta
-  absoluta de otro HOME, la restauración avisa sin reescribir el archivo: puede requerir un ajuste
+  absoluta de otro HOME, el despliegue avisa sin reescribir el archivo: puede requerir un ajuste
   manual.
-- Tras restaurar en otro equipo puede ser necesario volver a conceder permisos de accesibilidad de
+- Tras desplegar en otro equipo puede ser necesario volver a conceder permisos de accesibilidad de
   macOS a Ghostty para los atajos globales.
 
 ## Desarrollo
@@ -324,14 +374,17 @@ uv run ruff format .   # formato
 
 ```
 src/kamino/
-├── cli.py            # comandos backup, restore y update, y menú TUI sin argumentos
-├── ui.py             # selección interactiva, menú de comandos, tablas, progreso
-├── backup.py         # caso de uso: plan y ejecución del respaldo
-├── restore.py        # caso de uso: sesión, plan y ejecución de la restauración
-├── update.py         # actualización del binario desde GitHub
-├── conflicts.py      # diff por líneas, composición y validación de mezclas
-├── tui/              # TUI de restauración: apps, conflictos, detalle, confirmación y resumen
-├── plan.py           # Plan y Operation, compartidos
+├── cli.py            # argumentos, gating de TUI, salida y códigos
+├── commands.py       # flujos de texto compartidos con la CLI
+├── texts.py          # única fuente de textos visibles y glosario
+├── ui.py             # salida no interactiva con Rich
+├── clone.py          # plan_clone y write_clone (progreso y cancelación)
+├── deploy.py         # sesión, plan, clasificación y aplicación
+├── update.py         # consulta, descarga/verificación y reemplazo
+├── conflicts.py      # diff por líneas, composición y validación de híbridos
+├── progress.py       # contrato de progreso y cancelación
+├── tui/              # app única: menú, C1-C4, D0-D5, U1 y transversales
+├── plan.py           # Plan, Operation y recuento compartido
 ├── catalog/
 │   ├── models.py     # AppDefinition (validación)
 │   ├── loader.py     # catálogo embebido y del usuario
@@ -340,7 +393,7 @@ src/kamino/
 ├── archive.py        # tar.gz, manifiesto, checksums
 ├── ghostty.py        # lectura acotada de config-file y temas de Ghostty
 ├── paths.py          # normalización y acceso seguro relativo al home
-├── snapshot.py       # copia previa a restaurar
+├── snapshot.py       # holocrón de seguridad previo a desplegar
 └── errors.py         # excepciones propias
 ```
 

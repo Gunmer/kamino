@@ -1,6 +1,6 @@
 """Pruebas de `plan.py`: expansión de rutas, exclusiones y operaciones.
 
-Cubre el paso 4 de `backup` (diseño técnico §5.1): expandir `paths` de cada
+Cubre el paso 4 de `clone` (diseño técnico §5.1): expandir `paths` de cada
 app, aplicar `exclude` y construir el plan con tamaño y checksum; las rutas
 que no existen se registran como omitidas, no como error. Los enlaces
 simbólicos se guardan como enlace y no se siguen (§6). Todo se resuelve
@@ -19,7 +19,14 @@ import pytest
 from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
 from kamino.errors import PathError
-from kamino.plan import SENSITIVE_PATTERNS, Operation, Plan, build_plan, is_excluded
+from kamino.plan import (
+    SENSITIVE_PATTERNS,
+    Operation,
+    Plan,
+    build_plan,
+    count_files,
+    is_excluded,
+)
 
 
 def _app(
@@ -67,7 +74,7 @@ def test_operation_is_frozen() -> None:
 def test_plan_is_frozen_with_defaults() -> None:
     plan = Plan()
     assert plan.operations == []
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
     with pytest.raises(AttributeError):
         plan.skipped = ["x"]  # type: ignore[misc]
 
@@ -83,7 +90,7 @@ def test_single_file_operation(tmp_path: Path) -> None:
 
     plan = build_plan([_app(paths=[".gitconfig"])], home=tmp_path)
 
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
     assert len(plan.operations) == 1
     operation = plan.operations[0]
     assert operation.app_id == "foo"
@@ -109,7 +116,7 @@ def test_missing_path_is_skipped_not_an_error(tmp_path: Path) -> None:
     plan = build_plan([_app(paths=[".config/foo/no-existe.toml"])], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == [".config/foo/no-existe.toml"]
+    assert [item.path for item in plan.skipped] == [".config/foo/no-existe.toml"]
 
 
 def test_missing_and_existing_paths_mix(tmp_path: Path) -> None:
@@ -118,7 +125,7 @@ def test_missing_and_existing_paths_mix(tmp_path: Path) -> None:
     plan = build_plan([_app(paths=["falta.txt", "existe.txt"])], home=tmp_path)
 
     assert [operation.path for operation in plan.operations] == ["existe.txt"]
-    assert plan.skipped == ["falta.txt"]
+    assert [item.path for item in plan.skipped] == ["falta.txt"]
 
 
 # --- expansión de directorios ---
@@ -138,7 +145,7 @@ def test_directory_is_walked_recursively(tmp_path: Path) -> None:
         ".config/foo/sub/b.toml",
         ".config/foo/sub/deep/c.toml",
     ]
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
     sizes = {operation.path: operation.size for operation in plan.operations}
     assert sizes[".config/foo/sub/b.toml"] == 2
 
@@ -164,7 +171,7 @@ def test_empty_directory_produces_no_operations(tmp_path: Path) -> None:
     plan = build_plan([_app(paths=["vacio"])], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
 
 
 # --- enlaces simbólicos ---
@@ -200,7 +207,7 @@ def test_symlink_with_absolute_target_is_skipped(tmp_path: Path) -> None:
     plan = build_plan([_app(paths=["enlace.txt"])], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == ["enlace.txt"]
+    assert [item.path for item in plan.skipped] == ["enlace.txt"]
 
 
 def test_symlink_with_parent_escape_is_skipped(tmp_path: Path) -> None:
@@ -209,7 +216,7 @@ def test_symlink_with_parent_escape_is_skipped(tmp_path: Path) -> None:
     plan = build_plan([_app(paths=["enlace.txt"])], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == ["enlace.txt"]
+    assert [item.path for item in plan.skipped] == ["enlace.txt"]
 
 
 def test_broken_symlink_still_stored_as_link(tmp_path: Path) -> None:
@@ -219,7 +226,7 @@ def test_broken_symlink_still_stored_as_link(tmp_path: Path) -> None:
     plan = build_plan([_app(paths=["enlace.txt"])], home=tmp_path)
 
     assert plan.operations[0].link == "no-existe.txt"
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
 
 
 def test_symlinked_directory_inside_walk_is_a_link(tmp_path: Path) -> None:
@@ -231,7 +238,7 @@ def test_symlinked_directory_inside_walk_is_a_link(tmp_path: Path) -> None:
     plan = build_plan([_app(paths=["dir"])], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == ["dir/enlace-dir"]
+    assert [item.path for item in plan.skipped] == ["dir/enlace-dir"]
 
 
 def test_symlinked_directory_with_safe_target_stored_as_link(tmp_path: Path) -> None:
@@ -302,7 +309,7 @@ def test_exclude_applies_to_paths_entry_itself(tmp_path: Path) -> None:
     )
 
     assert [operation.path for operation in plan.operations] == ["keep.toml"]
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
 
 
 def test_excluded_and_skipped_are_different(tmp_path: Path) -> None:
@@ -312,7 +319,7 @@ def test_excluded_and_skipped_are_different(tmp_path: Path) -> None:
     plan = build_plan([_app(paths=["run.log", "falta.toml"], exclude=["**/*.log"])], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == ["falta.toml"]
+    assert [item.path for item in plan.skipped] == ["falta.toml"]
 
 
 # --- matriz de patrones de exclusión ---
@@ -372,7 +379,7 @@ def test_operations_carry_their_app_id(tmp_path: Path) -> None:
         ("alpha", "a.txt"),
         ("beta", "b.txt"),
     ]
-    assert plan.skipped == ["falta.txt"]
+    assert [item.path for item in plan.skipped] == ["falta.txt"]
 
 
 def test_build_plan_rejects_catalog_path_outside_home(tmp_path: Path) -> None:
@@ -407,7 +414,7 @@ def test_missing_optional_path_is_not_skipped(tmp_path: Path) -> None:
     plan = build_plan([app], home=tmp_path)
 
     assert [operation.path for operation in plan.operations] == ["config.toml"]
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
 
 
 def test_missing_required_path_is_still_skipped_with_optional_paths(tmp_path: Path) -> None:
@@ -416,7 +423,7 @@ def test_missing_required_path_is_still_skipped_with_optional_paths(tmp_path: Pa
     plan = build_plan([app], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == ["falta.toml"]
+    assert [item.path for item in plan.skipped] == ["falta.toml"]
 
 
 def test_optional_pattern_is_expanded_without_following_symlinks(tmp_path: Path) -> None:
@@ -432,7 +439,7 @@ def test_optional_pattern_is_expanded_without_following_symlinks(tmp_path: Path)
         ".codex/dos.config.toml",
         ".codex/uno.config.toml",
     ]
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
 
 
 def test_optional_pattern_parent_symlink_is_skipped(tmp_path: Path) -> None:
@@ -445,7 +452,7 @@ def test_optional_pattern_parent_symlink_is_skipped(tmp_path: Path) -> None:
     plan = build_plan([app], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == [".codex"]
+    assert [item.path for item in plan.skipped] == [".codex"]
 
 
 def test_duplicate_paths_are_deduplicated_per_app(tmp_path: Path) -> None:
@@ -486,7 +493,7 @@ def test_intermediate_symlink_path_is_skipped_and_not_read(tmp_path: Path) -> No
     plan = build_plan([app], home=tmp_path)
 
     assert plan.operations == []
-    assert plan.skipped == [".config/config.toml"]
+    assert [item.path for item in plan.skipped] == [".config/config.toml"]
 
 
 # --- referencias de Ghostty ---
@@ -533,7 +540,7 @@ def test_ghostty_optional_missing_reference_is_not_skipped(tmp_path: Path) -> No
     plan = build_plan([_ghostty()], home=tmp_path)
 
     assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
 
 
 def test_ghostty_cycle_is_reported_once_and_cut(tmp_path: Path) -> None:
@@ -581,7 +588,7 @@ def test_ghostty_builtin_theme_is_not_an_omission(tmp_path: Path) -> None:
     plan = build_plan([_ghostty()], home=tmp_path)
 
     assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
-    assert plan.skipped == []
+    assert [item.path for item in plan.skipped] == []
 
 
 def test_ghostty_external_reference_is_not_read_or_included(tmp_path: Path) -> None:
@@ -596,7 +603,7 @@ def test_ghostty_external_reference_is_not_read_or_included(tmp_path: Path) -> N
     plan = build_plan([_ghostty()], home=home)
 
     assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
-    assert str(external) in plan.skipped
+    assert str(external) in [item.path for item in plan.skipped]
     assert any("fuera del home" in notice for notice in plan.notices)
 
 
@@ -610,7 +617,7 @@ def test_ghostty_sensitive_reference_is_reported_without_reading(tmp_path: Path)
     plan = build_plan([_ghostty()], home=tmp_path)
 
     assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
-    assert ".config/ghostty/.env" in plan.skipped
+    assert ".config/ghostty/.env" in [item.path for item in plan.skipped]
     assert any("excluida por seguridad" in notice for notice in plan.notices)
 
 
@@ -698,8 +705,10 @@ def test_ghostty_historical_required_paths_keep_omission_semantics(tmp_path: Pat
     plan = build_plan([ghostty], home=home)
 
     assert [operation.path for operation in plan.operations] == [".config/ghostty/config.ghostty"]
-    assert ".config/ghostty/config" in plan.skipped
-    assert "Library/Application Support/com.mitchellh.ghostty/config" in plan.skipped
+    assert ".config/ghostty/config" in [item.path for item in plan.skipped]
+    assert "Library/Application Support/com.mitchellh.ghostty/config" in [
+        item.path for item in plan.skipped
+    ]
 
 
 def test_ghostty_reference_with_intermediate_symlink_is_not_read(tmp_path: Path) -> None:
@@ -717,7 +726,7 @@ def test_ghostty_reference_with_intermediate_symlink_is_not_read(tmp_path: Path)
     plan = build_plan([_ghostty()], home=home)
 
     assert [operation.path for operation in plan.operations] == [".config/ghostty/config"]
-    assert ".config/ghostty/sub/secreto.conf" in plan.skipped
+    assert ".config/ghostty/sub/secreto.conf" in [item.path for item in plan.skipped]
 
 
 def test_herdr_env_path_inside_home_is_included(tmp_path: Path, monkeypatch) -> None:
@@ -761,7 +770,7 @@ def test_herdr_external_env_path_is_reported_without_reading(tmp_path: Path, mon
     plan = build_plan([app], home=home)
 
     assert "custom" not in " ".join(operation.path for operation in plan.operations)
-    assert "HERDR_CONFIG_PATH fuera del home" in plan.skipped
+    assert "HERDR_CONFIG_PATH fuera del home" in [item.path for item in plan.skipped]
 
 
 def test_herdr_xdg_path_inside_and_outside_home(tmp_path: Path, monkeypatch) -> None:
@@ -787,7 +796,7 @@ def test_herdr_xdg_path_inside_and_outside_home(tmp_path: Path, monkeypatch) -> 
 
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "external-xdg"))
     plan = build_plan([app], home=home)
-    assert "XDG_CONFIG_HOME fuera del home" in plan.skipped
+    assert "XDG_CONFIG_HOME fuera del home" in [item.path for item in plan.skipped]
 
 
 def test_walk_unreadable_dir_recorded(tmp_path: Path) -> None:
@@ -807,7 +816,75 @@ def test_walk_unreadable_dir_recorded(tmp_path: Path) -> None:
         else:
             pytest.skip("el entorno permite listar directorios sin permiso")
         plan = build_plan([app], home=home)
-        assert ".config/app/secret" in plan.skipped
+        assert ".config/app/secret" in [item.path for item in plan.skipped]
         assert ".config/app/ok.txt" in [op.path for op in plan.operations]
     finally:
         secret.chmod(0o755)
+
+
+# --- recuento para C1 ---
+
+
+def test_count_files_matches_plan_with_expansion_and_exclusions(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    (home / ".config/foo").mkdir(parents=True)
+    (home / ".config/foo/a.toml").write_text("a\n", encoding="utf-8")
+    (home / ".config/foo/b.toml").write_text("b\n", encoding="utf-8")
+    (home / ".config/foo/.env").write_text("secreto\n", encoding="utf-8")
+    (home / "enlace.toml").symlink_to(".config/foo/a.toml")
+    app = _app(paths=[".config/foo", "falta.toml", "enlace.toml"], exclude=["**/.env"])
+
+    plan = build_plan([app], home=home)
+    counted = count_files([app], home=home)
+
+    assert counted.counts["foo"] == len(plan.operations) == 3
+    assert [item.path for item in counted.skipped] == ["falta.toml"]
+
+
+def test_count_files_parity_for_ghostty_references(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    ghostty = home / ".config/ghostty"
+    (ghostty / "themes").mkdir(parents=True)
+    (ghostty / "config").write_text("config-file = extra.conf\ntheme = mi-tema\n", encoding="utf-8")
+    (ghostty / "extra.conf").write_text("font-size = 12\n", encoding="utf-8")
+    (ghostty / "themes" / "mi-tema").write_text("background = 000000\n", encoding="utf-8")
+    app = AppDefinition.model_validate(
+        {
+            "id": "ghostty",
+            "name": "Ghostty",
+            "command": "ghostty",
+            "paths": [".config/ghostty/config"],
+        }
+    )
+
+    plan = build_plan([app], home=home)
+    counted = count_files([app], home=home)
+
+    assert counted.counts["ghostty"] == len(plan.operations)
+    assert {operation.path for operation in plan.operations} == {
+        ".config/ghostty/config",
+        ".config/ghostty/extra.conf",
+        ".config/ghostty/themes/mi-tema",
+    }
+
+
+def test_count_files_does_not_hash_regular_files(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    (home / ".config/foo").mkdir(parents=True)
+    (home / ".config/foo/a.toml").write_text("a\n", encoding="utf-8")
+    app = _app(paths=[".config/foo"])
+    called: list[str] = []
+    from kamino.paths import SafeHome
+
+    original = SafeHome.read_bytes
+
+    def read_bytes(self, rel):
+        called.append(str(rel))
+        return original(self, rel)
+
+    monkeypatch.setattr(SafeHome, "read_bytes", read_bytes)
+
+    counted = count_files([app], home=home)
+
+    assert counted.counts["foo"] == 1
+    assert called == []

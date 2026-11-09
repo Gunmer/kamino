@@ -1,8 +1,8 @@
-"""Copia de seguridad previa a restaurar (snapshot).
+"""Copia de seguridad previa a desplegar (snapshot).
 
 Se guarda en `~/Library/Application Support/kamino/snapshots/<fecha>.tar.gz` con
-el mismo formato que un respaldo (diseño técnico §6): una única app sintética
-`snapshot` con las rutas relativas al home, así el futuro `undo` es un `restore`
+el mismo formato que un clon (diseño técnico §6): una única app sintética
+`snapshot` con las rutas relativas al home, así el futuro `undo` es un `deploy`
 del snapshot.
 
 Módulo sin interfaz (§1): no imprime ni pregunta. `home`, `snapshots_dir` y
@@ -37,12 +37,12 @@ def create_snapshot(
     snapshots_dir: Path | None = None,
     timestamp: str | None = None,
 ) -> Path | None:
-    """Guarda el estado actual de `paths` antes de que la restauración lo cambie.
+    """Guarda el estado actual de `paths` antes de que el despliegue lo cambie.
 
-    Crea un archivo con el mismo formato que un respaldo (§6) bajo una única app
+    Crea un archivo con el mismo formato que un clon (§6) bajo una única app
     sintética `snapshot`, con las rutas relativas al home. Los directorios se
     expanden recursivamente; lo que no existe o no cabe en el manifiesto (enlaces
-    inseguros, tipos especiales) se omite, igual que en un respaldo.
+    inseguros, tipos especiales) se omite, igual que en un clon.
 
     Se guarda en `snapshots_dir` (por defecto
     `~/Library/Application Support/kamino/snapshots/`) con nombre
@@ -57,13 +57,10 @@ def create_snapshot(
     when = timestamp if timestamp is not None else datetime.now(UTC).strftime(_DATE_FORMAT)
     _check_timestamp(when)
 
-    definition = AppDefinition(
-        id=SNAPSHOT_APP_ID,
-        name=SNAPSHOT_APP_ID,
-        command=SNAPSHOT_APP_ID,
-        paths=_relative_targets(paths, root),
-    )
+    definition = _snapshot_definition(paths, root)
     plan = build_plan([definition], home=root)
+    if not plan.operations:
+        return None
     files = [
         FileEntry(path=op.path, sha256=op.sha256, size=op.size, mode=op.mode, link=op.link)
         for op in plan.operations
@@ -82,6 +79,24 @@ def create_snapshot(
     output = _output_path(directory, when)
     write_archive(output, manifest, source_root=root)
     return output
+
+
+def snapshot_files(paths: Sequence[Path], *, home: Path | None = None) -> int:
+    """Cuenta los archivos que protegería el holocrón, sin escribir nada."""
+    root = home if home is not None else Path.home()
+    if not paths:
+        return 0
+    definition = _snapshot_definition(paths, root)
+    return len(build_plan([definition], home=root).operations)
+
+
+def _snapshot_definition(paths: Sequence[Path], root: Path) -> AppDefinition:
+    return AppDefinition(
+        id=SNAPSHOT_APP_ID,
+        name=SNAPSHOT_APP_ID,
+        command=SNAPSHOT_APP_ID,
+        paths=_relative_targets(paths, root),
+    )
 
 
 def _default_dir(root: Path) -> Path:

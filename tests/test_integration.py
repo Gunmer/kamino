@@ -1,7 +1,7 @@
-"""Pruebas de integración: ciclo completo respaldo y restauración (§7).
+"""Pruebas de integración: ciclo completo clonación y despliegue (§7).
 
 Usa dos HOME falsos y una app `.app` simulada con un `Info.plist` falso para
-comprobar que solo se restauran las apps instaladas, sin tocar el sistema real.
+comprobar que solo se despliegan las apps instaladas, sin tocar el sistema real.
 """
 
 from __future__ import annotations
@@ -12,11 +12,11 @@ from pathlib import Path
 from typer.testing import CliRunner
 
 import kamino.cli as cli
-from kamino.backup import run_backup
 from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
+from kamino.clone import run_clone
 from kamino.conflicts import ConflictDecisions, FileAction, FileDecision, RowDecision
-from kamino.restore import prepare_restore, run_restore
+from kamino.deploy import prepare_deploy, run_deploy
 
 runner = CliRunner()
 
@@ -45,7 +45,7 @@ def _write_origin_config(origin: Path) -> None:
     config.write_text("a = 1\n")
 
 
-def test_backup_restore_cycle(tmp_path: Path) -> None:
+def test_clone_deploy_cycle(tmp_path: Path) -> None:
     app = _app()
     catalog = {"foo": app}
 
@@ -54,24 +54,24 @@ def test_backup_restore_cycle(tmp_path: Path) -> None:
     apps_dir = tmp_path / "Applications"
     _fake_app(apps_dir, "com.example.foo")
 
-    backup = tmp_path / "backup.tar.gz"
-    run_backup(
+    clone = tmp_path / "clone.tar.gz"
+    run_clone(
         home=origin,
         catalog=catalog,
         application_dirs=[apps_dir],
         selected=["foo"],
-        output=backup,
+        output=clone,
     )
 
     target = tmp_path / "target"
     target.mkdir()
-    result = run_restore(backup, home=target, catalog=catalog, application_dirs=[apps_dir])
+    result = run_deploy(clone, home=target, catalog=catalog, application_dirs=[apps_dir])
 
     assert (target / ".config" / "foo" / "config.toml").read_text() == "a = 1\n"
-    assert ".config/foo/config.toml" in result.restored
+    assert ".config/foo/config.toml" in result.deployed
 
 
-def test_restore_skips_uninstalled_app(tmp_path: Path) -> None:
+def test_deploy_skips_uninstalled_app(tmp_path: Path) -> None:
     app = _app()
     catalog = {"foo": app}
 
@@ -80,23 +80,23 @@ def test_restore_skips_uninstalled_app(tmp_path: Path) -> None:
     apps_dir = tmp_path / "Applications"
     _fake_app(apps_dir, "com.example.foo")
 
-    backup = tmp_path / "backup.tar.gz"
-    run_backup(
+    clone = tmp_path / "clone.tar.gz"
+    run_clone(
         home=origin,
         catalog=catalog,
         application_dirs=[apps_dir],
         selected=["foo"],
-        output=backup,
+        output=clone,
     )
 
     target = tmp_path / "target"
     target.mkdir()
     empty_apps = tmp_path / "empty-apps"
     empty_apps.mkdir()
-    result = run_restore(backup, home=target, catalog=catalog, application_dirs=[empty_apps])
+    result = run_deploy(clone, home=target, catalog=catalog, application_dirs=[empty_apps])
 
     assert not (target / ".config" / "foo" / "config.toml").exists()
-    assert result.restored == []
+    assert result.deployed == []
 
 
 def test_embedded_catalog_has_initial_apps(tmp_path: Path, monkeypatch) -> None:
@@ -156,18 +156,18 @@ def test_agent_herdr_zsh_and_ghostty_cycle(tmp_path: Path, monkeypatch) -> None:
     )
     _write(target, ".oh-my-zsh/oh-my-zsh.sh", "# framework\n")
 
-    backup = tmp_path / "backup.tar.gz"
-    backup_result = run_backup(
+    clone = tmp_path / "clone.tar.gz"
+    clone_result = run_clone(
         home=origin,
         catalog=catalog,
         application_dirs=[apps_dir],
         path=str(bin_dir),
-        output=backup,
+        output=clone,
     )
 
-    assert backup_result.manifest.apps
+    assert clone_result.manifest.apps
     manifest_paths = {
-        (app.id, entry.path) for app in backup_result.manifest.apps for entry in app.files
+        (app.id, entry.path) for app in clone_result.manifest.apps for entry in app.files
     }
     assert ("opencode", ".config/opencode/opencode.json") in manifest_paths
     assert ("herdr", ".config/herdr/config.toml") in manifest_paths
@@ -176,10 +176,10 @@ def test_agent_herdr_zsh_and_ghostty_cycle(tmp_path: Path, monkeypatch) -> None:
     assert ("oh-my-zsh", ".zshrc") in manifest_paths
     assert ("herdr", ".config/herdr/plugins/config/.env") not in manifest_paths
     assert all("plugins/foo" not in path for _app_id, path in manifest_paths)
-    assert not backup_result.plan.skipped
+    assert not clone_result.plan.skipped
 
-    result = run_restore(
-        backup,
+    result = run_deploy(
+        clone,
         home=target,
         catalog=catalog,
         application_dirs=[apps_dir],
@@ -192,29 +192,29 @@ def test_agent_herdr_zsh_and_ghostty_cycle(tmp_path: Path, monkeypatch) -> None:
     assert (target / ".config/ghostty/extra.conf").read_text() == "font-size = 14\n"
     assert not (target / ".config/herdr/plugins/config/.env").exists()
     assert not (target / ".oh-my-zsh/custom/plugins/foo/foo.plugin.zsh").exists()
-    assert result.restored
+    assert result.deployed
 
 
-def test_uninstalled_new_tool_is_not_backed_up(tmp_path: Path, monkeypatch) -> None:
+def test_uninstalled_new_tool_is_not_cloned(tmp_path: Path, monkeypatch) -> None:
     catalog = load_catalog(user_dir=tmp_path / "no-user-catalog")
     origin = tmp_path / "origin"
     _write(origin, ".config/navi/config.yaml", "theme: default\n")
     empty_bin = tmp_path / "empty-bin"
     empty_bin.mkdir()
 
-    result = run_backup(
+    result = run_clone(
         home=origin,
         catalog=catalog,
         application_dirs=[],
         path=str(empty_bin),
         selected=None,
-        output=tmp_path / "backup.tar.gz",
+        output=tmp_path / "clone.tar.gz",
     )
 
     assert result.manifest.apps == []
 
 
-# --- restore conflicts end to end ---
+# --- deploy conflicts end to end ---
 
 
 def _conflict_setup(tmp_path: Path) -> tuple[Path, AppDefinition, Path, Path, str, str]:
@@ -229,29 +229,29 @@ def _conflict_setup(tmp_path: Path) -> tuple[Path, AppDefinition, Path, Path, st
         )
     }
     local = "".join(f"line {index}\n" for index in range(20))
-    backup_text = local.replace("line 1\n", "LINE ONE\n").replace("line 18\n", "LINE EIGHTEEN\n")
+    clone_text = local.replace("line 1\n", "LINE ONE\n").replace("line 18\n", "LINE EIGHTEEN\n")
     origin = tmp_path / "origin"
-    _write(origin, ".config/foo/config.conf", backup_text)
+    _write(origin, ".config/foo/config.conf", clone_text)
     bin_dir = tmp_path / "bin"
     _fake_executable(bin_dir, "foo")
-    backup = tmp_path / "backup.tar.gz"
-    run_backup(
+    clone = tmp_path / "clone.tar.gz"
+    run_clone(
         home=origin,
         catalog=catalog,
         application_dirs=[],
         path=str(bin_dir),
-        output=backup,
+        output=clone,
     )
     target = tmp_path / "target"
     _write(target, ".config/foo/config.conf", local)
-    return backup, catalog["foo"], target, bin_dir, local, backup_text
+    return clone, catalog["foo"], target, bin_dir, local, clone_text
 
 
 def test_conflict_mix_snapshot_and_undo(tmp_path: Path) -> None:
-    backup, definition, target, bin_dir, local, _backup_text = _conflict_setup(tmp_path)
+    clone, definition, target, bin_dir, local, _clone_text = _conflict_setup(tmp_path)
     catalog = {"foo": definition}
-    session = prepare_restore(
-        backup,
+    session = prepare_deploy(
+        clone,
         home=target,
         catalog=catalog,
         application_dirs=[],
@@ -265,7 +265,7 @@ def test_conflict_mix_snapshot_and_undo(tmp_path: Path) -> None:
             ConflictDecisions(
                 {
                     conflict.path: FileDecision(
-                        FileAction.REVIEW, (RowDecision.BACKUP, RowDecision.LOCAL)
+                        FileAction.REVIEW, (RowDecision.CLONE, RowDecision.LOCAL)
                     )
                 }
             )
@@ -280,7 +280,7 @@ def test_conflict_mix_snapshot_and_undo(tmp_path: Path) -> None:
     assert result.merged == [".config/foo/config.conf"]
     assert result.snapshot is not None
 
-    undone = run_restore(
+    undone = run_deploy(
         result.snapshot,
         home=target,
         catalog=catalog,
@@ -290,7 +290,7 @@ def test_conflict_mix_snapshot_and_undo(tmp_path: Path) -> None:
     )
 
     assert (target / ".config/foo/config.conf").read_text() == local
-    assert undone.restored == [".config/foo/config.conf"]
+    assert undone.deployed == [".config/foo/config.conf"]
 
 
 def _cli_environment(tmp_path: Path, target: Path, bin_dir: Path) -> dict[str, str]:
@@ -304,26 +304,26 @@ def _cli_environment(tmp_path: Path, target: Path, bin_dir: Path) -> dict[str, s
 
 
 def test_cli_yes_applies_conflicts_without_tui(tmp_path: Path) -> None:
-    backup, _definition, target, bin_dir, _local, backup_text = _conflict_setup(tmp_path)
+    clone, _definition, target, bin_dir, _local, clone_text = _conflict_setup(tmp_path)
     env = _cli_environment(tmp_path, target, bin_dir)
 
-    result = runner.invoke(cli.app, ["restore", str(backup), "--yes"], env=env)
+    result = runner.invoke(cli.app, ["deploy", str(clone), "--yes"], env=env)
 
     assert result.exit_code == 0, result.output
-    assert (target / ".config/foo/config.conf").read_text() == backup_text
+    assert (target / ".config/foo/config.conf").read_text() == clone_text
     snapshots = target / "Library" / "Application Support" / "kamino" / "snapshots"
     assert list(snapshots.glob("*.tar.gz"))
 
 
 def test_cli_dry_run_prints_diff_without_writing(tmp_path: Path) -> None:
-    backup, _definition, target, bin_dir, local, _backup_text = _conflict_setup(tmp_path)
+    clone, _definition, target, bin_dir, local, _clone_text = _conflict_setup(tmp_path)
     env = _cli_environment(tmp_path, target, bin_dir)
 
-    result = runner.invoke(cli.app, ["restore", str(backup), "--dry-run"], env=env)
+    result = runner.invoke(cli.app, ["deploy", str(clone), "--dry-run"], env=env)
 
     assert result.exit_code == 0, result.output
-    assert "--- local/.config/foo/config.conf" in result.output
-    assert "+++ respaldo/.config/foo/config.conf" in result.output
+    assert "--- original/.config/foo/config.conf" in result.output
+    assert "+++ clon/.config/foo/config.conf" in result.output
     assert "LINE ONE" in result.output
     assert (target / ".config/foo/config.conf").read_text() == local
     snapshots = target / "Library" / "Application Support" / "kamino" / "snapshots"

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Respaldar y restaurar personalizaciones globales de herramientas de desarrollo y agentes de terminal sin incluir sus programas ni los archivos propios de cada proyecto.
+Clonar y desplegar personalizaciones globales de herramientas de desarrollo y agentes de terminal sin incluir sus programas ni los archivos propios de cada proyecto.
 
 ## Requirements
 
@@ -26,11 +26,11 @@ El catálogo integrado DEBE (`MUST`) ofrecer las herramientas de desarrollo agé
 
 - **GIVEN** una herramienta detectada solo por ejecutable no está presente en el PATH simulado
 - **WHEN** se consultan las aplicaciones instaladas
-- **THEN** su definición sigue disponible en el catálogo, pero no aparece como instalada ni se respalda automáticamente.
+- **THEN** su definición sigue disponible en el catálogo, pero no aparece como instalada ni se clona automáticamente.
 
 ### Requirement: Detección sin ejecutar herramientas
 
-Kamino DEBE (`MUST`) detectar las herramientas con ejecutable propio mediante ese ejecutable o su identificador de aplicación, sin ejecutarlas, y DEBE mantener la selección y restauración filtradas por instalación.
+Kamino DEBE (`MUST`) detectar las herramientas con ejecutable propio mediante ese ejecutable o su identificador de aplicación, sin ejecutarlas, y DEBE mantener la selección y despliegue filtradas por instalación.
 
 #### Scenario: Ejecutable disponible
 
@@ -38,10 +38,10 @@ Kamino DEBE (`MUST`) detectar las herramientas con ejecutable propio mediante es
 - **WHEN** se detectan las herramientas instaladas
 - **THEN** OpenCode se considera instalado sin ejecutar el archivo.
 
-#### Scenario: Herramienta ausente al restaurar
+#### Scenario: Herramienta ausente al desplegar
 
-- **GIVEN** un respaldo contiene configuraciones de una herramienta que no está instalada en el equipo de destino
-- **WHEN** se restaura el respaldo
+- **GIVEN** un clon contiene configuraciones de una herramienta que no está instalada en el equipo de destino
+- **WHEN** se despliega el clon
 - **THEN** se omiten e informan sus archivos sin instalarlos ni modificar sus destinos.
 
 #### Scenario: Dos nombres para Caveman
@@ -52,24 +52,24 @@ Kamino DEBE (`MUST`) detectar las herramientas con ejecutable propio mediante es
 
 ### Requirement: Conservación de personalizaciones globales
 
-Kamino DEBE (`MUST`) preservar los archivos globales incluidos de configuración, temas y atajos sin alterar su contenido. No DEBE buscar automáticamente configuraciones de repositorios ni respaldar ejecutables de las herramientas.
+Kamino DEBE (`MUST`) preservar los archivos globales incluidos de configuración, temas y atajos sin alterar su contenido. No DEBE buscar automáticamente configuraciones de repositorios ni clonar ejecutables de las herramientas.
 
 #### Scenario: Configuración y tema de OpenCode
 
 - **GIVEN** OpenCode está instalado y existen su configuración global, `cli.json` con atajos y un tema personalizado
-- **WHEN** se respalda y restaura OpenCode en otro HOME con la herramienta instalada
+- **WHEN** se clona y despliega OpenCode en otro HOME con la herramienta instalada
 - **THEN** los archivos incluidos conservan sus bytes y rutas relativas al HOME.
 
 #### Scenario: Configuración y atajos de Pi
 
 - **GIVEN** Pi está instalado y existen `settings.json`, `keybindings.json` y un tema propio en su directorio global
-- **WHEN** se completa el ciclo de respaldo y restauración
+- **WHEN** se completa el ciclo de clon y despliegue
 - **THEN** se conservan los tres archivos sin incluir `auth.json` ni el ejecutable.
 
 #### Scenario: Archivos locales de proyectos
 
 - **GIVEN** un repositorio contiene sus propios archivos de configuración de agentes
-- **WHEN** se respalda una herramienta del catálogo
+- **WHEN** se clona una herramienta del catálogo
 - **THEN** Kamino no descubre ni incluye esos archivos por el mero hecho de pertenecer al repositorio.
 
 ### Requirement: Configuración global de Oh My Zsh
@@ -79,14 +79,14 @@ Kamino DEBE (`MUST`) detectar Oh My Zsh mediante `zsh` y el marcador del framewo
 #### Scenario: Framework presente
 
 - **GIVEN** `zsh` está instalado y el HOME contiene el archivo de inicio de Oh My Zsh, archivos globales de configuración del shell y un tema personalizado
-- **WHEN** se selecciona Oh My Zsh para respaldar
+- **WHEN** se selecciona Oh My Zsh para clonar
 - **THEN** se incluyen los ajustes existentes, atajos y tema dentro del HOME.
 - **AND** se excluyen los archivos de las carpetas de plugins y sus directorios `.git`.
 
 #### Scenario: Solo está instalado zsh
 
 - **GIVEN** `zsh` está disponible pero el framework Oh My Zsh no está presente en el HOME
-- **WHEN** se detectan las aplicaciones o se restaura su configuración
+- **WHEN** se detectan las aplicaciones o se despliega su configuración
 - **THEN** Oh My Zsh no se considera instalado y sus archivos no se aplican.
 
 ### Requirement: Tema y atajos globales de Herdr
@@ -96,13 +96,13 @@ Kamino DEBE (`MUST`) conservar la configuración global de Herdr, incluidos el t
 #### Scenario: Preferencias personalizadas
 
 - **GIVEN** Herdr está instalado y su `config.toml` contiene `[theme]`, `[theme.custom]`, `[keys]` y `[[keys.command]]`
-- **WHEN** se respalda y restaura Herdr
-- **THEN** el archivo restaurado conserva íntegramente esas preferencias.
+- **WHEN** se clona y despliega Herdr
+- **THEN** el archivo despliegado conserva íntegramente esas preferencias.
 
 #### Scenario: Ubicación global personalizada de Herdr
 
 - **GIVEN** `HERDR_CONFIG_PATH` señala un archivo de configuración global dentro del HOME
-- **WHEN** se respalda Herdr
+- **WHEN** se clona Herdr
 - **THEN** se incluye ese archivo sin alterar su contenido y no se leen rutas fuera del HOME.
 
 ### Requirement: Rutas opcionales y omisiones reales
@@ -112,13 +112,13 @@ La ausencia de una ruta declarada como opcional en una definición nueva o ampli
 #### Scenario: Tema personalizado no creado
 
 - **GIVEN** una herramienta instalada tiene su archivo de configuración y no tiene un directorio de temas marcado como opcional
-- **WHEN** se respalda sin otras omisiones
+- **WHEN** se clona sin otras omisiones
 - **THEN** la ausencia del tema opcional no produce por sí sola el código de salida 3.
 
 #### Scenario: Ruta obligatoria heredada ausente
 
 - **GIVEN** una definición existente o del usuario declara una ruta obligatoria que no existe
-- **WHEN** se respalda esa definición
+- **WHEN** se clona esa definición
 - **THEN** la ruta se informa como omitida y la CLI conserva el código de salida 3.
 
 ### Requirement: Prioridad del catálogo del usuario

@@ -1,4 +1,4 @@
-"""Plan y Operation, compartidos por `backup` y `restore`.
+"""Plan y Operation, compartidos por `clone` y `deploy`.
 
 Principio (diseño técnico §1): planificar y luego ejecutar. `--dry-run` solo
 imprime el plan, así simulación y ejecución comparten el mismo código.
@@ -35,6 +35,7 @@ from kamino.ghostty import (
     theme_references,
 )
 from kamino.paths import SafeHome, to_absolute, to_relative
+from kamino.progress import CancelCallback, Phase, ProgressCallback, emit, ensure_not_cancelled
 
 #: Límites del descubrimiento específico de Ghostty.
 MAX_GHOSTTY_FILES = 500
@@ -99,17 +100,34 @@ class Operation:
 
 
 @dataclass(frozen=True)
+class SkippedPath:
+    """Una ruta omitida del plan con la causa visible para la interfaz."""
+
+    path: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class Plan:
-    """El plan de un respaldo: operaciones, rutas omitidas y avisos.
+    """El plan de una clonación: operaciones, rutas omitidas y avisos.
 
     `skipped` registra las rutas obligatorias ausentes, las opcionales
-    existentes pero inseguras y las referencias que no se pueden incluir.
-    `notices` comunica ciclos o límites sin cambiar por sí solo el código de
-    salida.
+    existentes pero inseguras y las referencias que no se pueden incluir, cada
+    una con su causa. `notices` comunica ciclos o límites sin cambiar por sí
+    solo el código de salida.
     """
 
     operations: list[Operation] = field(default_factory=list)
-    skipped: list[str] = field(default_factory=list)
+    skipped: list[SkippedPath] = field(default_factory=list)
+    notices: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class CountResult:
+    """Recuento de archivos por app sin leer ni hashear su contenido."""
+
+    counts: dict[str, int] = field(default_factory=dict)
+    skipped: list[SkippedPath] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
 
 
@@ -142,8 +160,11 @@ class _Builder:
     safe: SafeHome
     root: Path
     operations: list[Operation] = field(default_factory=list)
-    skipped: list[str] = field(default_factory=list)
+    skipped: list[SkippedPath] = field(default_factory=list)
     notices: list[str] = field(default_factory=list)
+    count_only: bool = False
+    progress: ProgressCallback | None = None
+    cancelled: CancelCallback | None = None
     _operations: set[tuple[str, str]] = field(default_factory=set)
     _skipped: set[str] = field(default_factory=set)
     _notices: set[str] = field(default_factory=set)
@@ -154,37 +175,69 @@ class _Builder:
             return
         self._operations.add(key)
         self.operations.append(operation)
+        emit(self.progress, Phase.PLANNING, len(self.operations), 0, operation.path)
 
-    def skip(self, path: str) -> None:
+    def skip(self, path: str, reason: str) -> None:
         if path not in self._skipped:
             self._skipped.add(path)
-            self.skipped.append(path)
+            self.skipped.append(SkippedPath(path=path, reason=reason))
 
     def notice(self, message: str) -> None:
         if message not in self._notices:
             self._notices.add(message)
             self.notices.append(message)
 
+    def count(self, app_id: str) -> int:
+        return sum(1 for operation in self.operations if operation.app_id == app_id)
+
     def regular_file(self, app_id: str, path: str) -> Operation | None:
         for operation in self.operations:
-            if (
-                operation.app_id == app_id
-                and operation.path == path
-                and operation.sha256 is not None
-            ):
+            if operation.app_id == app_id and operation.path == path and operation.link is None:
                 return operation
         return None
 
 
-def build_plan(apps: Sequence[AppDefinition], *, home: Path | None = None) -> Plan:
+def build_plan(
+    apps: Sequence[AppDefinition],
+    *,
+    home: Path | None = None,
+    progress: ProgressCallback | None = None,
+    cancelled: CancelCallback | None = None,
+) -> Plan:
     """Construye el plan expandiendo las entradas de cada app contra el home."""
     root = home if home is not None else Path.home()
     with SafeHome(root) as safe:
-        builder = _Builder(safe=safe, root=root)
+        builder = _Builder(safe=safe, root=root, progress=progress, cancelled=cancelled)
         for app in apps:
+            ensure_not_cancelled(cancelled)
             _expand_app(app, builder)
         return Plan(
             operations=builder.operations,
+            skipped=builder.skipped,
+            notices=builder.notices,
+        )
+
+
+def count_files(
+    apps: Sequence[AppDefinition],
+    *,
+    home: Path | None = None,
+    cancelled: CancelCallback | None = None,
+) -> CountResult:
+    """Cuenta archivos por app compartiendo expansión, exclusiones y `SafeHome`.
+
+    Lee igual que el plan solo las configuraciones de Ghostty necesarias para
+    descubrir referencias; el resto de archivos regulares se cuentan por
+    `lstat` sin abrir su contenido.
+    """
+    root = home if home is not None else Path.home()
+    with SafeHome(root) as safe:
+        builder = _Builder(safe=safe, root=root, count_only=True, cancelled=cancelled)
+        for app in apps:
+            ensure_not_cancelled(cancelled)
+            _expand_app(app, builder)
+        return CountResult(
+            counts={app.id: builder.count(app.id) for app in apps},
             skipped=builder.skipped,
             notices=builder.notices,
         )
@@ -214,6 +267,7 @@ def _expand(
     automatic: bool = False,
 ) -> None:
     """Expande una entrada: archivo, enlace o directorio recursivo."""
+    ensure_not_cancelled(builder.cancelled)
     rel = PurePosixPath(str(entry)).as_posix()
     SafeHome.parts(rel)
     if is_excluded(rel, app.exclude) or (automatic and is_excluded(rel, SENSITIVE_PATTERNS)):
@@ -222,10 +276,10 @@ def _expand(
         info = builder.safe.lstat(rel)
     except FileNotFoundError:
         if required:
-            builder.skip(rel)
+            builder.skip(rel, "no existe")
         return
     except (PathError, NotADirectoryError, OSError):
-        builder.skip(rel)
+        builder.skip(rel, "ruta insegura o ilegible")
         return
     if stat.S_ISLNK(info.st_mode):
         _add_link(app.id, rel, info, builder)
@@ -234,7 +288,7 @@ def _expand(
     elif stat.S_ISREG(info.st_mode):
         _add_file(app.id, rel, info, builder)
     else:
-        builder.skip(rel)
+        builder.skip(rel, "tipo de archivo no soportado")
 
 
 def _expand_pattern(app: AppDefinition, pattern: str, builder: _Builder) -> None:
@@ -245,7 +299,7 @@ def _expand_pattern(app: AppDefinition, pattern: str, builder: _Builder) -> None
     except FileNotFoundError:
         return
     except (PathError, NotADirectoryError, OSError):
-        builder.skip(parent)
+        builder.skip(parent, "directorio del patrón inseguro o ilegible")
         return
     for name in names:
         if fnmatch(name, PurePosixPath(pattern).name):
@@ -260,7 +314,7 @@ def _expand_env(app: AppDefinition, name: str, builder: _Builder) -> None:
     try:
         rel = to_relative(Path(value), home=builder.root).as_posix()
     except PathError:
-        builder.skip(f"{name} fuera del home")
+        builder.skip(f"{name} fuera del home", "fuera del home")
         return
     _expand(app, rel, builder, required=False)
 
@@ -273,7 +327,7 @@ def _expand_xdg(app: AppDefinition, entry: str, builder: _Builder) -> None:
     try:
         xdg = to_relative(Path(value), home=builder.root).as_posix()
     except PathError:
-        builder.skip("XDG_CONFIG_HOME fuera del home")
+        builder.skip("XDG_CONFIG_HOME fuera del home", "fuera del home")
         return
     _expand(app, f"{xdg}/{entry}", builder, required=False)
 
@@ -285,20 +339,39 @@ def _walk(app: AppDefinition, rel: str, builder: _Builder) -> None:
         return is_excluded(child, app.exclude)
 
     for item in builder.safe.walk(rel, prune=prune):
+        ensure_not_cancelled(builder.cancelled)
         if item.kind == "file" and item.info is not None:
             _add_file(app.id, item.path, item.info, builder)
         elif item.kind == "link" and item.info is not None:
             _add_link(app.id, item.path, item.info, builder)
         else:
-            builder.skip(item.path)
+            builder.skip(item.path, "tipo de archivo no soportado")
 
 
 def _add_file(app_id: str, rel: str, info: os.stat_result, builder: _Builder) -> None:
-    """Crea la operación de un archivo regular leyéndolo de forma segura."""
+    """Crea la operación de un archivo regular leyéndolo de forma segura.
+
+    En modo recuento no se abre el archivo: basta con `lstat` para conocer su
+    tamaño, y el resultado nunca se escribe en un archivo.
+    """
+    ensure_not_cancelled(builder.cancelled)
+    if builder.count_only:
+        builder.add_operation(
+            Operation(
+                app_id=app_id,
+                path=rel,
+                source=to_absolute(rel, home=builder.root),
+                size=info.st_size,
+                sha256=None,
+                mode=f"{stat.S_IMODE(info.st_mode):04o}",
+                link=None,
+            )
+        )
+        return
     try:
         data = builder.safe.read_bytes(rel)
     except (PathError, OSError):
-        builder.skip(rel)
+        builder.skip(rel, "no se pudo leer")
         return
     builder.add_operation(
         Operation(
@@ -318,10 +391,10 @@ def _add_link(app_id: str, rel: str, info: os.stat_result, builder: _Builder) ->
     try:
         target = builder.safe.readlink(rel)
     except (PathError, OSError):
-        builder.skip(rel)
+        builder.skip(rel, "no se pudo leer el enlace")
         return
     if not _is_safe_link(target):
-        builder.skip(rel)
+        builder.skip(rel, "enlace no seguro")
         return
     builder.add_operation(
         Operation(
@@ -355,12 +428,13 @@ def _expand_ghostty(app: AppDefinition, builder: _Builder) -> None:
         operation.path
         for operation in builder.operations
         if operation.app_id == app.id
-        and operation.sha256 is not None
+        and operation.link is None
         and PurePosixPath(operation.path).name in CONFIG_FILENAMES
     ]
 
     def parse(rel: str, depth: int) -> None:
         nonlocal processed
+        ensure_not_cancelled(builder.cancelled)
         if rel in visited:
             return
         visited.add(rel)
@@ -408,11 +482,11 @@ def _follow_config_file(
         return
     resolved = resolve_reference(raw, base_rel, builder.root)
     if resolved is None:
-        builder.skip(raw)
+        builder.skip(raw, "referencia de Ghostty fuera del home")
         builder.notice(f"referencia de Ghostty fuera del home: {raw}")
         return
     if _blocked_reference(app, resolved):
-        builder.skip(resolved)
+        builder.skip(resolved, "referencia de Ghostty excluida por seguridad")
         builder.notice(f"referencia de Ghostty excluida por seguridad: {resolved}")
         return
     if resolved in stack:
@@ -423,7 +497,7 @@ def _follow_config_file(
     if included:
         parse(resolved, depth + 1)
     elif not optional:
-        builder.skip(resolved)
+        builder.skip(resolved, "referencia de Ghostty no incluida")
 
 
 def _follow_theme(
@@ -438,11 +512,11 @@ def _follow_theme(
     if is_path_reference(raw):
         resolved = resolve_reference(raw, base_rel, builder.root)
         if resolved is None:
-            builder.skip(raw)
+            builder.skip(raw, "tema de Ghostty fuera del home")
             builder.notice(f"tema de Ghostty fuera del home: {raw}")
             return
         if _blocked_reference(app, resolved):
-            builder.skip(resolved)
+            builder.skip(resolved, "tema de Ghostty excluido por seguridad")
             builder.notice(f"tema de Ghostty excluido por seguridad: {resolved}")
             return
         _expand(app, resolved, builder, required=True, automatic=True)
@@ -454,7 +528,7 @@ def _follow_theme(
         except FileNotFoundError:
             continue
         except (PathError, NotADirectoryError, OSError):
-            builder.skip(candidate)
+            builder.skip(candidate, "tema de Ghostty inseguro")
             builder.notice(f"tema de Ghostty inseguro: {candidate}")
             return
         if stat.S_ISREG(info.st_mode):

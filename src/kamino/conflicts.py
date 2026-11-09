@@ -1,7 +1,7 @@
-"""Conflict detection, diffing, composition and validation for restores.
+"""Conflict detection, diffing, composition and validation for deploys.
 
-The restore flow keeps this module free of interface code: it receives the local
-state and the backup bytes and returns the conflict model that both the CLI and
+The deploy flow keeps this module free of interface code: it receives the local
+state and the clone bytes and returns the conflict model that both the CLI and
 the TUI consume. Composition happens here too, so the interface never injects
 arbitrary bytes into a destination.
 
@@ -16,9 +16,9 @@ Rules:
 - Symlinks with different targets are whole-file conflicts.
 - Hunks are generated with :class:`difflib.SequenceMatcher` using
   :data:`CONTEXT_LINES` lines of context. Each changed line is a row that starts
-  on the backup side and can be switched to the local side.
+  on the clone side and can be switched to the local side.
 - Composition keeps equal lines from the local file (including their endings),
-  adapts backup lines to the dominant local line ending and preserves the final
+  adapts clone lines to the dominant local line ending and preserves the final
   newline of the chosen side; a missing final newline only survives on the last
   emitted line.
 """
@@ -65,13 +65,13 @@ class RowKind(StrEnum):
     EQUAL = "equal"
     REPLACE = "replace"
     LOCAL_ONLY = "local_only"
-    BACKUP_ONLY = "backup_only"
+    CLONE_ONLY = "clone_only"
 
 
 class RowDecision(StrEnum):
     """Which side of a row is written."""
 
-    BACKUP = "backup"
+    CLONE = "clone"
     LOCAL = "local"
 
 
@@ -95,15 +95,15 @@ class LocalFile:
 
 @dataclass(frozen=True)
 class HunkRow:
-    """One line of a hunk with its local and backup versions.
+    """One line of a hunk with its local and clone versions.
 
     ``EQUAL`` rows carry both sides, ``REPLACE`` rows pair one line per side,
-    and ``LOCAL_ONLY``/``BACKUP_ONLY`` rows have a single side.
+    and ``LOCAL_ONLY``/``CLONE_ONLY`` rows have a single side.
     """
 
     kind: RowKind
     local: str | None = None
-    backup: str | None = None
+    clone: str | None = None
 
 
 @dataclass(frozen=True)
@@ -114,9 +114,9 @@ class Hunk:
     #: 1-based, end-exclusive local line range covered by the block.
     local_start: int
     local_end: int
-    #: 1-based, end-exclusive backup line range covered by the block.
-    backup_start: int
-    backup_end: int
+    #: 1-based, end-exclusive clone line range covered by the block.
+    clone_start: int
+    clone_end: int
     #: Context and changed lines in document order, with their original endings.
     rows: tuple[HunkRow, ...]
 
@@ -168,22 +168,22 @@ class _MergeStatus(StrEnum):
 
 @dataclass(frozen=True)
 class Conflict:
-    """A destination and a backup file that differ in content or link target."""
+    """A destination and a clone file that differ in content or link target."""
 
     app_id: str
     path: str
     destination: Path
     kind: ConflictKind
     local_size: int
-    backup_size: int
+    clone_size: int
     local_mode: str
-    backup_mode: str
+    clone_mode: str
     local_sha256: str | None
-    backup_sha256: str | None
+    clone_sha256: str | None
     local_link: str | None
-    backup_link: str | None
+    clone_link: str | None
     local_text: str | None
-    backup_text: str | None
+    clone_text: str | None
     hunks: tuple[Hunk, ...] = ()
     validation_format: str | None = None
 
@@ -195,7 +195,7 @@ def build_conflict(
     destination: Path,
     entry: FileEntry,
     local: LocalFile,
-    backup_content: bytes | None,
+    clone_content: bytes | None,
 ) -> Conflict | None:
     """Build a conflict, or return ``None`` when the file needs no decision.
 
@@ -204,7 +204,7 @@ def build_conflict(
     those keep the existing overwrite semantics.
     """
     local_sha = sha256(local.data).hexdigest() if local.kind == "file" else None
-    backup_sha = entry.sha256
+    clone_sha = entry.sha256
 
     if entry.link is not None:
         if local.kind != "symlink" or local.link is None:
@@ -217,24 +217,24 @@ def build_conflict(
             destination=destination,
             kind=ConflictKind.SYMLINK,
             local_size=0,
-            backup_size=0,
+            clone_size=0,
             local_mode=local.mode,
-            backup_mode=entry.mode,
+            clone_mode=entry.mode,
             local_sha256=None,
-            backup_sha256=None,
+            clone_sha256=None,
             local_link=local.link,
-            backup_link=entry.link,
+            clone_link=entry.link,
             local_text=None,
-            backup_text=None,
+            clone_text=None,
         )
 
     if local.kind != "file":
         return None
-    if backup_sha is not None and local_sha == backup_sha:
+    if clone_sha is not None and local_sha == clone_sha:
         return None
 
     local_text = _decode_text(local.data)
-    if backup_content is None:
+    if clone_content is None:
         # The size in the manifest is enough to reject oversized diffs; the
         # content is only needed for a text diff.
         if entry.size > MAX_TEXT_BYTES or len(local.data) > MAX_TEXT_BYTES:
@@ -245,43 +245,43 @@ def build_conflict(
             app_id, path, destination, entry, local, local_sha, ConflictKind.BINARY
         )
 
-    backup_text = _decode_text(backup_content)
-    if local_text is None or backup_text is None:
+    clone_text = _decode_text(clone_content)
+    if local_text is None or clone_text is None:
         if entry.size > MAX_TEXT_BYTES or len(local.data) > MAX_TEXT_BYTES:
             kind = ConflictKind.LARGE
         else:
             kind = ConflictKind.BINARY
         return _whole_file_conflict(app_id, path, destination, entry, local, local_sha, kind)
 
-    if _normalise_newlines(local_text) == _normalise_newlines(backup_text):
+    if _normalise_newlines(local_text) == _normalise_newlines(clone_text):
         return None
 
     if (
         entry.size > MAX_TEXT_BYTES
         or len(local.data) > MAX_TEXT_BYTES
-        or _line_count(backup_text) > MAX_DIFF_LINES
+        or _line_count(clone_text) > MAX_DIFF_LINES
         or _line_count(local_text) > MAX_DIFF_LINES
     ):
         return _whole_file_conflict(
             app_id, path, destination, entry, local, local_sha, ConflictKind.LARGE
         )
 
-    hunks = build_hunks(local_text, backup_text)
+    hunks = build_hunks(local_text, clone_text)
     return Conflict(
         app_id=app_id,
         path=path,
         destination=destination,
         kind=ConflictKind.TEXT,
         local_size=len(local.data),
-        backup_size=entry.size,
+        clone_size=entry.size,
         local_mode=local.mode,
-        backup_mode=entry.mode,
+        clone_mode=entry.mode,
         local_sha256=local_sha,
-        backup_sha256=backup_sha,
+        clone_sha256=clone_sha,
         local_link=None,
-        backup_link=None,
+        clone_link=None,
         local_text=local_text,
-        backup_text=backup_text,
+        clone_text=clone_text,
         hunks=hunks,
         validation_format=validation_format(path),
     )
@@ -302,26 +302,26 @@ def _whole_file_conflict(
         destination=destination,
         kind=kind,
         local_size=len(local.data),
-        backup_size=entry.size,
+        clone_size=entry.size,
         local_mode=local.mode,
-        backup_mode=entry.mode,
+        clone_mode=entry.mode,
         local_sha256=local_sha,
-        backup_sha256=entry.sha256,
+        clone_sha256=entry.sha256,
         local_link=None,
-        backup_link=None,
+        clone_link=None,
         local_text=None,
-        backup_text=None,
+        clone_text=None,
         validation_format=validation_format(path),
     )
 
 
-def build_hunks(local_text: str, backup_text: str) -> tuple[Hunk, ...]:
+def build_hunks(local_text: str, clone_text: str) -> tuple[Hunk, ...]:
     """Return the change blocks between two text files."""
     local_lines = local_text.splitlines(keepends=True)
-    backup_lines = backup_text.splitlines(keepends=True)
+    clone_lines = clone_text.splitlines(keepends=True)
     local_norm = _normalise_newlines(local_text).splitlines(keepends=True)
-    backup_norm = _normalise_newlines(backup_text).splitlines(keepends=True)
-    matcher = SequenceMatcher(None, local_norm, backup_norm, autojunk=False)
+    clone_norm = _normalise_newlines(clone_text).splitlines(keepends=True)
+    matcher = SequenceMatcher(None, local_norm, clone_norm, autojunk=False)
 
     hunks: list[Hunk] = []
     for group in matcher.get_grouped_opcodes(CONTEXT_LINES):
@@ -329,14 +329,14 @@ def build_hunks(local_text: str, backup_text: str) -> tuple[Hunk, ...]:
             continue
         rows: list[HunkRow] = []
         for tag, i1, i2, j1, j2 in group:
-            rows.extend(_rows_for_opcode(tag, local_lines, backup_lines, i1, i2, j1, j2))
+            rows.extend(_rows_for_opcode(tag, local_lines, clone_lines, i1, i2, j1, j2))
         hunks.append(
             Hunk(
                 index=len(hunks) + 1,
                 local_start=group[0][1] + 1,
                 local_end=group[-1][2] + 1,
-                backup_start=group[0][3] + 1,
-                backup_end=group[-1][4] + 1,
+                clone_start=group[0][3] + 1,
+                clone_end=group[-1][4] + 1,
                 rows=tuple(rows),
             )
         )
@@ -346,7 +346,7 @@ def build_hunks(local_text: str, backup_text: str) -> tuple[Hunk, ...]:
 def _rows_for_opcode(
     tag: str,
     local_lines: Sequence[str],
-    backup_lines: Sequence[str],
+    clone_lines: Sequence[str],
     i1: int,
     i2: int,
     j1: int,
@@ -354,43 +354,43 @@ def _rows_for_opcode(
 ) -> tuple[HunkRow, ...]:
     """Turn one diff opcode into aligned rows with the original line endings."""
     local_slice = local_lines[i1:i2]
-    backup_slice = backup_lines[j1:j2]
+    clone_slice = clone_lines[j1:j2]
     if tag == "equal":
         return tuple(
-            HunkRow(RowKind.EQUAL, local, backup)
-            for local, backup in zip(local_slice, backup_slice, strict=True)
+            HunkRow(RowKind.EQUAL, local, clone)
+            for local, clone in zip(local_slice, clone_slice, strict=True)
         )
     if tag == "replace":
-        paired = min(len(local_slice), len(backup_slice))
+        paired = min(len(local_slice), len(clone_slice))
         rows = [
-            HunkRow(RowKind.REPLACE, local_slice[index], backup_slice[index])
+            HunkRow(RowKind.REPLACE, local_slice[index], clone_slice[index])
             for index in range(paired)
         ]
         rows.extend(HunkRow(RowKind.LOCAL_ONLY, line, None) for line in local_slice[paired:])
-        rows.extend(HunkRow(RowKind.BACKUP_ONLY, None, line) for line in backup_slice[paired:])
+        rows.extend(HunkRow(RowKind.CLONE_ONLY, None, line) for line in clone_slice[paired:])
         return tuple(rows)
     if tag == "delete":
         return tuple(HunkRow(RowKind.LOCAL_ONLY, line, None) for line in local_slice)
     if tag == "insert":
-        return tuple(HunkRow(RowKind.BACKUP_ONLY, None, line) for line in backup_slice)
+        return tuple(HunkRow(RowKind.CLONE_ONLY, None, line) for line in clone_slice)
     raise ValueError(f"unknown diff opcode: {tag}")
 
 
-def compose(local_text: str, backup_text: str, decisions: Sequence[RowDecision]) -> str:
+def compose(local_text: str, clone_text: str, decisions: Sequence[RowDecision]) -> str:
     """Compose the result from the selected side of every decidable row.
 
-    Equal lines always come from the local file. Backup lines adopt the
+    Equal lines always come from the local file. Clone lines adopt the
     dominant local line ending, and a missing final newline is only preserved
     on the last emitted line.
     """
     local_lines = local_text.splitlines(keepends=True)
-    backup_lines = backup_text.splitlines(keepends=True)
+    clone_lines = clone_text.splitlines(keepends=True)
     local_norm = _normalise_newlines(local_text).splitlines(keepends=True)
-    backup_norm = _normalise_newlines(backup_text).splitlines(keepends=True)
-    matcher = SequenceMatcher(None, local_norm, backup_norm, autojunk=False)
+    clone_norm = _normalise_newlines(clone_text).splitlines(keepends=True)
+    matcher = SequenceMatcher(None, local_norm, clone_norm, autojunk=False)
 
     expected = sum(
-        len(_rows_for_opcode(tag, local_lines, backup_lines, i1, i2, j1, j2))
+        len(_rows_for_opcode(tag, local_lines, clone_lines, i1, i2, j1, j2))
         for tag, i1, i2, j1, j2 in matcher.get_opcodes()
         if tag != "equal"
     )
@@ -404,7 +404,7 @@ def compose(local_text: str, backup_text: str, decisions: Sequence[RowDecision])
         if tag == "equal":
             output.extend(local_lines[i1:i2])
             continue
-        rows = _rows_for_opcode(tag, local_lines, backup_lines, i1, i2, j1, j2)
+        rows = _rows_for_opcode(tag, local_lines, clone_lines, i1, i2, j1, j2)
         for row in rows:
             decision = decisions[decision_index]
             decision_index += 1
@@ -412,13 +412,13 @@ def compose(local_text: str, backup_text: str, decisions: Sequence[RowDecision])
                 if decision is RowDecision.LOCAL:
                     output.append(row.local or "")
                 else:
-                    output.append(_adapt_line(row.backup or "", eol))
+                    output.append(_adapt_line(row.clone or "", eol))
             elif row.kind is RowKind.LOCAL_ONLY:
                 if decision is RowDecision.LOCAL:
                     output.append(row.local or "")
             else:
-                if decision is RowDecision.BACKUP:
-                    output.append(_adapt_line(row.backup or "", eol))
+                if decision is RowDecision.CLONE:
+                    output.append(_adapt_line(row.clone or "", eol))
     return _ensure_final_newline(output, eol)
 
 
@@ -448,7 +448,7 @@ def _adapt_line(line: str, eol: str) -> str:
 def validate_merge(
     path: str,
     local_text: str,
-    backup_text: str,
+    clone_text: str,
     merged_text: str,
 ) -> MergeValidation:
     """Validate a composed file with the standard library.
@@ -462,11 +462,11 @@ def validate_merge(
             _MergeStatus.UNVALIDATED, "este formato no se valida automáticamente"
         )
     local_error = parser(local_text)
-    backup_error = parser(backup_text)
-    if local_error is not None or backup_error is not None:
+    clone_error = parser(clone_text)
+    if local_error is not None or clone_error is not None:
         return MergeValidation(
             _MergeStatus.WARNING,
-            "uno de los originales ya era inválido; se permite aplicar la mezcla",
+            "uno de los originales ya era inválido; se permite aplicar el híbrido",
         )
     merged_error = parser(merged_text)
     if merged_error is not None:
@@ -489,7 +489,7 @@ def validation_format(path: str) -> str | None:
 
 
 def apply_all(conflicts: Sequence[Conflict]) -> ConflictDecisions:
-    """Decide every conflict by applying the backup side."""
+    """Decide every conflict by applying the clone side."""
     return ConflictDecisions(
         {conflict.path: FileDecision(FileAction.APPLY) for conflict in conflicts}
     )
@@ -507,7 +507,7 @@ def row_count(conflict: Conflict) -> int:
     return sum(1 for hunk in conflict.hunks for row in hunk.rows if row.kind is not RowKind.EQUAL)
 
 
-def review_all(conflict: Conflict, decision: RowDecision = RowDecision.BACKUP) -> FileDecision:
+def review_all(conflict: Conflict, decision: RowDecision = RowDecision.CLONE) -> FileDecision:
     """Build a ``REVIEW`` decision with every row on the same side."""
     return FileDecision(FileAction.REVIEW, tuple(decision for _row in range(row_count(conflict))))
 

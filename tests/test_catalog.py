@@ -157,6 +157,15 @@ def test_embedded_catalog_has_example(tmp_path, monkeypatch) -> None:
     assert catalog["git"].command == "git"
 
 
+def test_yazi_catalog_includes_plugins_and_entrypoints(tmp_path) -> None:
+    catalog = load_catalog(user_dir=tmp_path / "no-existe")
+    assert {
+        ".config/yazi/init.lua",
+        ".config/yazi/package.toml",
+        ".config/yazi/plugins",
+    } <= set(catalog["yazi"].paths)
+
+
 def test_embedded_catalog_has_all_new_tools(tmp_path) -> None:
     catalog = load_catalog(user_dir=tmp_path / "no-existe")
     assert {

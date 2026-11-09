@@ -1,9 +1,9 @@
-"""Pruebas de `snapshot.py`: copia de seguridad previa a restaurar.
+"""Pruebas de `snapshot.py`: copia de seguridad previa a desplegar.
 
-El snapshot usa el mismo formato que un respaldo (§6: "Snapshots"): una única app
+El snapshot usa el mismo formato que un clon (§6: "Snapshots"): una única app
 sintética `snapshot`, rutas relativas al home y nombre `<timestamp>.tar.gz` en
 `~/Library/Application Support/kamino/snapshots/`, así el futuro `undo` es un
-`restore` del snapshot. Todo se inyecta (home, snapshots_dir, timestamp) para no
+`deploy` del snapshot. Todo se inyecta (home, snapshots_dir, timestamp) para no
 tocar el sistema real (§7).
 """
 
@@ -203,10 +203,8 @@ def test_intermediate_symlink_is_not_read_or_snapshotted(tmp_path: Path) -> None
         timestamp=TIMESTAMP,
     )
 
-    assert snapshot is not None
-    manifest = read_manifest(snapshot)
-    (app,) = manifest.apps
-    assert app.files == []
+    assert snapshot is None
+    assert not snapshots.exists()
 
 
 # --- validación de entradas ---

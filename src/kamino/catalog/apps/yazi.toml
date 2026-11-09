@@ -1,5 +1,5 @@
 id = "yazi"
 name = "yazi"
 command = "yazi"
-paths = [".config/yazi/yazi.toml", ".config/yazi/keymap.toml", ".config/yazi/theme.toml"]
+paths = [".config/yazi/yazi.toml", ".config/yazi/keymap.toml", ".config/yazi/theme.toml", ".config/yazi/init.lua", ".config/yazi/package.toml", ".config/yazi/plugins"]
 exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

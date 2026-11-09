@@ -5,11 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "kamino-cli"
 version = "0.6.0"
-description = "Respalda y restaura configuraciones de aplicaciones de macOS en un único archivo portable."
+description = "Clona y despliega configuraciones de aplicaciones de macOS en un único archivo portable."
 readme = "README.md"
 requires-python = ">=3.11"
 authors = [{ name = "Cristiam" }]
-keywords = ["backup", "restore", "macos", "dotfiles", "config", "cli"]
+keywords = ["clone", "deploy", "macos", "dotfiles", "config", "cli"]
 classifiers = [
   "Environment :: Console",
   "Operating System :: MacOS",
@@ -23,7 +23,6 @@ classifiers = [
 dependencies = [
   "certifi>=2024.2.2",
   "typer>=0.12",
-  "questionary>=2.0",
   "rich>=13.7",
   "pydantic>=2.7",
   "textual>=8.2.8",

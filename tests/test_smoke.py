@@ -21,8 +21,8 @@ def test_all_modules_import() -> None:
     modules = [
         "kamino.cli",
         "kamino.ui",
-        "kamino.backup",
-        "kamino.restore",
+        "kamino.clone",
+        "kamino.deploy",
         "kamino.plan",
         "kamino.detect",
         "kamino.archive",
