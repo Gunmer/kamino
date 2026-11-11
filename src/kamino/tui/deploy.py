@@ -19,6 +19,7 @@ from textual.widgets.option_list import Option
 from kamino import texts
 from kamino.archive import read_manifest
 from kamino.catalog.models import AppDefinition
+from kamino.config import AppConfig, ConfigLoadResult, load_config
 from kamino.conflicts import (
     Conflict,
     ConflictDecisions,
@@ -77,6 +78,7 @@ class DeployState:
 
     home: Path | None = None
     catalog: dict[str, AppDefinition] | None = None
+    catalog_dir: Path | None = None
     application_dirs: Sequence[Path] | None = None
     path: str | None = None
     snapshots_dir: Path | None = None
@@ -127,10 +129,24 @@ def _prepare_session(state: DeployState, clone_file: Path) -> DeploySession:
         clone_file,
         home=state.home,
         catalog=state.catalog,
+        catalog_dir=state.catalog_dir,
         application_dirs=state.application_dirs,
         path=state.path,
         snapshots_dir=state.snapshots_dir,
     )
+
+
+def _apply_requested(state: DeployState) -> None:
+    """Filtra la selección y el aviso de `--apps` tras preparar la sesión."""
+    if state.requested is None or state.session is None:
+        return
+    deployable = {app.id for app in state.session.deployable_apps}
+    state.selected = [app_id for app_id in state.requested if app_id in deployable]
+    missing = [app_id for app_id in state.requested if app_id not in deployable]
+    state.apps_error = (
+        "aviso: app no desplegable o desconocida: " + ", ".join(missing) if missing else None
+    )
+    state.include_apps = state.selected is None or state.apps_error is not None
 
 
 def _warnings_text(session: DeploySession) -> str:
@@ -224,6 +240,7 @@ class DeployFileScreen(Screen[None]):
         self.state.clone_file = path
         self.state.session = session
         self.kamino.cleanup = session.close
+        _apply_requested(self.state)
         warnings = _warnings_text(session)
         self.query_one("#warnings", Static).update(warnings)
         self._advance()
@@ -1323,7 +1340,10 @@ def deploy_initial_screen(state: DeployState) -> Screen:
 
 
 def start_deploy_from_menu(app: KaminoApp) -> None:
-    state = DeployState()
+    state = DeployState(
+        catalog_dir=app.config.catalog_dir,
+        snapshots_dir=app.config.snapshots_dir,
+    )
     app.push_screen(DeployFileScreen(state))
 
 
@@ -1342,35 +1362,65 @@ def run_deploy_flow(
     apps_error: str | None = None,
     file_error: str | None = None,
     session: DeploySession | None = None,
+    config_result: ConfigLoadResult | None = None,
 ) -> int:
     """Ejecuta el flujo directo y devuelve su código."""
     from kamino.tui.app import run_app
 
-    state = DeployState(
-        home=home,
-        catalog=catalog,
-        application_dirs=application_dirs,
-        path=path,
-        snapshots_dir=snapshots_dir,
-        clone_file=clone_file,
-        selected=selected,
-        requested=requested,
-        dry_run=dry_run,
-        verbose=verbose,
-        include_file=file_error is not None,
-        include_apps=selected is None or apps_error is not None,
-        file_error=file_error,
-        apps_error=apps_error,
-        session=session,
-    )
-    if not state.include_file and state.session is None:
+    resolved = config_result if config_result is not None else load_config(home=home)
+
+    def build_state(config: AppConfig, *, use_session: bool) -> DeployState:
+        return DeployState(
+            home=home,
+            catalog=catalog,
+            catalog_dir=config.catalog_dir,
+            application_dirs=application_dirs,
+            path=path,
+            snapshots_dir=snapshots_dir if snapshots_dir is not None else config.snapshots_dir,
+            clone_file=clone_file,
+            selected=selected,
+            requested=requested,
+            dry_run=dry_run,
+            verbose=verbose,
+            include_file=file_error is not None,
+            include_apps=selected is None or apps_error is not None,
+            file_error=file_error,
+            apps_error=apps_error,
+            session=session if use_session else None,
+        )
+
+    state = build_state(resolved.config, use_session=resolved.error is None)
+    if resolved.error is None and not state.include_file and state.session is None:
         try:
             state.session = _prepare_session(state, clone_file)
         except KaminoError as exc:
             state.include_file = True
             state.file_error = str(exc)
+    _apply_requested(state)
+
+    def after_config(app: KaminoApp) -> Screen:
+        nonlocal state
+        if state.session is not None:
+            state.session.close()
+            state.session = None
+        state = build_state(app.config, use_session=False)
+        if not state.include_file and state.session is None:
+            try:
+                state.session = _prepare_session(state, clone_file)
+            except KaminoError as exc:
+                state.include_file = True
+                state.file_error = str(exc)
+        _apply_requested(state)
+        return deploy_initial_screen(state)
+
     try:
-        return run_app(mode="direct", initial=deploy_initial_screen(state))
+        return run_app(
+            mode="direct",
+            initial=deploy_initial_screen(state),
+            config_result=resolved,
+            config_home=home,
+            after_config=after_config,
+        )
     finally:
         if state.session is not None:
             state.session.close()

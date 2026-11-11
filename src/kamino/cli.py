@@ -15,11 +15,8 @@ from typing import Annotated
 import typer
 
 from kamino import __version__, texts, ui
-from kamino.catalog.loader import load_catalog
 from kamino.clone import validate_destination
 from kamino.commands import execute_clone, execute_deploy, execute_update
-from kamino.deploy import prepare_deploy
-from kamino.detect import is_installed
 from kamino.errors import KaminoError, PartialApplyError
 from kamino.tui.app import run_app
 from kamino.tui.clone import run_clone_flow
@@ -148,31 +145,19 @@ def _clone_tui(
     verbose: bool,
     force: bool,
 ) -> int:
-    """Decide qué pantallas omitir y abre el flujo directo de clonación."""
-    catalog = load_catalog()
-    installed = {app.id for app in catalog.values() if is_installed(app)}
-    missing = (
-        [app_id for app_id in requested if app_id not in installed] if requested is not None else []
-    )
-    apps_error = "aviso: app no instalada o desconocida: " + ", ".join(missing) if missing else None
-    selected = (
-        [app_id for app_id in requested if app_id in installed] if requested is not None else None
-    )
+    """Valida la ruta y abre el flujo directo de clonación."""
     output_path: Path | None = None
     output_error: str | None = None
     if output is not None:
         output_path = output.expanduser().resolve()
         output_error = validate_destination(output_path)
     return run_clone_flow(
-        catalog=catalog,
-        selected=selected,
+        requested=requested,
         output=output_path,
         force=force,
         dry_run=dry_run,
         verbose=verbose,
-        apps_error=apps_error,
         output_error=output_error,
-        missing_requested=missing,
     )
 
 
@@ -241,7 +226,7 @@ def _deploy_tui(
     requested: list[str] | None,
     verbose: bool,
 ) -> int:
-    """Valida el archivo y `--apps`, y abre el flujo directo de despliegue."""
+    """Valida el archivo y abre el flujo directo de despliegue."""
     if not clone_file.is_file():
         return run_deploy_flow(
             clone_file=clone_file,
@@ -249,32 +234,10 @@ def _deploy_tui(
             verbose=verbose,
             file_error=f"no existe el archivo: {clone_file}",
         )
-    try:
-        session = prepare_deploy(clone_file)
-    except KaminoError as exc:
-        return run_deploy_flow(
-            clone_file=clone_file,
-            requested=requested,
-            verbose=verbose,
-            file_error=str(exc),
-        )
-    deployable = {app.id for app in session.deployable_apps}
-    if requested is None:
-        selected = None
-        apps_error = None
-    else:
-        selected = [app_id for app_id in requested if app_id in deployable]
-        missing = [app_id for app_id in requested if app_id not in deployable]
-        apps_error = (
-            "aviso: app no desplegable o desconocida: " + ", ".join(missing) if missing else None
-        )
     return run_deploy_flow(
         clone_file=clone_file,
-        selected=selected,
         requested=requested,
         verbose=verbose,
-        apps_error=apps_error,
-        session=session,
     )
 
 

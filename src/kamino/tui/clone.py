@@ -29,6 +29,8 @@ from kamino.clone import (
     validate_destination,
     write_clone,
 )
+from kamino.config import AppConfig, ConfigLoadResult, load_config
+from kamino.defaults import catalog_dir as default_catalog_dir
 from kamino.detect import is_installed
 from kamino.errors import KaminoError, OperationCancelled
 from kamino.plan import CountResult, count_files
@@ -52,10 +54,12 @@ class CloneState:
 
     home: Path | None = None
     catalog: dict[str, AppDefinition] | None = None
+    catalog_dir: Path | None = None
     application_dirs: Sequence[Path] | None = None
     path: str | None = None
     selected: list[str] | None = None
     output: Path | None = None
+    default_output_dir: Path | None = None
     force: bool = False
     dry_run: bool = False
     verbose: bool = False
@@ -88,7 +92,10 @@ def _root(state: CloneState) -> Path:
 def _catalog(state: CloneState) -> dict[str, AppDefinition]:
     if state.catalog is not None:
         return state.catalog
-    return load_catalog(user_dir=_root(state) / ".config" / "kamino" / "apps")
+    directory = (
+        state.catalog_dir if state.catalog_dir is not None else default_catalog_dir(_root(state))
+    )
+    return load_catalog(user_dir=directory)
 
 
 def _installed(state: CloneState) -> tuple[list[AppDefinition], list[AppDefinition]]:
@@ -336,7 +343,8 @@ class CloneDestinationScreen(Screen[None]):
 
     def on_mount(self) -> None:
         state = self.state
-        default = state.output or (Path.cwd() / default_name(state.now))
+        directory = state.default_output_dir if state.default_output_dir is not None else Path.cwd()
+        default = state.output or (directory / default_name(state.now))
         path_input = self.query_one("#path", Input)
         path_input.value = str(default.expanduser())
         path_input.focus()
@@ -357,9 +365,18 @@ class CloneDestinationScreen(Screen[None]):
 
     def _validate(self) -> str | None:
         path = self._absolute()
-        error = validate_destination(path)
+        error = validate_destination(
+            path,
+            allow_missing_parent=self._is_default_proposal(path),
+        )
         self.query_one("#status", Static).update(error or "")
         return error
+
+    def _is_default_proposal(self, path: Path) -> bool:
+        if self.state.output is not None or self.state.default_output_dir is None:
+            return False
+        expected = (self.state.default_output_dir / default_name(self.state.now)).resolve()
+        return path == expected
 
     def on_input_changed(self, event: Input.Changed) -> None:
         self._validate()
@@ -514,6 +531,7 @@ class CloneReviewScreen(Screen[None]):
                 selected=self.state.selected,
                 output=self.state.output,
                 catalog=self.state.catalog,
+                catalog_dir=self.state.catalog_dir,
                 application_dirs=self.state.application_dirs,
                 path=self.state.path,
                 now=self.state.now,
@@ -805,8 +823,10 @@ def _clone_state(
     *,
     home: Path | None,
     catalog: dict[str, AppDefinition] | None,
+    catalog_dir: Path | None,
     selected: list[str] | None,
     output: Path | None,
+    default_output_dir: Path | None,
     force: bool,
     dry_run: bool,
     verbose: bool,
@@ -822,10 +842,12 @@ def _clone_state(
     return CloneState(
         home=home,
         catalog=catalog,
+        catalog_dir=catalog_dir,
         application_dirs=application_dirs,
         path=path,
         selected=selected,
         output=output,
+        default_output_dir=default_output_dir,
         force=force,
         dry_run=dry_run,
         verbose=verbose,
@@ -842,8 +864,10 @@ def start_clone_from_menu(app: KaminoApp) -> None:
     state = _clone_state(
         home=None,
         catalog=None,
+        catalog_dir=app.config.catalog_dir,
         selected=None,
         output=None,
+        default_output_dir=app.config.clone_output_dir,
         force=False,
         dry_run=False,
         verbose=False,
@@ -877,6 +901,7 @@ def run_clone_flow(
     home: Path | None = None,
     catalog: dict[str, AppDefinition] | None = None,
     selected: list[str] | None = None,
+    requested: list[str] | None = None,
     output: Path | None = None,
     force: bool = False,
     dry_run: bool = False,
@@ -887,27 +912,64 @@ def run_clone_flow(
     apps_error: str | None = None,
     output_error: str | None = None,
     missing_requested: list[str] | None = None,
+    config_result: ConfigLoadResult | None = None,
 ) -> int:
     """Ejecuta el flujo en modo directo y devuelve su código."""
     from kamino.tui.app import run_app
 
-    include_apps = (selected is None and output_error is None) or apps_error is not None
+    resolved = config_result if config_result is not None else load_config(home=home)
     include_destination = output is None or output_error is not None
-    state = _clone_state(
-        home=home,
-        catalog=catalog,
-        selected=selected,
-        output=output,
-        force=force,
-        dry_run=dry_run,
-        verbose=verbose,
-        application_dirs=application_dirs,
-        path=path,
-        now=now,
-        include_apps=include_apps,
-        include_destination=include_destination,
-        apps_error=apps_error,
-        output_error=output_error,
-        missing_requested=list(missing_requested or []),
+
+    def selection(config: AppConfig) -> tuple[list[str] | None, str | None, list[str]]:
+        if requested is None:
+            return selected, apps_error, list(missing_requested or [])
+        definitions = catalog if catalog is not None else load_catalog(user_dir=config.catalog_dir)
+        installed = {
+            app.id
+            for app in definitions.values()
+            if is_installed(
+                app,
+                home=home,
+                application_dirs=application_dirs,
+                path=path,
+            )
+        }
+        chosen = [app_id for app_id in requested if app_id in installed]
+        missing = [app_id for app_id in requested if app_id not in installed]
+        error = "aviso: app no instalada o desconocida: " + ", ".join(missing) if missing else None
+        return chosen, error, missing
+
+    def build_state(config: AppConfig) -> CloneState:
+        chosen, error, missing = selection(config)
+        include_apps = (chosen is None and output_error is None) or error is not None
+        return _clone_state(
+            home=home,
+            catalog=catalog,
+            catalog_dir=config.catalog_dir,
+            selected=chosen,
+            output=output,
+            default_output_dir=config.clone_output_dir,
+            force=force,
+            dry_run=dry_run,
+            verbose=verbose,
+            application_dirs=application_dirs,
+            path=path,
+            now=now,
+            include_apps=include_apps,
+            include_destination=include_destination,
+            apps_error=error,
+            output_error=output_error,
+            missing_requested=missing,
+        )
+
+    def after_config(app: KaminoApp) -> Screen:
+        return clone_initial_screen(build_state(app.config))
+
+    state = build_state(resolved.config)
+    return run_app(
+        mode="direct",
+        initial=clone_initial_screen(state),
+        config_result=resolved,
+        config_home=home,
+        after_config=after_config,
     )
-    return run_app(mode="direct", initial=clone_initial_screen(state))

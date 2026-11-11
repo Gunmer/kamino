@@ -8,15 +8,19 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from textual._context import visible_screen_stack
+from textual.renderables.background_screen import BackgroundScreen
+from textual.screen import Screen
 from textual.widgets import Button, DataTable, Input, OptionList, Static
 
 from kamino import texts
 from kamino.archive import FileEntry
 from kamino.catalog.models import AppDefinition
 from kamino.clone import run_clone
+from kamino.config import AppConfig, ConfigLoadResult, config_path, load_config
 from kamino.conflicts import LocalFile, build_conflict
 from kamino.deploy import prepare_deploy
-from kamino.errors import ArchiveError, OperationCancelled, PartialApplyError
+from kamino.errors import ArchiveError, ConfigError, OperationCancelled, PartialApplyError
 from kamino.tui import clone as clone_tui
 from kamino.tui import deploy as deploy_tui
 from kamino.tui import update as update_tui
@@ -31,6 +35,7 @@ from kamino.tui.clone import (
     clone_initial_screen,
 )
 from kamino.tui.common import ChoiceDialog, ErrorScreen
+from kamino.tui.config import ConfigScreen
 from kamino.tui.deploy import (
     DeployAppsScreen,
     DeployConfirmScreen,
@@ -48,6 +53,12 @@ from kamino.update import ReleaseInfo, UpdateOutcome
 
 def _run(coroutine) -> None:
     asyncio.run(coroutine)
+
+
+def _composited_background(screen: Screen):
+    """Render a screen background exactly as the compositor does."""
+    visible_screen_stack.set(list(screen.app._background_screens))
+    return screen.render()
 
 
 def _app_def(app_id: str = "foo", paths: list[str] | None = None) -> AppDefinition:
@@ -143,6 +154,9 @@ def test_menu_degrades_by_height_and_recovers() -> None:
             assert menu.query_one("#subtitle", Static).display is False
             assert menu.query_one("#capsules", Static).display is False
             assert menu.query_one("#menu").display is True
+            options = menu.query_one("#menu-options", OptionList)
+            assert len(options.options) == 5
+            assert options.size.height == 5
             await pilot.resize_terminal(80, 26)
             await asyncio.sleep(0.3)
             assert menu.query_one("#capsules", Static).display is True
@@ -186,9 +200,9 @@ def test_menu_arrows_move_selection_and_enter_accepts() -> None:
             await pilot.press("up")
             await pilot.pause()
             assert options.highlighted == 0
-            await pilot.press("down", "down", "down")
+            await pilot.press("down", "down", "down", "down")
             await pilot.pause()
-            assert options.highlighted == 3
+            assert options.highlighted == 4
             await pilot.press("enter")
             await pilot.pause()
             assert app.return_value == 0
@@ -426,6 +440,30 @@ def test_pushing_screen_hides_previous_and_pop_restores(tmp_path: Path) -> None:
     _run(scenario())
 
 
+def test_pushed_screen_does_not_composite_previous_screen(tmp_path: Path) -> None:
+    home, catalog, bin_path = _source_home(tmp_path)
+    state = CloneState(home=home, catalog=catalog, application_dirs=[], path=bin_path)
+    app = KaminoApp(mode="direct", initial=CloneAppsScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            await asyncio.sleep(0.3)
+            await pilot.pause()
+            assert app._background_screens == []
+            app.push_screen(CloneDestinationScreen(state))
+            await pilot.pause()
+            assert app._background_screens == []
+            # The previous screen's compositor stays alive for back navigation,
+            # but it must never be painted under the active screen.
+            assert not isinstance(_composited_background(app.screen), BackgroundScreen)
+            app.pop_screen()
+            await pilot.pause()
+            assert app.screen.query_one("#apps", DataTable).row_count == 1
+
+    _run(scenario())
+
+
 def test_c2_default_name_validation_and_shortcuts(tmp_path: Path, monkeypatch) -> None:
     home, catalog, bin_path = _source_home(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -451,6 +489,56 @@ def test_c2_default_name_validation_and_shortcuts(tmp_path: Path, monkeypatch) -
             await pilot.press("f3")
             await pilot.pause()
             assert "Downloads" in path_input.value or path_input.value.endswith(".tar.gz")
+
+    _run(scenario())
+
+
+def test_c2_uses_vault_and_accepts_missing_default_dir(tmp_path: Path) -> None:
+    home, catalog, bin_path = _source_home(tmp_path)
+    vault = home / ".config" / "kamino" / "vault"
+    state = CloneState(
+        home=home,
+        catalog=catalog,
+        application_dirs=[],
+        path=bin_path,
+        default_output_dir=vault,
+        include_apps=False,
+        include_destination=True,
+    )
+    app = KaminoApp(mode="direct", initial=CloneDestinationScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            path_input = app.screen.query_one("#path", Input)
+            assert path_input.value.startswith(str(vault))
+            assert not app.screen.query_one("#status", Static).content
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, CloneReviewScreen)
+
+    _run(scenario())
+
+
+def test_c2_uses_configured_output_dir(tmp_path: Path) -> None:
+    home, catalog, bin_path = _source_home(tmp_path)
+    configured = tmp_path / "clones"
+    state = CloneState(
+        home=home,
+        catalog=catalog,
+        application_dirs=[],
+        path=bin_path,
+        default_output_dir=configured,
+        include_apps=False,
+        include_destination=True,
+    )
+    app = KaminoApp(mode="direct", initial=CloneDestinationScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            assert app.screen.query_one("#path", Input).value.startswith(str(configured))
+            assert not app.screen.query_one("#status", Static).content
 
     _run(scenario())
 
@@ -615,6 +703,8 @@ def test_c3_writes_and_opens_summary(tmp_path: Path) -> None:
             assert isinstance(app.screen, CloneSummaryScreen)
             assert (tmp_path / "out.tar.gz").exists()
             assert app.screen.query_one("#exit-line", Static).display is False
+            assert app._background_screens == []
+            assert not isinstance(_composited_background(app.screen), BackgroundScreen)
             await pilot.press("enter")
             await pilot.pause()
             assert app.return_value == 0
@@ -1542,5 +1632,280 @@ def test_d2_uppercase_shortcuts_apply_globally(tmp_path: Path) -> None:
             assert all(
                 decision.action.value == "omit" for decision in state.decisions.decisions.values()
             )
+
+    _run(scenario())
+
+
+def _config_home(tmp_path: Path) -> Path:
+    return tmp_path / "home"
+
+
+def _config_app(home: Path) -> KaminoApp:
+    return KaminoApp(
+        mode="menu",
+        config_result=load_config(home=home),
+        config_home=home,
+        phrase="frase",
+    )
+
+
+def test_menu_config_option_opens_screen(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            options = app.screen.query_one("#menu-options", OptionList)
+            assert len(options.options) == 5
+            assert options.options[3].id == "config"
+            await pilot.press("s")
+            await pilot.pause()
+            assert isinstance(app.screen, MenuScreen)
+            await pilot.press("down", "down", "down", "enter")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfigScreen)
+
+    _run(scenario())
+
+
+def test_config_screen_saves_and_applies_immediately(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            app.push_screen(ConfigScreen(load_config(home=home), home=home))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            assert screen.query_one("#catalog-dir", Input).value == str(
+                home / ".config" / "kamino" / "apps"
+            )
+            screen.query_one("#catalog-dir", Input).value = str(home / "catalog")
+            screen.query_one("#clone-output-dir", Input).value = str(home / "clones")
+            screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, MenuScreen)
+            assert config_path(home).exists()
+            assert app.config.catalog_dir == home / "catalog"
+            assert app.config.clone_output_dir == home / "clones"
+            assert app.config.snapshots_dir == home / "snapshots"
+            assert not (home / "clones").exists()
+            await pilot.press("d")
+            await pilot.pause()
+            assert isinstance(app.screen, DeployFileScreen)
+            assert app.screen.state.catalog_dir == home / "catalog"
+            assert app.screen.state.snapshots_dir == home / "snapshots"
+
+    _run(scenario())
+
+
+def test_menu_clone_uses_saved_config(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            app.push_screen(ConfigScreen(load_config(home=home), home=home))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            screen.query_one("#catalog-dir", Input).value = str(home / "catalog")
+            screen.query_one("#clone-output-dir", Input).value = str(home / "clones")
+            screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            await pilot.press("c")
+            await pilot.pause()
+            assert isinstance(app.screen, CloneAppsScreen)
+            assert app.screen.state.catalog_dir == home / "catalog"
+            assert app.screen.state.default_output_dir == home / "clones"
+
+    _run(scenario())
+
+
+def test_config_screen_cancel_does_not_create_file(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            app.push_screen(ConfigScreen(load_config(home=home), home=home))
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+            assert isinstance(app.screen, MenuScreen)
+            assert not config_path(home).exists()
+
+    _run(scenario())
+
+
+def test_config_screen_validation_blocks_save(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            app.push_screen(ConfigScreen(load_config(home=home), home=home))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            screen.query_one("#catalog-dir", Input).value = "relative"
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfigScreen)
+            assert not config_path(home).exists()
+            assert "ruta absoluta" in str(screen.query_one("#settings-status", Static).render())
+
+    _run(scenario())
+
+
+def test_config_screen_invalid_file_opens_with_error_and_cancel_exits(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    target = config_path(home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('[catalog]\ndir = "Downloads"\n', encoding="utf-8")
+    app = KaminoApp(
+        mode="menu",
+        config_result=load_config(home=home),
+        config_home=home,
+        phrase="frase",
+    )
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            assert screen.query_one("#settings-error", Static).display is True
+            assert screen.query_one("#catalog-dir", Input).value == "Downloads"
+            await pilot.press("escape")
+            await pilot.pause()
+
+    _run(scenario())
+    assert app.return_value == 1
+
+
+def test_config_screen_invalid_file_can_be_corrected(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    target = config_path(home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('[catalog]\ndir = "Downloads"\n', encoding="utf-8")
+    app = KaminoApp(
+        mode="menu",
+        config_result=load_config(home=home),
+        config_home=home,
+        phrase="frase",
+    )
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            screen.query_one("#catalog-dir", Input).value = str(home / "catalog")
+            screen.query_one("#clone-output-dir", Input).value = str(home / "clones")
+            screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, MenuScreen)
+            assert load_config(home=home).error is None
+
+    _run(scenario())
+
+
+def test_run_clone_flow_rebuilds_state_after_config(tmp_path: Path, monkeypatch) -> None:
+    home, catalog, _bin_path = _source_home(tmp_path)
+    invalid = ConfigLoadResult(
+        config=load_config(home=home).config,
+        error=ConfigError("config inválida"),
+        exists=True,
+    )
+    captured: dict = {}
+    monkeypatch.setattr(
+        "kamino.tui.app.run_app",
+        lambda **kwargs: captured.update(kwargs) or 0,
+    )
+
+    code = clone_tui.run_clone_flow(home=home, catalog=catalog, config_result=invalid)
+
+    assert code == 0
+    new_config = AppConfig(
+        catalog_dir=home / "catalog",
+        clone_output_dir=home / "clones",
+        snapshots_dir=home / "snapshots",
+    )
+    screen = captured["after_config"](SimpleNamespace(config=new_config))
+    assert isinstance(screen, CloneAppsScreen)
+    assert screen.state.catalog_dir == new_config.catalog_dir
+    assert screen.state.default_output_dir == new_config.clone_output_dir
+
+
+def test_run_deploy_flow_rebuilds_state_after_config(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    invalid = ConfigLoadResult(
+        config=load_config(home=home).config,
+        error=ConfigError("config inválida"),
+        exists=True,
+    )
+    captured: dict = {}
+    monkeypatch.setattr(
+        "kamino.tui.app.run_app",
+        lambda **kwargs: captured.update(kwargs) or 0,
+    )
+
+    code = deploy_tui.run_deploy_flow(
+        clone_file=tmp_path / "missing.tar.gz",
+        home=home,
+        file_error="no existe",
+        config_result=invalid,
+    )
+
+    assert code == 0
+    new_config = AppConfig(
+        catalog_dir=home / "catalog",
+        clone_output_dir=home / "clones",
+        snapshots_dir=home / "snapshots",
+    )
+    screen = captured["after_config"](SimpleNamespace(config=new_config))
+    assert isinstance(screen, DeployFileScreen)
+    assert screen.state.catalog_dir == new_config.catalog_dir
+    assert screen.state.snapshots_dir == new_config.snapshots_dir
+
+
+def test_config_screen_invalid_file_continues_direct_flow(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    target = config_path(home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('[catalog]\ndir = "Downloads"\n', encoding="utf-8")
+
+    class NextScreen(Screen[None]):
+        def compose(self):
+            yield Static("next", id="next")
+
+    app = KaminoApp(
+        mode="direct",
+        config_result=load_config(home=home),
+        config_home=home,
+        after_config=lambda _app: NextScreen(),
+        phrase="frase",
+    )
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            assert isinstance(app.screen, ConfigScreen)
+            app.screen.query_one("#catalog-dir", Input).value = str(home / "catalog")
+            app.screen.query_one("#clone-output-dir", Input).value = str(home / "clones")
+            app.screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, NextScreen)
 
     _run(scenario())

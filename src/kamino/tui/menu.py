@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class MenuScreen(Screen[None]):
-    """Wordmark, cápsulas, frase fija y las cuatro opciones."""
+    """Wordmark, cápsulas, frase fija y las cinco opciones."""
 
     BINDINGS = [
         Binding("c", "clone", "Clonar"),
@@ -39,6 +39,7 @@ class MenuScreen(Screen[None]):
                 Option(f"{texts.MENU_CLONE}  (c)", id="c"),
                 Option(f"{texts.MENU_DEPLOY}  (d)", id="d"),
                 Option(f"{texts.MENU_UPDATE}  (u)", id="u"),
+                Option(texts.MENU_CONFIG, id="config"),
                 Option(f"{texts.MENU_EXIT}  (q)", id="q"),
                 id="menu-options",
                 compact=True,
@@ -99,6 +100,7 @@ class MenuScreen(Screen[None]):
             "c": self.action_clone,
             "d": self.action_deploy,
             "u": self.action_update,
+            "config": self.action_config,
             "q": self.action_quit,
         }
         action = actions.get(event.option.id or "")
@@ -119,6 +121,16 @@ class MenuScreen(Screen[None]):
         from kamino.tui.update import start_update_from_menu
 
         start_update_from_menu(self.kamino)
+
+    def action_config(self) -> None:
+        from kamino.tui.config import ConfigScreen
+
+        self.app.push_screen(
+            ConfigScreen(
+                self.kamino.config_result,
+                home=self.kamino.config_home,
+            )
+        )
 
     def action_quit(self) -> None:
         self.kamino.exit(self.kamino.session.last_code)

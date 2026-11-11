@@ -14,6 +14,7 @@ from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
 from kamino.clone import CloneResult, run_clone
 from kamino.conflicts import apply_all
+from kamino.defaults import catalog_dir as default_catalog_dir
 from kamino.deploy import DeployResult, DeploySession, prepare_deploy, result_code
 from kamino.detect import is_installed
 from kamino.update import UpdateResult, run_update
@@ -68,7 +69,7 @@ def execute_clone(
     definitions = (
         catalog
         if catalog is not None
-        else load_catalog(user_dir=(home or Path.home()) / ".config" / "kamino" / "apps")
+        else load_catalog(user_dir=default_catalog_dir(home or Path.home()))
     )
     installed = installed_apps(definitions, home=home, application_dirs=application_dirs, path=path)
     if requested is None:

@@ -69,11 +69,13 @@ DIFF_WARNING = (
 MENU_CLONE = "Clonar"
 MENU_DEPLOY = "Desplegar"
 MENU_UPDATE = "Actualizar"
+MENU_CONFIG = "Configuración"
 MENU_EXIT = "Abandonar Kamino"
 
 MENU_CLONE_HELP = "Crea un clon de las apps instaladas."
 MENU_DEPLOY_HELP = "Despliega desde un archivo del clon."
 MENU_UPDATE_HELP = "Actualiza a la última versión publicada."
+MENU_CONFIG_HELP = "Edita las rutas de la TUI."
 MENU_EXIT_HELP = "Cierra kamino."
 
 LAST_MISSION = "Última misión: {summary}"
@@ -353,6 +355,18 @@ SHORTCUTS_U1 = shortcut_line(
     ("?", "ayuda"),
 )
 SHORTCUTS_HELP = shortcut_line(("Enter/Esc/?", "cerrar"))
+SHORTCUTS_SETTINGS = shortcut_line(
+    ("Tab/Mayús+Tab", "mover"),
+    ("Ctrl+S", "guardar"),
+    ("Esc", "volver"),
+    ("?", "ayuda"),
+)
+SHORTCUTS_SETTINGS_ERROR = shortcut_line(
+    ("Tab/Mayús+Tab", "mover"),
+    ("Ctrl+S", "guardar"),
+    ("Esc", "salir sin guardar"),
+    ("?", "ayuda"),
+)
 SHORTCUTS_DIALOG = shortcut_line(
     ("↑↓", "mover"),
     ("Enter", "aceptar"),
@@ -459,6 +473,25 @@ LABEL_SCREEN = "Pantalla: {screen}"
 LABEL_SHORTCUTS = "Atajos de esta pantalla:"
 LABEL_FLOW = "Flujo:"
 
+SETTINGS_TITLE = "Configuración"
+SETTINGS_SUBTITLE = "Rutas de Kamino · ~/.config/kamino/config.toml"
+SETTINGS_CLI_NOTE = "La CLI no usa estos valores; solo la TUI."
+SETTINGS_CATALOG_LABEL = "Catálogo de aplicaciones"
+SETTINGS_CLONE_LABEL = "Destino de los clones"
+SETTINGS_SNAPSHOTS_LABEL = "Directorio de holocrones"
+SETTINGS_CATALOG_HINT = "Definiciones TOML de apps del usuario. Por defecto: ~/.config/kamino/apps."
+SETTINGS_CLONE_HINT = "Carpeta de clone-AAAAMMDD.tar.gz. Por defecto: ~/.config/kamino/vault."
+SETTINGS_SNAPSHOTS_HINT = (
+    "Copia del estado anterior antes de desplegar. Por defecto: ~/.config/kamino/vault/snapshot."
+)
+SETTINGS_PATH_PLACEHOLDER = "Ruta absoluta o que empiece por ~"
+SETTINGS_WARN_CATALOG_MISSING = "no existe; se usarán solo las definiciones integradas"
+SETTINGS_WARN_CLONE_MISSING = "no existe; se creará al clonar"
+SETTINGS_WARN_SNAPSHOTS_MISSING = "no existe; se creará al desplegar"
+SETTINGS_WARN_NO_FILE = "no existe config.toml; se creará al guardar"
+SETTINGS_SAVED = "configuración guardada"
+SETTINGS_SAVE_ERROR = "no se pudo guardar. El archivo anterior no cambió"
+
 STATUS_RENAME_STARTED = "El renombrado ya había empezado: no se puede cancelar."
 STATUS_CANCELLING = "Cancelando…"
 STATUS_PREPARING_CANCELLED = "Preparación cancelada; no se escribió nada."
@@ -479,6 +512,14 @@ TITLE_PREPARING = "Preparando el despliegue"
 TITLE_RETRY_ADVICE = "Vuelve a D0 y elige un clon válido."
 TITLE_CANCEL_PREPARE = "Cancelando…"
 
+HELP_SETTINGS = (
+    ("Tab", "siguiente campo"),
+    ("Mayús+Tab", "campo anterior"),
+    ("Enter", "siguiente campo"),
+    ("Ctrl+S", "guardar la configuración"),
+    ("F1", "abrir esta ayuda"),
+    ("Esc", "volver o salir sin guardar"),
+)
 HELP_C1 = (
     ("↑↓", "recorrer apps"),
     ("Espacio", "marcar o desmarcar sin perder el foco"),
@@ -562,7 +603,7 @@ HELP_U1 = (
     ("Esc", "cancelar antes del reemplazo o salir al terminar"),
 )
 HELP_MENU = (
-    ("↑↓", "mover la selección"),
+    ("↑↓", "mover la selección, incluida Configuración"),
     ("Enter", "aceptar la opción seleccionada"),
     ("c", "clonar"),
     ("d", "desplegar"),
@@ -610,6 +651,7 @@ SCREEN_C2 = "C2 · destino"
 SCREEN_C3 = "C3 · revisión"
 SCREEN_C4 = "C4 · resumen"
 SCREEN_U1 = "U1 · actualización"
+SCREEN_SETTINGS = "Configuración"
 SCREEN_MENU = "menú principal"
 SCREEN_ERROR = "error"
 SCREEN_SMALL = "terminal pequeña"

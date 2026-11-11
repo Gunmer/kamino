@@ -2,9 +2,9 @@
 
 El snapshot usa el mismo formato que un clon (§6: "Snapshots"): una única app
 sintética `snapshot`, rutas relativas al home y nombre `<timestamp>.tar.gz` en
-`~/Library/Application Support/kamino/snapshots/`, así el futuro `undo` es un
-`deploy` del snapshot. Todo se inyecta (home, snapshots_dir, timestamp) para no
-tocar el sistema real (§7).
+`~/.config/kamino/vault/snapshot/`, así el futuro `undo` es un `deploy` del
+snapshot. Todo se inyecta (home, snapshots_dir, timestamp) para no tocar el
+sistema real (§7).
 """
 
 from __future__ import annotations
@@ -89,13 +89,13 @@ def test_snapshot_records_current_content(tmp_path: Path) -> None:
         assert member.read() == b"viejo\n"
 
 
-def test_default_snapshots_dir_is_under_home(tmp_path: Path) -> None:
+def test_default_snapshots_dir_is_under_vault(tmp_path: Path) -> None:
     home = tmp_path / "home"
     _write_file(home, "cfg.toml")
 
     snapshot = create_snapshot([home / "cfg.toml"], home=home, timestamp=TIMESTAMP)
 
-    expected = home / "Library" / "Application Support" / "kamino" / "snapshots"
+    expected = home / ".config" / "kamino" / "vault" / "snapshot"
     assert snapshot == expected / f"{TIMESTAMP}.tar.gz"
     assert snapshot is not None and snapshot.exists()
 

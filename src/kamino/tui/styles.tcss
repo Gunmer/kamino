@@ -41,7 +41,7 @@ Screen {
 
 #menu-options {
     width: 38;
-    height: 4;
+    height: 5;
     background: transparent;
 }
 
@@ -94,6 +94,61 @@ Screen {
 #status {
     color: $warning;
     min-height: 1;
+}
+
+#settings-title {
+    padding: 1 2 0 2;
+    color: $primary;
+    text-style: bold;
+}
+
+#settings-subtitle {
+    padding: 0 2;
+    text-style: italic;
+}
+
+#settings-note {
+    padding: 0 2;
+    opacity: 60%;
+}
+
+#settings-error {
+    padding: 0 2;
+    color: $error;
+}
+
+#settings-body {
+    height: 1fr;
+    padding: 1 2 0 2;
+}
+
+.settings-label {
+    padding: 1 0 0 0;
+    text-style: bold;
+}
+
+#settings-hint {
+    padding: 0 2;
+    opacity: 60%;
+    min-height: 1;
+}
+
+#settings-status {
+    padding: 0 2;
+    color: $warning;
+    min-height: 1;
+}
+
+#settings-status.settings-error {
+    color: $error;
+}
+
+#settings-status.settings-warning {
+    color: $warning;
+}
+
+#settings-status.settings-success {
+    color: $success;
 }
 
 #warning,
