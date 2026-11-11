@@ -21,13 +21,7 @@ if TYPE_CHECKING:
 class MenuScreen(Screen[None]):
     """Wordmark, cápsulas, frase fija y las cinco opciones."""
 
-    BINDINGS = [
-        Binding("c", "clone", "Clonar"),
-        Binding("d", "deploy", "Desplegar"),
-        Binding("u", "update", "Actualizar"),
-        Binding("q", "quit", "Abandonar"),
-        Binding("question_mark", "help", "Ayuda", priority=True),
-    ]
+    BINDINGS = [Binding("question_mark", "help", "Ayuda", priority=True)]
 
     def compose(self) -> ComposeResult:
         yield Static("", id="wordmark")
@@ -36,11 +30,11 @@ class MenuScreen(Screen[None]):
         yield Static("", id="phrase")
         with Vertical(id="menu"):
             yield OptionList(
-                Option(f"{texts.MENU_CLONE}  (c)", id="c"),
-                Option(f"{texts.MENU_DEPLOY}  (d)", id="d"),
-                Option(f"{texts.MENU_UPDATE}  (u)", id="u"),
+                Option(texts.MENU_CLONE, id="c"),
+                Option(texts.MENU_DEPLOY, id="d"),
+                Option(texts.MENU_UPDATE, id="u"),
                 Option(texts.MENU_CONFIG, id="config"),
-                Option(f"{texts.MENU_EXIT}  (q)", id="q"),
+                Option(texts.MENU_EXIT, id="q"),
                 id="menu-options",
                 compact=True,
             )

@@ -36,7 +36,7 @@ La interfaz interactiva DEBE (`MUST`) ser una sola aplicación con menú y flujo
 
 ### Requirement: Menú principal
 
-El menú DEBE (`MUST`) mostrar el wordmark KAMINO, un separador de ocho cápsulas de clonación con la última marcada como el original, las opciones Clonar, Desplegar, Actualizar, Configuración y Abandonar Kamino, en ese orden, y la línea de última misión cuando exista. Los atajos propuestos `c`, `d`, `u` y `q` DEBEN respetarse; Configuración NO DEBE tener atajo de teclado. Las flechas arriba y abajo DEBEN mover la selección y `Enter` DEBE aceptar la opción seleccionada; `q` y la opción de salida DEBEN cerrar la aplicación y Escape NO DEBE cerrarla.
+El menú DEBE (`MUST`) mostrar el wordmark KAMINO, un separador de ocho cápsulas de clonación con la última marcada como el original, las opciones Clonar, Desplegar, Actualizar, Configuración y Abandonar Kamino, en ese orden, y la línea de última misión cuando exista. Las opciones NO DEBEN (`MUST NOT`) tener atajos de una tecla. Las flechas arriba y abajo DEBEN mover la selección y `Enter` DEBE aceptar la opción seleccionada; la opción de salida DEBE cerrar la aplicación y Escape NO DEBE cerrarla.
 
 #### Scenario: Menú completo
 
@@ -56,16 +56,16 @@ El menú DEBE (`MUST`) mostrar el wordmark KAMINO, un separador de ocho cápsula
 - **WHEN** se selecciona Configuración con las flechas y se pulsa `Enter`
 - **THEN** se abre la pantalla de configuración con las tres rutas y sus valores actuales
 
-#### Scenario: Configuración sin atajo
-
-- **GIVEN** el menú principal abierto y el cursor fuera de Configuración
-- **WHEN** se pulsa `s`
-- **THEN** no se abre la pantalla de configuración
-
-#### Scenario: Salir con el atajo
+#### Scenario: Opciones sin atajos de una tecla
 
 - **GIVEN** el menú principal abierto
-- **WHEN** se pulsa `q`
+- **WHEN** se pulsan `c`, `d`, `u` o `q`
+- **THEN** no se ejecuta ninguna opción y la aplicación permanece en el menú
+
+#### Scenario: Salir con la opción de salida
+
+- **GIVEN** el menú principal abierto
+- **WHEN** se selecciona Abandonar Kamino con las flechas y se pulsa `Enter`
 - **THEN** la aplicación se cierra con el código del último flujo ejecutado, o 0 si no hubo ninguno
 
 #### Scenario: Escape no sale
@@ -77,7 +77,7 @@ El menú DEBE (`MUST`) mostrar el wordmark KAMINO, un separador de ocho cápsula
 #### Scenario: Actualizar desde el menú
 
 - **GIVEN** el menú principal abierto
-- **WHEN** se elige Actualizar o se pulsa `u`
+- **WHEN** se selecciona Actualizar con las flechas y se pulsa `Enter`
 - **THEN** se ejecuta el mismo flujo que `kamino update` y se vuelve al menú al terminar
 
 ### Requirement: Navegación por teclado y pie de atajos
@@ -192,7 +192,7 @@ Todo error mostrado en la interfaz DEBE (`MUST`) tener cuatro partes: qué pasó
 
 ### Requirement: Terminal pequeña y redimensionado
 
-Por debajo de 80 columnas o 24 filas, la interfaz DEBE (`MUST`) mostrar una pantalla de aviso que se actualice al redimensionar sin perder el estado. Una operación en curso DEBE continuar en segundo plano y `q` DEBE quedar deshabilitado hasta que termine.
+Por debajo de 80 columnas o 24 filas, la interfaz DEBE (`MUST`) mostrar una pantalla de aviso que se actualice al redimensionar sin perder el estado. Una operación en curso DEBE continuar en segundo plano y la aplicación NO DEBE cerrarse hasta que termine.
 
 #### Scenario: Terminal demasiado pequeña
 
@@ -204,7 +204,7 @@ Por debajo de 80 columnas o 24 filas, la interfaz DEBE (`MUST`) mostrar una pant
 
 - **GIVEN** una clonación o un despliegue en curso
 - **WHEN** la terminal baja de 80x24
-- **THEN** la operación continúa y `q` no cierra la aplicación hasta que termine
+- **THEN** la operación continúa y la aplicación no se cierra hasta que termine
 
 #### Scenario: Redimensionar de vuelta
 
@@ -231,7 +231,7 @@ Por debajo de 80 columnas o 24 filas, la interfaz DEBE (`MUST`) mostrar una pant
 #### Scenario: Código al salir del menú
 
 - **GIVEN** un flujo que terminó con código 3 y el menú abierto
-- **WHEN** se sale con `q`
+- **WHEN** se elige Abandonar Kamino
 - **THEN** la aplicación termina con código 3
 
 ### Requirement: Frases, logo y degradación por altura

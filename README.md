@@ -235,9 +235,8 @@ no cambian: el formato del archivo y los holocrones antiguos siguen siendo compa
 
 Una sola app de Textual reúne menú, clonación, despliegue y actualización. El menú muestra el
 wordmark KAMINO, ocho cápsulas con la última marcada como el original, una frase fija por sesión y
-las opciones Clonar (`c`), Desplegar (`d`), Actualizar (`u`) y Abandonar Kamino (`q`). Las flechas
-mueven la selección y `Enter` acepta la opción seleccionada. `q` solo sale desde el menú; Escape
-nunca cierra. La línea de última misión aparece tras el primer flujo de la sesión y no se persiste.
+las opciones Clonar, Desplegar, Actualizar, Configuración y Abandonar Kamino. Las flechas mueven la
+selección y `Enter` acepta la opción seleccionada; no hay atajos de una tecla. Escape nunca cierra. La línea de última misión aparece tras el primer flujo de la sesión y no se persiste.
 
 Todas las pantallas se manejan con teclado y muestran al pie una leyenda de las teclas activas, sin
 botoneras inferiores: `Esc` retrocede, `Enter` continúa o acepta y las flechas mueven el foco. En
@@ -260,7 +259,7 @@ monocromo y cada estado conserva icono y palabra. El wordmark se oculta sin UTF-
 
 ### Configuración de la TUI
 
-La opción **Configuración** del menú, situada después de Actualizar y sin atajo de teclado, permite
+La opción **Configuración** del menú, situada después de Actualizar, permite
 ver y editar las tres rutas en una pantalla. La pantalla se guarda con `Ctrl+S`; `Esc` vuelve sin
 escribir. El archivo solo lo lee y escribe la TUI: la vía no interactiva de la CLI no aplica estos
 valores y usa los defaults integrados.

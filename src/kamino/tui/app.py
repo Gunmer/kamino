@@ -20,7 +20,7 @@ from kamino.tui.menu import MenuScreen
 
 
 class SizeGuard(Static):
-    """Aviso a pantalla completa que conserva la pantalla inferior y bloquea q."""
+    """Aviso a pantalla completa que conserva la pantalla inferior y bloquea la salida."""
 
     can_focus = True
     BINDINGS = [

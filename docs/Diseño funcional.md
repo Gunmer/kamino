@@ -14,9 +14,9 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   transversales. Se abre solo si la entrada y la salida son terminales y no se definió
   `KAMINO_PLAIN`.
 - El menú muestra el wordmark KAMINO, un separador de ocho cápsulas con la última marcada como el
-  original, una frase fija por sesión y las opciones Clonar (`c`), Desplegar (`d`), Actualizar (`u`),
-  Configuración y Abandonar Kamino (`q`). Configuración se recorre con flechas y `Enter`, sin atajo
-  de teclado. `q` solo sale desde el menú y Escape nunca cierra.
+  original, una frase fija por sesión y las opciones Clonar, Desplegar, Actualizar, Configuración y
+  Abandonar Kamino. Todas se recorren con flechas y `Enter`; no hay atajos de una tecla y Escape
+  nunca cierra.
 - Configuración muestra y edita las rutas de catálogo, clones y holocrones. `Ctrl+S` guarda y `Esc`
   vuelve sin escribir. El archivo `~/.config/kamino/config.toml` solo lo lee y escribe la TUI; la
   vía no interactiva de la CLI usa los valores integrados. El archivo se crea solo al guardar.

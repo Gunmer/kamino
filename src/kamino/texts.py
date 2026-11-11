@@ -264,7 +264,6 @@ def shortcut_line(*entries: tuple[str, str]) -> str:
 SHORTCUTS_MENU = shortcut_line(
     ("↑↓", "mover"),
     ("Enter", "aceptar"),
-    ("c/d/u/q", "atajos"),
     ("?", "ayuda"),
 )
 SHORTCUTS_C1 = shortcut_line(
@@ -605,10 +604,6 @@ HELP_U1 = (
 HELP_MENU = (
     ("↑↓", "mover la selección, incluida Configuración"),
     ("Enter", "aceptar la opción seleccionada"),
-    ("c", "clonar"),
-    ("d", "desplegar"),
-    ("u", "actualizar"),
-    ("q", "salir con el último código"),
 )
 
 

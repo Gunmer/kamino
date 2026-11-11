@@ -137,7 +137,7 @@ def test_menu_opens_with_wordmark_phrase_and_no_last_mission() -> None:
             await pilot.press("escape")
             await pilot.pause()
             assert isinstance(app.screen, MenuScreen)
-            await pilot.press("q")
+            await pilot.press("down", "down", "down", "down", "enter")
             await pilot.pause()
             assert app.return_value == 0
 
@@ -210,7 +210,22 @@ def test_menu_arrows_move_selection_and_enter_accepts() -> None:
     _run(scenario())
 
 
-def test_menu_q_returns_last_code_and_shows_last_mission() -> None:
+def test_menu_letter_keys_do_not_trigger_options() -> None:
+    app = KaminoApp(mode="menu", phrase="frase", show_logo=False)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            for key in ("c", "d", "u", "q"):
+                await pilot.press(key)
+                await pilot.pause()
+                assert isinstance(app.screen, MenuScreen)
+            assert app.return_value is None
+
+    _run(scenario())
+
+
+def test_menu_exit_returns_last_code_and_shows_last_mission() -> None:
     app = KaminoApp(mode="menu", phrase="frase", show_logo=True)
 
     async def scenario() -> None:
@@ -221,7 +236,7 @@ def test_menu_q_returns_last_code_and_shows_last_mission() -> None:
             app.screen.refresh_mission()
             await pilot.pause()
             assert "Clon completado" in str(app.screen.query_one("#last-mission", Static).content)
-            await pilot.press("q")
+            await pilot.press("down", "down", "down", "down", "enter")
             await pilot.pause()
             assert app.return_value == 3
 
@@ -234,7 +249,7 @@ def test_menu_clone_flow_returns_to_menu_with_mission() -> None:
     async def scenario() -> None:
         async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause()
-            await pilot.press("c")
+            await pilot.press("enter")
             await pilot.pause()
             assert isinstance(app.screen, CloneAppsScreen)
             app.screen.action_cancel()
@@ -1694,7 +1709,7 @@ def test_config_screen_saves_and_applies_immediately(tmp_path: Path) -> None:
             assert app.config.clone_output_dir == home / "clones"
             assert app.config.snapshots_dir == home / "snapshots"
             assert not (home / "clones").exists()
-            await pilot.press("d")
+            await pilot.press("down", "enter")
             await pilot.pause()
             assert isinstance(app.screen, DeployFileScreen)
             assert app.screen.state.catalog_dir == home / "catalog"
@@ -1719,7 +1734,7 @@ def test_menu_clone_uses_saved_config(tmp_path: Path) -> None:
             screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
             await pilot.press("ctrl+s")
             await pilot.pause()
-            await pilot.press("c")
+            await pilot.press("enter")
             await pilot.pause()
             assert isinstance(app.screen, CloneAppsScreen)
             assert app.screen.state.catalog_dir == home / "catalog"
