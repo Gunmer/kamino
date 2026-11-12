@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from textual.app import App
@@ -13,11 +15,12 @@ from textual.screen import Screen
 from textual.widgets import Static
 
 from kamino import texts
+from kamino.config import AppConfig, ConfigLoadResult, default_config, load_config
 from kamino.tui.menu import MenuScreen
 
 
 class SizeGuard(Static):
-    """Aviso a pantalla completa que conserva la pantalla inferior y bloquea q."""
+    """Aviso a pantalla completa que conserva la pantalla inferior y bloquea la salida."""
 
     can_focus = True
     BINDINGS = [
@@ -89,6 +92,9 @@ class KaminoApp(App[int]):
         phrase: str | None = None,
         show_logo: bool | None = None,
         unicode: bool | None = None,
+        config_result: ConfigLoadResult | None = None,
+        config_home: Path | None = None,
+        after_config: Callable[[KaminoApp], Screen] | None = None,
     ) -> None:
         super().__init__()
         self.theme = default_theme()
@@ -99,14 +105,41 @@ class KaminoApp(App[int]):
         self.show_logo = self.unicode if show_logo is None else show_logo
         self.cleanup = None
         self._guard_pending = False
+        self.config_home = config_home
+        self.config_result = (
+            config_result
+            if config_result is not None
+            else ConfigLoadResult(config=default_config(config_home))
+        )
+        self.config = self.config_result.config
+        self.config_error = self.config_result.error
+        self.after_config = after_config
 
     def on_mount(self) -> None:
-        if self.initial is not None:
+        if self.config_error is not None:
+            from kamino.tui.config import ConfigScreen
+
+            self.push_screen(
+                ConfigScreen(
+                    self.config_result,
+                    home=self.config_home,
+                    error_mode=True,
+                    on_saved=self._after_config_saved,
+                )
+            )
+        elif self.initial is not None:
             self.push_screen(self.initial)
         else:
             self.push_screen(MenuScreen())
         self.call_after_refresh(self._ensure_size_guard)
         self.set_interval(0.2, self._ensure_size_guard)
+
+    def _after_config_saved(self, config: AppConfig) -> None:
+        self.config = config
+        self.config_error = None
+        self.config_result = ConfigLoadResult(config=config, exists=True)
+        next_screen = self.after_config(self) if self.after_config is not None else MenuScreen()
+        self.switch_screen(next_screen)
 
     def push_screen(self, screen, callback=None, wait_for_dismiss=False, *, mode=None):  # type: ignore[override]
         if self.screen_stack:
@@ -125,6 +158,26 @@ class KaminoApp(App[int]):
         self.call_after_refresh(self._ensure_size_guard)
         self.call_after_refresh(self._repaint_screen)
         return result
+
+    def switch_screen(self, screen: Screen | str):  # type: ignore[override]
+        if self.screen_stack:
+            self.screen.display = False
+        result = super().switch_screen(screen)
+        self.call_after_refresh(self._ensure_size_guard)
+        self.call_after_refresh(self._repaint_screen)
+        return result
+
+    @property
+    def _background_screens(self) -> list[Screen]:
+        """No screen is composited below the active one.
+
+        With the ansi-dark theme every screen background is `ansi_default`
+        (alpha 0), which Textual treats as translucent and renders the
+        previous screen's compositor underneath. Kamino screens always fill
+        the terminal, so uncovered cells must show the terminal background,
+        never a previous screen.
+        """
+        return []
 
     def _repaint_screen(self) -> None:
         """Repinta la pantalla completa para no dejar restos de la anterior."""
@@ -238,14 +291,21 @@ def run_app(
     phrase: str | None = None,
     show_logo: bool | None = None,
     unicode: bool | None = None,
+    config_result: ConfigLoadResult | None = None,
+    config_home: Path | None = None,
+    after_config: Callable[[KaminoApp], Screen] | None = None,
 ) -> int:
     """Ejecuta la app y devuelve su código de salida."""
+    resolved = config_result if config_result is not None else load_config(home=config_home)
     app = KaminoApp(
         mode=mode,
         initial=initial,
         phrase=phrase,
         show_logo=show_logo,
         unicode=unicode,
+        config_result=resolved,
+        config_home=config_home,
+        after_config=after_config,
     )
     result = app.run()
     return int(result or 0)

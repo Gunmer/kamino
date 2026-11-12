@@ -22,6 +22,8 @@ import kamino
 from kamino.archive import FORMAT_VERSION, AppEntry, FileEntry, Manifest, write_archive
 from kamino.catalog.loader import load_catalog
 from kamino.catalog.models import AppDefinition
+from kamino.defaults import catalog_dir as default_catalog_dir
+from kamino.defaults import vault_dir
 from kamino.detect import detect_version, is_installed
 from kamino.errors import ArchiveError
 from kamino.plan import Plan, build_plan
@@ -70,7 +72,9 @@ def plan_clone(
     home: Path | None = None,
     selected: list[str] | None = None,
     output: Path | None = None,
+    output_dir: Path | None = None,
     catalog: dict[str, AppDefinition] | None = None,
+    catalog_dir: Path | None = None,
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
     metadata: dict[str, str] | None = None,
@@ -82,21 +86,26 @@ def plan_clone(
 
     - `selected`: ids a clonar; `None` usa todas las instaladas. Los ids
       desconocidos o no instalados se ignoran (cruce de conjuntos).
-    - `output`: archivo destino; por defecto `clone-yyyyMMdd.tar.gz` con la
-      fecha local en el directorio actual.
+    - `output`: archivo destino; tiene prioridad sobre `output_dir`.
+    - `output_dir`: directorio del destino por defecto; si no se indica, se
+      usa `~/.config/kamino/vault/`.
+    - `catalog_dir`: directorio del catálogo del usuario; por defecto
+      `~/.config/kamino/apps/`.
     - `now`: reloj inyectable para la fecha del nombre por defecto.
     """
     root = home if home is not None else Path.home()
     definitions = (
         catalog
         if catalog is not None
-        else load_catalog(user_dir=root / ".config" / "kamino" / "apps")
+        else load_catalog(
+            user_dir=catalog_dir if catalog_dir is not None else default_catalog_dir(root)
+        )
     )
 
     apps = _select_installed(definitions, selected, application_dirs, path, root)
     plan = build_plan(apps, home=root, progress=progress, cancelled=cancelled)
     manifest = _build_manifest(apps, plan, application_dirs, metadata, root)
-    target = output if output is not None else _default_output(root, now)
+    target = _destination(output, output_dir, root, now)
     return ClonePlan(plan=plan, manifest=manifest, output=target, apps=apps)
 
 
@@ -138,8 +147,10 @@ def run_clone(
     home: Path | None = None,
     selected: list[str] | None = None,
     output: Path | None = None,
+    output_dir: Path | None = None,
     dry_run: bool = False,
     catalog: dict[str, AppDefinition] | None = None,
+    catalog_dir: Path | None = None,
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
     metadata: dict[str, str] | None = None,
@@ -153,7 +164,9 @@ def run_clone(
         home=home,
         selected=selected,
         output=output,
+        output_dir=output_dir,
         catalog=catalog,
+        catalog_dir=catalog_dir,
         application_dirs=application_dirs,
         path=path,
         metadata=metadata,
@@ -248,10 +261,19 @@ def default_name(now: datetime | None = None) -> str:
     return f"clone-{moment.strftime('%Y%m%d')}.tar.gz"
 
 
-def _default_output(root: Path, now: datetime | None) -> Path:
-    """`clone-yyyyMMdd.tar.gz` en el cwd, sin sufijos automáticos."""
-    del root  # el destino por defecto es el directorio actual, no el home
-    return Path.cwd() / default_name(now)
+def _destination(
+    output: Path | None,
+    output_dir: Path | None,
+    root: Path,
+    now: datetime | None,
+) -> Path:
+    """Resuelve el destino: explícito, configurado o vault por defecto."""
+    if output is not None:
+        return output
+    directory = output_dir if output_dir is not None else vault_dir(root)
+    if directory.exists() and not directory.is_dir():
+        raise ArchiveError(f"la ruta del directorio no es válida: {directory}")
+    return directory / default_name(now)
 
 
 def free_suffix(output: Path) -> Path:
@@ -264,7 +286,7 @@ def free_suffix(output: Path) -> Path:
     raise ArchiveError(f"no se pudo elegir un nombre libre para {output.name}")
 
 
-def validate_destination(output: Path) -> str | None:
+def validate_destination(output: Path, *, allow_missing_parent: bool = False) -> str | None:
     """Valida el destino sin crear nada; devuelve el error visible o `None`."""
     if not output.name or output.name in {".", ".."}:
         return "el nombre del clon no es válido"
@@ -272,6 +294,8 @@ def validate_destination(output: Path) -> str | None:
         return "el nombre del clon no es válido"
     parent = output.parent if output.parent != Path("") else Path.cwd()
     if not parent.exists():
+        if allow_missing_parent:
+            return None
         return f"el directorio no existe: {parent}"
     if not parent.is_dir():
         return f"la ruta del directorio no es válida: {parent}"

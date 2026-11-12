@@ -14,8 +14,12 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   transversales. Se abre solo si la entrada y la salida son terminales y no se definió
   `KAMINO_PLAIN`.
 - El menú muestra el wordmark KAMINO, un separador de ocho cápsulas con la última marcada como el
-  original, una frase fija por sesión y las opciones Clonar (`c`), Desplegar (`d`), Actualizar (`u`)
-  y Abandonar Kamino (`q`). `q` solo sale desde el menú y Escape nunca cierra.
+  original, una frase fija por sesión y las opciones Clonar, Desplegar, Actualizar, Configuración y
+  Abandonar Kamino. Todas se recorren con flechas y `Enter`; no hay atajos de una tecla y Escape
+  nunca cierra.
+- Configuración muestra y edita las rutas de catálogo, clones y holocrones. `Ctrl+S` guarda y `Esc`
+  vuelve sin escribir. El archivo `~/.config/kamino/config.toml` solo lo lee y escribe la TUI; la
+  vía no interactiva de la CLI usa los valores integrados. El archivo se crea solo al guardar.
 - La cabecera degrada por altura: 30+ filas muestra todo; 26-29 cabecera, separador y menú; 24-25
   cabecera y menú; por debajo de 24 aparece un aviso que conserva el estado.
 - La ayuda contextual se abre con `?` y, en campos de texto, con `F1`. Todo error tiene cuatro
@@ -35,10 +39,11 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   Permite filtrar con `/`, seleccionar todas o ninguna con `a` y `n` sobre las filas visibles, y
   deshabilita las apps sin archivos. Las flechas recorren las apps, `Espacio` marca o desmarca sin
   perder el foco y `Enter` continúa. Las apps no detectadas se informan en una línea aparte.
-- C2 propone `clone-<aaaammdd>.tar.gz` con la fecha local, resuelve la ruta a absoluta y valida en
-  vivo. `F2`, `F3` y `F4` usan el directorio actual, Descargas y Escritorio. Si el clon existe,
-  muestra un diálogo con ruta, fecha y tamaño y las acciones Volver, Otro nombre y Reemplazar clon
-  navegables con flechas y `Enter`, con Volver preseleccionada. El destino no se crea hasta C3.
+- C2 propone `clone-<aaaammdd>.tar.gz` con la fecha local en `~/.config/kamino/vault/` o en el
+  `clone.output_dir` configurado para la TUI, resuelve la ruta a absoluta y valida en vivo. `F2`,
+  `F3` y `F4` usan el directorio actual, Descargas y Escritorio. Si el clon existe, muestra un
+  diálogo con ruta, fecha y tamaño y las acciones Volver, Otro nombre y Reemplazar clon navegables
+  con flechas y `Enter`, con Volver preseleccionada. El destino no se crea hasta C3.
 - C3 pasa por planificando, revisión y en curso. Muestra apps, archivos, tamaño y destino; `d`
   enumera las rutas omitidas con su motivo y `f` los archivos incluidos agrupados por app. Advierte
   de que el clon no está cifrado y puede contener secretos. Con `--dry-run` termina en la revisión
@@ -49,14 +54,24 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   si el terminal no lo admite, se avisa. La línea de salida solo aparece con código 3. No hay atajo
   para abrir el Finder.
 - Permite modo no interactivo: `clone --apps vscode,iterm2,git`.
-- Sin `--output`, el nombre por defecto es `clone-<aaaammdd>.tar.gz` en el directorio actual. Sin
-  `--force`/`-f`, un clon existente es un error; con `--force` se reemplaza de forma atómica tras
-  revalidar el destino, y cualquier error o cancelación elimina el temporal.
+- Sin `--output`, el nombre por defecto es `clone-<aaaammdd>.tar.gz` en
+  `~/.config/kamino/vault/`; el directorio se crea al escribir y no en simulación. Sin `--force`/`-f`,
+  un clon existente es un error; con `--force` se reemplaza de forma atómica tras revalidar el
+  destino, y cualquier error o cancelación elimina el temporal.
 - Con terminal interactiva, `--apps` omite C1, `--output` omite C2 y ambos juntos pasan a C3. Un
   valor inválido abre la pantalla correspondiente precargada con el error.
 
 ### 2.2 Despliegue (`deploy`)
 
+- D0 combina en una sola tabla los `.tar.gz` hijos directos de `clone.output_dir` (por defecto
+  `~/.config/kamino/vault/`) y del directorio actual, sin recorrer subdirectorios. Los ordena por
+  fecha de modificación descendente, deduplica por ruta resuelta y muestra el origen (`por defecto`,
+  `este directorio` o `ruta manual`) y el tamaño. El preview de la fila resaltada muestra la ruta
+  completa con `~`, la fecha y el tamaño; si una fuente no existe, está vacía o no se puede leer, se
+  informa sin ocultar los clones de la otra. La tabla arranca con el foco y el clon más reciente
+  seleccionado. `/` filtra por nombre u origen, `o` salta a `Otro archivo...` y `Esc` vuelve a la
+  tabla, cierra el filtro o cancela el flujo según el foco. Al volver de D1 se conserva el clon
+  elegido; si era una ruta manual fuera de la lista, el campo aparece precargado.
 - D0 valida solo el manifiesto del clon: rechaza un `tar.gz` dañado, con más de un `manifest.json`,
   con un manifiesto de más de 4 MiB o con un formato más nuevo. Los avisos de arquitectura o macOS
   no bloquean. Un manifiesto válido no implica que la integridad esté verificada.
@@ -76,10 +91,13 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   cambios, el número de archivos protegidos y el directorio del holocrón. Las acciones se recorren
   con flechas, Retirada está preseleccionada y no existe un atajo de una tecla para aplicar. Volver
   o cancelar no escribe ni crea holocrón.
-- El holocrón se crea solo si hay al menos un destino existente que proteger. Antes de escribir se
-  revalidan los destinos; si alguno cambió, se aborta sin escribir. Un fallo después del holocrón
-  se informa como “Despliegue incompleto” con los aplicados, el fallido y el holocrón, y termina con
-  código 1; no hay rollback automático.
+- El holocrón se guarda por defecto en `~/.config/kamino/vault/snapshot/`, o en el
+  `deploy.snapshots_dir` configurado para la TUI, y se crea solo si hay al menos un destino existente
+  que proteger. Antes de escribir se revalidan los destinos; si alguno cambió, se aborta sin
+  escribir. Un fallo después del holocrón se informa como “Despliegue incompleto” con los aplicados,
+  el fallido y el holocrón, y termina con código 1; no hay rollback automático.
+- Los holocrones antiguos en `~/Library/Application Support/kamino/snapshots/` no se mueven ni se
+  copian; siguen pudiendo desplegarse indicando su ruta.
 - D5 informa de desplegados, híbridos, omitidos, sin cambios y de la ruta del holocrón. Un híbrido
   cuenta como éxito. La línea de salida aparece solo si el código no es 0 e incluye la orden para
   deshacer con `kamino deploy <ruta>` cuando existe holocrón.

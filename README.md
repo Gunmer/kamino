@@ -158,7 +158,7 @@ El Homebrew tap se publicará tras la primera versión etiquetada.
 ## Uso
 
 ```bash
-kamino                       # TUI: menú Clonar, Desplegar, Actualizar y Abandonar
+kamino                       # TUI: menú Clonar, Desplegar, Actualizar, Configuración y Abandonar
 kamino --help
 kamino clone                 # TUI: elige apps, destino y revisa el plan
 kamino deploy clone-<aaaammdd>.tar.gz   # TUI: apps, conflictos y confirmación
@@ -185,9 +185,16 @@ kamino clone -a vscode,iterm2,git -o clon.tar.gz -n   # simulación: no crea el 
 kamino clone -f                                      # reemplaza clone-<aaaammdd>.tar.gz
 ```
 
-Sin `--output`, el nombre por defecto es `clone-<aaaammdd>.tar.gz` con la fecha local en el
-directorio actual. Sin `--force`, un clon existente es un error y no se sobrescribe; con `--force`
-se reemplaza de forma atómica. `--dry-run --force` no modifica nada.
+Sin `--output`, el nombre por defecto es `clone-<aaaammdd>.tar.gz` con la fecha local dentro de
+`~/.config/kamino/vault/`. Kamino crea ese directorio al escribir el clon; `--dry-run` no lo crea.
+Sin `--force`, un clon existente es un error y no se sobrescribe; con `--force` se reemplaza de
+forma atómica. `--dry-run --force` no modifica nada.
+
+El cambio de destino es incompatible con scripts que esperaban el archivo en el directorio actual:
+usa `--output` para conservar la ruta anterior. Los holocrones nuevos se guardan en
+`~/.config/kamino/vault/snapshot/`; los antiguos en
+`~/Library/Application Support/kamino/snapshots/` no se mueven ni se copian y siguen pudiéndose
+desplegar indicando su ruta.
 
 Con terminal interactiva, `clone` abre la TUI si no se definió `KAMINO_PLAIN`. `--apps` omite C1,
 `--output` omite C2 y ambos juntos pasan directamente a la revisión C3. Un valor inválido abre la
@@ -201,6 +208,15 @@ kamino deploy clone-20261109.tar.gz -a git,zsh # sin selección de apps
 kamino deploy clone-20261109.tar.gz -y -v      # aplica todo sin preguntar
 kamino deploy clone-20261109.tar.gz -n         # simulación: imprime diffs, no escribe
 ```
+
+Desde el menú, **Desplegar** abre D0 con una sola lista que combina los clones de
+`clone.output_dir` (por defecto `~/.config/kamino/vault/`) y los `.tar.gz` del directorio actual.
+La lista se ordena por fecha de modificación, deduplica los archivos que aparecen en ambas rutas y
+muestra el origen de cada fila, además de la ruta completa, la fecha y el tamaño del clon
+resaltado. La tabla recibe el foco y deja seleccionado el clon más reciente; `/` filtra por nombre
+u origen y `o` salta a `Otro archivo...`, que abre el campo de ruta manual. Si `kamino deploy`
+recibe una ruta inexistente o inválida, D0 se abre con esa ruta precargada, el error visible y la
+lista de clones disponible.
 
 Sin terminal interactiva, un despliegue real requiere `-y` o `--yes`; la simulación con `-n`
 no lo requiere. `deploy -n` y `deploy --yes` no abren la TUI aunque haya terminal. `-a` valida los
@@ -228,9 +244,8 @@ no cambian: el formato del archivo y los holocrones antiguos siguen siendo compa
 
 Una sola app de Textual reúne menú, clonación, despliegue y actualización. El menú muestra el
 wordmark KAMINO, ocho cápsulas con la última marcada como el original, una frase fija por sesión y
-las opciones Clonar (`c`), Desplegar (`d`), Actualizar (`u`) y Abandonar Kamino (`q`). Las flechas
-mueven la selección y `Enter` acepta la opción seleccionada. `q` solo sale desde el menú; Escape
-nunca cierra. La línea de última misión aparece tras el primer flujo de la sesión y no se persiste.
+las opciones Clonar, Desplegar, Actualizar, Configuración y Abandonar Kamino. Las flechas mueven la
+selección y `Enter` acepta la opción seleccionada; no hay atajos de una tecla. Escape nunca cierra. La línea de última misión aparece tras el primer flujo de la sesión y no se persiste.
 
 Todas las pantallas se manejan con teclado y muestran al pie una leyenda de las teclas activas, sin
 botoneras inferiores: `Esc` retrocede, `Enter` continúa o acepta y las flechas mueven el foco. En
@@ -250,6 +265,39 @@ La TUI usa la paleta ANSI del terminal: el tema por defecto es `ansi-dark` y `TE
 permite elegir otro tema válido de Textual, por ejemplo `ansi-light`. Con `NO_COLOR` se muestra en
 monocromo y cada estado conserva icono y palabra. El wordmark se oculta sin UTF-8 o con
 `KAMINO_NO_LOGO`. `KAMINO_PLAIN` fuerza la salida de texto para scripting.
+
+### Configuración de la TUI
+
+La opción **Configuración** del menú, situada después de Actualizar, permite
+ver y editar las tres rutas en una pantalla. La pantalla se guarda con `Ctrl+S`; `Esc` vuelve sin
+escribir. El archivo solo lo lee y escribe la TUI: la vía no interactiva de la CLI no aplica estos
+valores y usa los defaults integrados.
+
+```toml
+[catalog]
+dir = "~/.config/kamino/apps"
+
+[clone]
+output_dir = "~/.config/kamino/vault"
+
+[deploy]
+snapshots_dir = "~/.config/kamino/vault/snapshot"
+```
+
+| Clave | Valor por defecto | Uso en la TUI |
+| --- | --- | --- |
+| `catalog.dir` | `~/.config/kamino/apps` | Definiciones TOML de apps del usuario |
+| `clone.output_dir` | `~/.config/kamino/vault` | Directorio propuesto en C2 y destino del clon |
+| `deploy.snapshots_dir` | `~/.config/kamino/vault/snapshot` | Directorio de los holocrones |
+
+El archivo es opcional y se crea solo al guardar desde la pantalla. Admite únicamente esas tres
+claves; un TOML inválido, una sección o clave desconocida, un tipo incorrecto, una ruta relativa,
+`~usuario` o una ruta existente que no sea un directorio se rechazan. Si el archivo es inválido al
+arrancar, la TUI abre Configuración con el error y los valores legibles; no lo sobrescribe hasta
+que se guarde. Los directorios configurados se crean al clonar o desplegar, no al guardar. Los
+cambios guardados se aplican de inmediato a los flujos de la misma sesión. `--force`, `--yes` y
+`--dry-run` no se configuran: son decisiones por operación. `ui.plain` y `ui.theme` tampoco existen
+en este esquema.
 
 ### Conflictos en el despliegue
 
@@ -378,12 +426,14 @@ src/kamino/
 ├── commands.py       # flujos de texto compartidos con la CLI
 ├── texts.py          # única fuente de textos visibles y glosario
 ├── ui.py             # salida no interactiva con Rich
+├── defaults.py       # rutas por defecto compartidas
+├── config.py         # configuración TOML exclusiva de la TUI
 ├── clone.py          # plan_clone y write_clone (progreso y cancelación)
 ├── deploy.py         # sesión, plan, clasificación y aplicación
 ├── update.py         # consulta, descarga/verificación y reemplazo
 ├── conflicts.py      # diff por líneas, composición y validación de híbridos
 ├── progress.py       # contrato de progreso y cancelación
-├── tui/              # app única: menú, C1-C4, D0-D5, U1 y transversales
+├── tui/              # app única: menú, C1-C4, D0-D5, U1, configuración y transversales
 ├── plan.py           # Plan, Operation y recuento compartido
 ├── catalog/
 │   ├── models.py     # AppDefinition (validación)

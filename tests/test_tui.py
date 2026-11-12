@@ -3,20 +3,26 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from textual._context import visible_screen_stack
+from textual.renderables.background_screen import BackgroundScreen
+from textual.screen import Screen
 from textual.widgets import Button, DataTable, Input, OptionList, Static
 
 from kamino import texts
 from kamino.archive import FileEntry
 from kamino.catalog.models import AppDefinition
 from kamino.clone import run_clone
+from kamino.config import AppConfig, ConfigLoadResult, config_path, load_config
 from kamino.conflicts import LocalFile, build_conflict
 from kamino.deploy import prepare_deploy
-from kamino.errors import ArchiveError, OperationCancelled, PartialApplyError
+from kamino.errors import ArchiveError, ConfigError, OperationCancelled, PartialApplyError
 from kamino.tui import clone as clone_tui
 from kamino.tui import deploy as deploy_tui
 from kamino.tui import update as update_tui
@@ -31,6 +37,7 @@ from kamino.tui.clone import (
     clone_initial_screen,
 )
 from kamino.tui.common import ChoiceDialog, ErrorScreen
+from kamino.tui.config import ConfigScreen
 from kamino.tui.deploy import (
     DeployAppsScreen,
     DeployConfirmScreen,
@@ -48,6 +55,12 @@ from kamino.update import ReleaseInfo, UpdateOutcome
 
 def _run(coroutine) -> None:
     asyncio.run(coroutine)
+
+
+def _composited_background(screen: Screen):
+    """Render a screen background exactly as the compositor does."""
+    visible_screen_stack.set(list(screen.app._background_screens))
+    return screen.render()
 
 
 def _app_def(app_id: str = "foo", paths: list[str] | None = None) -> AppDefinition:
@@ -126,7 +139,7 @@ def test_menu_opens_with_wordmark_phrase_and_no_last_mission() -> None:
             await pilot.press("escape")
             await pilot.pause()
             assert isinstance(app.screen, MenuScreen)
-            await pilot.press("q")
+            await pilot.press("down", "down", "down", "down", "enter")
             await pilot.pause()
             assert app.return_value == 0
 
@@ -143,6 +156,9 @@ def test_menu_degrades_by_height_and_recovers() -> None:
             assert menu.query_one("#subtitle", Static).display is False
             assert menu.query_one("#capsules", Static).display is False
             assert menu.query_one("#menu").display is True
+            options = menu.query_one("#menu-options", OptionList)
+            assert len(options.options) == 5
+            assert options.size.height == 5
             await pilot.resize_terminal(80, 26)
             await asyncio.sleep(0.3)
             assert menu.query_one("#capsules", Static).display is True
@@ -186,9 +202,9 @@ def test_menu_arrows_move_selection_and_enter_accepts() -> None:
             await pilot.press("up")
             await pilot.pause()
             assert options.highlighted == 0
-            await pilot.press("down", "down", "down")
+            await pilot.press("down", "down", "down", "down")
             await pilot.pause()
-            assert options.highlighted == 3
+            assert options.highlighted == 4
             await pilot.press("enter")
             await pilot.pause()
             assert app.return_value == 0
@@ -196,7 +212,22 @@ def test_menu_arrows_move_selection_and_enter_accepts() -> None:
     _run(scenario())
 
 
-def test_menu_q_returns_last_code_and_shows_last_mission() -> None:
+def test_menu_letter_keys_do_not_trigger_options() -> None:
+    app = KaminoApp(mode="menu", phrase="frase", show_logo=False)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            for key in ("c", "d", "u", "q"):
+                await pilot.press(key)
+                await pilot.pause()
+                assert isinstance(app.screen, MenuScreen)
+            assert app.return_value is None
+
+    _run(scenario())
+
+
+def test_menu_exit_returns_last_code_and_shows_last_mission() -> None:
     app = KaminoApp(mode="menu", phrase="frase", show_logo=True)
 
     async def scenario() -> None:
@@ -207,7 +238,7 @@ def test_menu_q_returns_last_code_and_shows_last_mission() -> None:
             app.screen.refresh_mission()
             await pilot.pause()
             assert "Clon completado" in str(app.screen.query_one("#last-mission", Static).content)
-            await pilot.press("q")
+            await pilot.press("down", "down", "down", "down", "enter")
             await pilot.pause()
             assert app.return_value == 3
 
@@ -220,7 +251,7 @@ def test_menu_clone_flow_returns_to_menu_with_mission() -> None:
     async def scenario() -> None:
         async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause()
-            await pilot.press("c")
+            await pilot.press("enter")
             await pilot.pause()
             assert isinstance(app.screen, CloneAppsScreen)
             app.screen.action_cancel()
@@ -426,6 +457,30 @@ def test_pushing_screen_hides_previous_and_pop_restores(tmp_path: Path) -> None:
     _run(scenario())
 
 
+def test_pushed_screen_does_not_composite_previous_screen(tmp_path: Path) -> None:
+    home, catalog, bin_path = _source_home(tmp_path)
+    state = CloneState(home=home, catalog=catalog, application_dirs=[], path=bin_path)
+    app = KaminoApp(mode="direct", initial=CloneAppsScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            await asyncio.sleep(0.3)
+            await pilot.pause()
+            assert app._background_screens == []
+            app.push_screen(CloneDestinationScreen(state))
+            await pilot.pause()
+            assert app._background_screens == []
+            # The previous screen's compositor stays alive for back navigation,
+            # but it must never be painted under the active screen.
+            assert not isinstance(_composited_background(app.screen), BackgroundScreen)
+            app.pop_screen()
+            await pilot.pause()
+            assert app.screen.query_one("#apps", DataTable).row_count == 1
+
+    _run(scenario())
+
+
 def test_c2_default_name_validation_and_shortcuts(tmp_path: Path, monkeypatch) -> None:
     home, catalog, bin_path = _source_home(tmp_path)
     monkeypatch.chdir(tmp_path)
@@ -451,6 +506,56 @@ def test_c2_default_name_validation_and_shortcuts(tmp_path: Path, monkeypatch) -
             await pilot.press("f3")
             await pilot.pause()
             assert "Downloads" in path_input.value or path_input.value.endswith(".tar.gz")
+
+    _run(scenario())
+
+
+def test_c2_uses_vault_and_accepts_missing_default_dir(tmp_path: Path) -> None:
+    home, catalog, bin_path = _source_home(tmp_path)
+    vault = home / ".config" / "kamino" / "vault"
+    state = CloneState(
+        home=home,
+        catalog=catalog,
+        application_dirs=[],
+        path=bin_path,
+        default_output_dir=vault,
+        include_apps=False,
+        include_destination=True,
+    )
+    app = KaminoApp(mode="direct", initial=CloneDestinationScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            path_input = app.screen.query_one("#path", Input)
+            assert path_input.value.startswith(str(vault))
+            assert not app.screen.query_one("#status", Static).content
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, CloneReviewScreen)
+
+    _run(scenario())
+
+
+def test_c2_uses_configured_output_dir(tmp_path: Path) -> None:
+    home, catalog, bin_path = _source_home(tmp_path)
+    configured = tmp_path / "clones"
+    state = CloneState(
+        home=home,
+        catalog=catalog,
+        application_dirs=[],
+        path=bin_path,
+        default_output_dir=configured,
+        include_apps=False,
+        include_destination=True,
+    )
+    app = KaminoApp(mode="direct", initial=CloneDestinationScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            assert app.screen.query_one("#path", Input).value.startswith(str(configured))
+            assert not app.screen.query_one("#status", Static).content
 
     _run(scenario())
 
@@ -615,6 +720,8 @@ def test_c3_writes_and_opens_summary(tmp_path: Path) -> None:
             assert isinstance(app.screen, CloneSummaryScreen)
             assert (tmp_path / "out.tar.gz").exists()
             assert app.screen.query_one("#exit-line", Static).display is False
+            assert app._background_screens == []
+            assert not isinstance(_composited_background(app.screen), BackgroundScreen)
             await pilot.press("enter")
             await pilot.pause()
             assert app.return_value == 0
@@ -736,6 +843,7 @@ def _deploy_state(tmp_path: Path, *, conflict: bool = True) -> DeployState:
         application_dirs=[],
         path=bin_path,
         snapshots_dir=tmp_path / "snapshots",
+        clone_output_dir=clone.parent,
         clone_file=clone,
         session=session,
         include_file=False,
@@ -743,19 +851,48 @@ def _deploy_state(tmp_path: Path, *, conflict: bool = True) -> DeployState:
     )
 
 
-def test_d0_lists_tar_gz_and_rejects_invalid_file(tmp_path: Path, monkeypatch) -> None:
+def _tar_gz(path: Path, *, mtime: float, content: bytes = b"x") -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(content)
+    os.utime(path, (mtime, mtime))
+    return path
+
+
+def _deploy_file_state(tmp_path: Path, **overrides) -> tuple[DeployState, Path]:
+    clone, _, catalog, bin_path = _clone_file(tmp_path)
+    target = tmp_path / "target"
+    target.mkdir(exist_ok=True)
+    values: dict = {
+        "home": target,
+        "catalog": catalog,
+        "application_dirs": [],
+        "path": bin_path,
+        "snapshots_dir": tmp_path / "snapshots",
+    }
+    values.update(overrides)
+    return DeployState(**values), clone
+
+
+def test_d0_lists_direct_tar_gz_and_enters_selected_clone(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    clone, _, _, _ = _clone_file(tmp_path)
-    app = KaminoApp(mode="direct", initial=DeployFileScreen(DeployState()), phrase="frase")
+    (tmp_path / "sub").mkdir()
+    _tar_gz(tmp_path / "sub" / "anidado.tar.gz", mtime=time.time())
+    (tmp_path / "notas.txt").write_text("x", encoding="utf-8")
+    state, clone = _deploy_file_state(tmp_path, clone_output_dir=None)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
 
     async def scenario() -> None:
         async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause()
-            table = app.screen.query_one(DataTable)
-            assert table.row_count == 1
-            path_input = app.screen.query_one("#path", Input)
-            path_input.value = str(clone)
-            await pilot.pause()
+            table = app.screen.query_one("#files", DataTable)
+            assert table.row_count == 2
+            assert table.get_row_at(0)[0] == clone.name
+            assert table.get_row_at(0)[1] == texts.DEPLOY_ORIGIN_CWD
+            assert table.get_row_at(0)[2] == texts.size_label(clone.stat().st_size)
+            assert table.get_row_at(1)[0] == texts.DEPLOY_OTHER_FILE
+            assert table.get_row_at(1)[1] == texts.DEPLOY_ORIGIN_MANUAL
+            assert table.has_focus
+            assert app.screen.query_one("#path", Input).display is False
             await pilot.press("enter")
             await pilot.pause()
             assert isinstance(app.screen, DeployAppsScreen)
@@ -768,17 +905,428 @@ def test_d0_blocks_invalid_file(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     bad = tmp_path / "bad.tar.gz"
     bad.write_bytes(b"no tar")
+    state, _ = _deploy_file_state(tmp_path, clone_output_dir=tmp_path)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("o")
+            await pilot.press("enter")
+            path_input = app.screen.query_one("#path", Input)
+            assert path_input.display is True
+            assert path_input.has_focus
+            path_input.value = str(bad)
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, DeployFileScreen)
+            assert path_input.value == str(bad)
+            assert "no es un clon válido" in str(app.screen.query_one("#status", Static).content)
+
+    _run(scenario())
+
+
+def test_d0_file_error_prefills_manual_path_and_keeps_list(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    configured = tmp_path / "clones"
+    _tar_gz(configured / "disponible.tar.gz", mtime=time.time())
+    missing = tmp_path / "no-existe.tar.gz"
+    state = DeployState(clone_output_dir=configured, clone_file=missing, file_error="no existe")
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            path_input = app.screen.query_one("#path", Input)
+            assert path_input.display is True
+            assert path_input.has_focus
+            assert path_input.value == str(missing)
+            assert app.screen.query_one("#files", DataTable).row_count == 2
+            assert "no existe" in str(app.screen.query_one("#status", Static).content)
+
+    _run(scenario())
+
+
+def test_d0_merges_sources_by_mtime_and_origin(tmp_path: Path, monkeypatch) -> None:
+    configured = tmp_path / "clones"
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    _tar_gz(configured / "viejo.tar.gz", mtime=1_700_000_000, content=b"a")
+    _tar_gz(configured / "medio.tar.gz", mtime=1_700_001_000, content=b"bb")
+    _tar_gz(cwd / "nuevo.tar.gz", mtime=1_700_002_000, content=b"ccc")
+    monkeypatch.chdir(cwd)
+    state = DeployState(clone_output_dir=configured)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            table = app.screen.query_one("#files", DataTable)
+            rows = [table.get_row_at(index) for index in range(table.row_count)]
+            assert [row[0] for row in rows] == [
+                "nuevo.tar.gz",
+                "medio.tar.gz",
+                "viejo.tar.gz",
+                texts.DEPLOY_OTHER_FILE,
+            ]
+            assert rows[0][1] == texts.DEPLOY_ORIGIN_CWD
+            assert rows[1][1] == texts.DEPLOY_ORIGIN_DEFAULT
+            assert rows[2][1] == texts.DEPLOY_ORIGIN_DEFAULT
+            assert rows[0][2] == "3 B"
+            assert table.cursor_row == 0
+
+    _run(scenario())
+
+
+def test_d0_shared_source_directory_lists_once(tmp_path: Path, monkeypatch) -> None:
+    shared = tmp_path / "shared"
+    _tar_gz(shared / "clon.tar.gz", mtime=time.time())
+    monkeypatch.chdir(shared)
+    state = DeployState(clone_output_dir=shared)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            table = app.screen.query_one("#files", DataTable)
+            assert table.row_count == 2
+            assert table.get_row_at(0)[1] == texts.DEPLOY_ORIGIN_DEFAULT
+            assert table.get_row_at(1)[0] == texts.DEPLOY_OTHER_FILE
+
+    _run(scenario())
+
+
+def test_d0_deduplicates_by_resolved_path(tmp_path: Path, monkeypatch) -> None:
+    configured = tmp_path / "clones"
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    real = _tar_gz(configured / "clon.tar.gz", mtime=time.time())
+    (cwd / "alias.tar.gz").symlink_to(real)
+    monkeypatch.chdir(cwd)
+    state = DeployState(clone_output_dir=configured)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            table = app.screen.query_one("#files", DataTable)
+            assert table.row_count == 2
+            assert table.get_row_at(0)[0] == "clon.tar.gz"
+            assert table.get_row_at(0)[1] == texts.DEPLOY_ORIGIN_DEFAULT
+
+    _run(scenario())
+
+
+def test_d0_informs_missing_source_and_lists_the_other(tmp_path: Path, monkeypatch) -> None:
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    _tar_gz(cwd / "clon.tar.gz", mtime=time.time())
+    missing = tmp_path / "sin-clones"
+    monkeypatch.chdir(cwd)
+    state = DeployState(clone_output_dir=missing)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            table = app.screen.query_one("#files", DataTable)
+            assert table.row_count == 2
+            assert "no existe" in str(app.screen.query_one("#status", Static).content)
+            assert str(missing) in str(app.screen.query_one("#status", Static).content)
+
+    _run(scenario())
+
+
+def test_d0_informs_empty_and_unreadable_sources(tmp_path: Path, monkeypatch) -> None:
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    _tar_gz(cwd / "clon.tar.gz", mtime=time.time())
+    configured = tmp_path / "clones"
+    configured.mkdir()
+    monkeypatch.chdir(cwd)
+    state = DeployState(clone_output_dir=configured)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            assert "sin clones" in str(app.screen.query_one("#status", Static).content)
+
+    _run(scenario())
+
+    unreadable = tmp_path / "no-es-directorio"
+    unreadable.write_text("x", encoding="utf-8")
+    state = DeployState(clone_output_dir=unreadable)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def unreadable_scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            status = str(app.screen.query_one("#status", Static).content)
+            assert "no se puede leer" in status
+            assert app.screen.query_one("#files", DataTable).row_count == 2
+
+    _run(unreadable_scenario())
+
+
+def test_d0_preview_shows_abbreviated_path_date_and_size(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    configured = home / ".config/kamino/vault"
+    stamp = datetime(2026, 5, 4, 9, 30).timestamp()
+    _tar_gz(configured / "clon.tar.gz", mtime=stamp, content=b"x" * 2048)
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(cwd)
+    state = DeployState(clone_output_dir=configured)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            preview = str(app.screen.query_one("#preview", Static).content)
+            assert "~/.config/kamino/vault/clon.tar.gz" in preview
+            assert "2026-05-04 09:30" in preview
+            assert "2.0 KB" in preview
+            await pilot.press("down")
+            await pilot.pause()
+            assert str(app.screen.query_one("#preview", Static).content) == (
+                texts.DEPLOY_PREVIEW_MANUAL
+            )
+
+    _run(scenario())
+
+
+def test_d0_arrow_navigation_and_other_row(tmp_path: Path, monkeypatch) -> None:
+    configured = tmp_path / "clones"
+    _tar_gz(configured / "alfa.tar.gz", mtime=100)
+    _tar_gz(configured / "beta.tar.gz", mtime=200)
+    monkeypatch.chdir(tmp_path)
+    state = DeployState(clone_output_dir=configured)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            table = app.screen.query_one("#files", DataTable)
+            assert table.cursor_row == 0
+            await pilot.press("down")
+            assert table.cursor_row == 1
+            await pilot.press("down")
+            assert table.cursor_row == 2
+            assert table.get_row_at(2)[0] == texts.DEPLOY_OTHER_FILE
+            await pilot.press("up")
+            assert table.cursor_row == 1
+            await pilot.press("o")
+            assert table.cursor_row == 2
+            assert table.has_focus
+            await pilot.press("enter")
+            await pilot.pause()
+            path_input = app.screen.query_one("#path", Input)
+            assert path_input.display is True
+            assert path_input.has_focus
+            await pilot.press("escape")
+            await pilot.pause()
+            assert table.has_focus
+            assert isinstance(app.screen, DeployFileScreen)
+
+    _run(scenario())
+
+
+def test_d0_filter_by_name_and_origin(tmp_path: Path, monkeypatch) -> None:
+    configured = tmp_path / "clones"
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    _tar_gz(configured / "alfa.tar.gz", mtime=100)
+    _tar_gz(cwd / "beta.tar.gz", mtime=200)
+    monkeypatch.chdir(cwd)
+    state = DeployState(clone_output_dir=configured)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            table = screen.query_one("#files", DataTable)
+            await pilot.press("slash")
+            await pilot.pause()
+            filter_input = screen.query_one("#filter", Input)
+            assert filter_input.display is True
+            assert filter_input.has_focus
+            filter_input.value = "beta"
+            await pilot.pause()
+            assert table.row_count == 2
+            assert table.get_row_at(0)[0] == "beta.tar.gz"
+            assert table.get_row_at(1)[0] == texts.DEPLOY_OTHER_FILE
+            filter_input.value = "por defecto"
+            await pilot.pause()
+            assert table.row_count == 2
+            assert table.get_row_at(0)[0] == "alfa.tar.gz"
+            filter_input.value = "zzz"
+            await pilot.pause()
+            assert table.row_count == 1
+            assert table.get_row_at(0)[0] == texts.DEPLOY_OTHER_FILE
+            await pilot.press("enter")
+            await pilot.pause()
+            path_input = screen.query_one("#path", Input)
+            assert path_input.display is True
+            assert path_input.has_focus
+            await pilot.press("escape")
+            await pilot.pause()
+            assert table.has_focus
+            await pilot.press("slash")
+            await pilot.pause()
+            filter_input = screen.query_one("#filter", Input)
+            assert filter_input.has_focus
+            await pilot.press("escape")
+            await pilot.pause()
+            assert filter_input.display is False
+            assert filter_input.value == ""
+            assert table.row_count == 3
+            assert table.has_focus
+
+    _run(scenario())
+
+
+def test_d0_empty_list_opens_manual_path(tmp_path: Path, monkeypatch) -> None:
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
     app = KaminoApp(mode="direct", initial=DeployFileScreen(DeployState()), phrase="frase")
 
     async def scenario() -> None:
         async with app.run_test(size=(100, 40)) as pilot:
             await pilot.pause()
-            app.screen.query_one("#path", Input).value = str(bad)
+            table = app.screen.query_one("#files", DataTable)
+            assert table.row_count == 1
+            assert table.get_row_at(0)[0] == texts.DEPLOY_OTHER_FILE
+            path_input = app.screen.query_one("#path", Input)
+            assert path_input.display is True
+            assert path_input.has_focus
+            assert "sin clones" in str(app.screen.query_one("#status", Static).content)
+
+    _run(scenario())
+
+
+def test_d0_manual_valid_clone_advances(tmp_path: Path, monkeypatch) -> None:
+    state, clone = _deploy_file_state(tmp_path, clone_output_dir=None)
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            path_input = app.screen.query_one("#path", Input)
+            assert path_input.has_focus
+            path_input.value = str(clone)
             await pilot.pause()
             await pilot.press("enter")
             await pilot.pause()
-            assert isinstance(app.screen, DeployFileScreen)
-            assert "no es un clon válido" in str(app.screen.query_one("#status", Static).content)
+            assert isinstance(app.screen, DeployAppsScreen)
+            assert app.screen.state.clone_file == clone.resolve()
+
+    _run(scenario())
+
+
+def test_d0_preselects_clone_file_from_list(tmp_path: Path, monkeypatch) -> None:
+    configured = tmp_path / "clones"
+    clone = _tar_gz(configured / "elegido.tar.gz", mtime=time.time())
+    monkeypatch.chdir(tmp_path)
+    state = DeployState(clone_output_dir=configured, clone_file=clone)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            table = app.screen.query_one("#files", DataTable)
+            assert table.cursor_row == 0
+            assert table.get_row_at(0)[0] == "elegido.tar.gz"
+            assert table.has_focus
+            assert app.screen.query_one("#path", Input).display is False
+
+    _run(scenario())
+
+
+def test_d0_manual_clone_file_opens_prefilled(tmp_path: Path, monkeypatch) -> None:
+    state, clone = _deploy_file_state(tmp_path, clone_output_dir=tmp_path / "clones")
+    (tmp_path / "clones").mkdir()
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    state.clone_file = clone
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            path_input = app.screen.query_one("#path", Input)
+            assert path_input.display is True
+            assert path_input.has_focus
+            assert path_input.value == str(clone)
+            assert app.screen.query_one("#files", DataTable).row_count == 1
+
+    _run(scenario())
+
+
+def test_d0_help_describes_filter_and_manual_path(tmp_path: Path, monkeypatch) -> None:
+    configured = tmp_path / "clones"
+    _tar_gz(configured / "clon.tar.gz", mtime=time.time())
+    monkeypatch.chdir(tmp_path)
+    state = DeployState(clone_output_dir=configured)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            await pilot.press("question_mark")
+            await pilot.pause()
+            body = str(app.screen.query_one("#help-body", Static).content)
+            assert "/" in body
+            assert "filtrar" in body
+            assert "Otro archivo..." in body
+            assert "ruta manual" in body
+
+    _run(scenario())
+
+
+def test_d0_is_usable_at_80x24(tmp_path: Path, monkeypatch) -> None:
+    configured = tmp_path / "clones"
+    cwd = tmp_path / "cwd"
+    cwd.mkdir()
+    _tar_gz(configured / "alfa.tar.gz", mtime=100)
+    _tar_gz(cwd / "beta.tar.gz", mtime=200)
+    monkeypatch.chdir(cwd)
+    state = DeployState(clone_output_dir=configured)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 24)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            table = screen.query_one("#files", DataTable)
+            assert table.size.width <= 80
+            assert table.size.height > 0
+            assert table.row_count == 3
+            assert screen.query_one("#shortcut-bar", Static).content
+            assert screen.query_one("#title", Static).content
+            await pilot.press("down")
+            await pilot.press("slash")
+            await pilot.pause()
+            filter_input = screen.query_one("#filter", Input)
+            filter_input.value = "alfa"
+            await pilot.pause()
+            assert table.row_count == 2
+            await pilot.press("escape")
+            await pilot.pause()
+            await pilot.press("o")
+            await pilot.press("enter")
+            await pilot.pause()
+            path_input = screen.query_one("#path", Input)
+            assert path_input.display is True
+            assert path_input.has_focus
 
     _run(scenario())
 
@@ -851,7 +1399,74 @@ def test_d1_checksum_failure_returns_to_d0(tmp_path: Path, monkeypatch) -> None:
             await pilot.press("d")
             await pilot.pause()
             assert isinstance(app.screen, DeployFileScreen)
+            table = app.screen.query_one("#files", DataTable)
+            assert table.has_focus
+            assert table.cursor_row == 0
+            assert table.get_row_at(0)[0] == state.clone_file.name  # type: ignore[union-attr]
+            assert "clon con mutaciones" in str(app.screen.query_one("#status", Static).content)
             assert (state.home / ".config/foo/config.toml").read_text() != "clone\n"
+
+    _run(scenario())
+
+
+def test_d0_recovers_focus_and_selection_after_d1(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    state, clone = _deploy_file_state(tmp_path, clone_output_dir=tmp_path)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, DeployAppsScreen)
+            await pilot.press("escape")
+            await pilot.pause()
+            assert isinstance(app.screen, DeployFileScreen)
+            table = app.screen.query_one("#files", DataTable)
+            assert table.has_focus
+            assert table.cursor_row == 0
+            assert table.get_row_at(0)[0] == clone.name
+
+    _run(scenario())
+
+
+def test_d0_restores_selection_after_d1_error(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    state, clone = _deploy_file_state(tmp_path, clone_output_dir=tmp_path)
+    app = KaminoApp(mode="direct", initial=DeployFileScreen(state), phrase="frase")
+
+    def corrupt(path, manifest, **kwargs):
+        raise ArchiveError("clon con mutaciones")
+
+    monkeypatch.setattr("kamino.deploy.verify_archive", corrupt)
+    monkeypatch.setattr("kamino.archive.verify_archive", corrupt)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(100, 40)) as pilot:
+            await pilot.pause()
+            table = app.screen.query_one("#files", DataTable)
+            assert table.cursor_row == 0
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, DeployAppsScreen)
+            await pilot.press("a")
+            await pilot.press("enter")
+            for _ in range(30):
+                await asyncio.sleep(0.1)
+                await pilot.pause()
+                if isinstance(app.screen, ErrorScreen):
+                    break
+            assert isinstance(app.screen, ErrorScreen)
+            await pilot.press("d")
+            await pilot.pause()
+            assert isinstance(app.screen, DeployFileScreen)
+            screen = app.screen
+            table = screen.query_one("#files", DataTable)
+            assert table.has_focus
+            assert table.cursor_row == 0
+            assert table.get_row_at(0)[0] == clone.name
+            assert "clon con mutaciones" in str(screen.query_one("#status", Static).content)
 
     _run(scenario())
 
@@ -1542,5 +2157,282 @@ def test_d2_uppercase_shortcuts_apply_globally(tmp_path: Path) -> None:
             assert all(
                 decision.action.value == "omit" for decision in state.decisions.decisions.values()
             )
+
+    _run(scenario())
+
+
+def _config_home(tmp_path: Path) -> Path:
+    return tmp_path / "home"
+
+
+def _config_app(home: Path) -> KaminoApp:
+    return KaminoApp(
+        mode="menu",
+        config_result=load_config(home=home),
+        config_home=home,
+        phrase="frase",
+    )
+
+
+def test_menu_config_option_opens_screen(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            options = app.screen.query_one("#menu-options", OptionList)
+            assert len(options.options) == 5
+            assert options.options[3].id == "config"
+            await pilot.press("s")
+            await pilot.pause()
+            assert isinstance(app.screen, MenuScreen)
+            await pilot.press("down", "down", "down", "enter")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfigScreen)
+
+    _run(scenario())
+
+
+def test_config_screen_saves_and_applies_immediately(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            app.push_screen(ConfigScreen(load_config(home=home), home=home))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            assert screen.query_one("#catalog-dir", Input).value == str(
+                home / ".config" / "kamino" / "apps"
+            )
+            screen.query_one("#catalog-dir", Input).value = str(home / "catalog")
+            screen.query_one("#clone-output-dir", Input).value = str(home / "clones")
+            screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, MenuScreen)
+            assert config_path(home).exists()
+            assert app.config.catalog_dir == home / "catalog"
+            assert app.config.clone_output_dir == home / "clones"
+            assert app.config.snapshots_dir == home / "snapshots"
+            assert not (home / "clones").exists()
+            await pilot.press("down", "enter")
+            await pilot.pause()
+            assert isinstance(app.screen, DeployFileScreen)
+            assert app.screen.state.catalog_dir == home / "catalog"
+            assert app.screen.state.snapshots_dir == home / "snapshots"
+            assert app.screen.state.clone_output_dir == home / "clones"
+
+    _run(scenario())
+
+
+def test_menu_clone_uses_saved_config(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            app.push_screen(ConfigScreen(load_config(home=home), home=home))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            screen.query_one("#catalog-dir", Input).value = str(home / "catalog")
+            screen.query_one("#clone-output-dir", Input).value = str(home / "clones")
+            screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            await pilot.press("enter")
+            await pilot.pause()
+            assert isinstance(app.screen, CloneAppsScreen)
+            assert app.screen.state.catalog_dir == home / "catalog"
+            assert app.screen.state.default_output_dir == home / "clones"
+
+    _run(scenario())
+
+
+def test_config_screen_cancel_does_not_create_file(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            app.push_screen(ConfigScreen(load_config(home=home), home=home))
+            await pilot.pause()
+            await pilot.press("escape")
+            await pilot.pause()
+            assert isinstance(app.screen, MenuScreen)
+            assert not config_path(home).exists()
+
+    _run(scenario())
+
+
+def test_config_screen_validation_blocks_save(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    app = _config_app(home)
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            app.push_screen(ConfigScreen(load_config(home=home), home=home))
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            screen.query_one("#catalog-dir", Input).value = "relative"
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, ConfigScreen)
+            assert not config_path(home).exists()
+            assert "ruta absoluta" in str(screen.query_one("#settings-status", Static).render())
+
+    _run(scenario())
+
+
+def test_config_screen_invalid_file_opens_with_error_and_cancel_exits(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    target = config_path(home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('[catalog]\ndir = "Downloads"\n', encoding="utf-8")
+    app = KaminoApp(
+        mode="menu",
+        config_result=load_config(home=home),
+        config_home=home,
+        phrase="frase",
+    )
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            assert screen.query_one("#settings-error", Static).display is True
+            assert screen.query_one("#catalog-dir", Input).value == "Downloads"
+            await pilot.press("escape")
+            await pilot.pause()
+
+    _run(scenario())
+    assert app.return_value == 1
+
+
+def test_config_screen_invalid_file_can_be_corrected(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    target = config_path(home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('[catalog]\ndir = "Downloads"\n', encoding="utf-8")
+    app = KaminoApp(
+        mode="menu",
+        config_result=load_config(home=home),
+        config_home=home,
+        phrase="frase",
+    )
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            screen = app.screen
+            assert isinstance(screen, ConfigScreen)
+            screen.query_one("#catalog-dir", Input).value = str(home / "catalog")
+            screen.query_one("#clone-output-dir", Input).value = str(home / "clones")
+            screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, MenuScreen)
+            assert load_config(home=home).error is None
+
+    _run(scenario())
+
+
+def test_run_clone_flow_rebuilds_state_after_config(tmp_path: Path, monkeypatch) -> None:
+    home, catalog, _bin_path = _source_home(tmp_path)
+    invalid = ConfigLoadResult(
+        config=load_config(home=home).config,
+        error=ConfigError("config inválida"),
+        exists=True,
+    )
+    captured: dict = {}
+    monkeypatch.setattr(
+        "kamino.tui.app.run_app",
+        lambda **kwargs: captured.update(kwargs) or 0,
+    )
+
+    code = clone_tui.run_clone_flow(home=home, catalog=catalog, config_result=invalid)
+
+    assert code == 0
+    new_config = AppConfig(
+        catalog_dir=home / "catalog",
+        clone_output_dir=home / "clones",
+        snapshots_dir=home / "snapshots",
+    )
+    screen = captured["after_config"](SimpleNamespace(config=new_config))
+    assert isinstance(screen, CloneAppsScreen)
+    assert screen.state.catalog_dir == new_config.catalog_dir
+    assert screen.state.default_output_dir == new_config.clone_output_dir
+
+
+def test_run_deploy_flow_rebuilds_state_after_config(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    invalid = ConfigLoadResult(
+        config=load_config(home=home).config,
+        error=ConfigError("config inválida"),
+        exists=True,
+    )
+    captured: dict = {}
+    monkeypatch.setattr(
+        "kamino.tui.app.run_app",
+        lambda **kwargs: captured.update(kwargs) or 0,
+    )
+
+    code = deploy_tui.run_deploy_flow(
+        clone_file=tmp_path / "missing.tar.gz",
+        home=home,
+        file_error="no existe",
+        config_result=invalid,
+    )
+
+    assert code == 0
+    new_config = AppConfig(
+        catalog_dir=home / "catalog",
+        clone_output_dir=home / "clones",
+        snapshots_dir=home / "snapshots",
+    )
+    screen = captured["after_config"](SimpleNamespace(config=new_config))
+    assert isinstance(screen, DeployFileScreen)
+    assert screen.state.catalog_dir == new_config.catalog_dir
+    assert screen.state.snapshots_dir == new_config.snapshots_dir
+    assert screen.state.clone_output_dir == new_config.clone_output_dir
+
+
+def test_config_screen_invalid_file_continues_direct_flow(tmp_path: Path) -> None:
+    home = _config_home(tmp_path)
+    target = config_path(home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text('[catalog]\ndir = "Downloads"\n', encoding="utf-8")
+
+    class NextScreen(Screen[None]):
+        def compose(self):
+            yield Static("next", id="next")
+
+    app = KaminoApp(
+        mode="direct",
+        config_result=load_config(home=home),
+        config_home=home,
+        after_config=lambda _app: NextScreen(),
+        phrase="frase",
+    )
+
+    async def scenario() -> None:
+        async with app.run_test(size=(80, 30)) as pilot:
+            await pilot.pause()
+            assert isinstance(app.screen, ConfigScreen)
+            app.screen.query_one("#catalog-dir", Input).value = str(home / "catalog")
+            app.screen.query_one("#clone-output-dir", Input).value = str(home / "clones")
+            app.screen.query_one("#snapshots-dir", Input).value = str(home / "snapshots")
+            await pilot.press("ctrl+s")
+            await pilot.pause()
+            assert isinstance(app.screen, NextScreen)
 
     _run(scenario())

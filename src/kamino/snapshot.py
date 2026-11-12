@@ -1,9 +1,8 @@
 """Copia de seguridad previa a desplegar (snapshot).
 
-Se guarda en `~/Library/Application Support/kamino/snapshots/<fecha>.tar.gz` con
-el mismo formato que un clon (diseño técnico §6): una única app sintética
-`snapshot` con las rutas relativas al home, así el futuro `undo` es un `deploy`
-del snapshot.
+Se guarda en `~/.config/kamino/vault/snapshot/<fecha>.tar.gz` con el mismo
+formato que un clon (diseño técnico §6): una única app sintética `snapshot` con
+las rutas relativas al home, así el futuro `undo` es un `deploy` del snapshot.
 
 Módulo sin interfaz (§1): no imprime ni pregunta. `home`, `snapshots_dir` y
 `timestamp` se inyectan para que las pruebas no toquen el sistema real (§7).
@@ -19,6 +18,7 @@ from pathlib import Path, PurePosixPath
 import kamino
 from kamino.archive import FORMAT_VERSION, AppEntry, FileEntry, Manifest, write_archive
 from kamino.catalog.models import AppDefinition
+from kamino.defaults import snapshots_dir as default_snapshots_dir
 from kamino.errors import ArchiveError, PathError
 from kamino.paths import to_relative
 from kamino.plan import build_plan
@@ -45,8 +45,8 @@ def create_snapshot(
     inseguros, tipos especiales) se omite, igual que en un clon.
 
     Se guarda en `snapshots_dir` (por defecto
-    `~/Library/Application Support/kamino/snapshots/`) con nombre
-    `<timestamp>.tar.gz`, usando la hora actual en ISO 8601 UTC si no se indica;
+    `~/.config/kamino/vault/snapshot/`) con nombre `<timestamp>.tar.gz`, usando
+    la hora actual en ISO 8601 UTC si no se indica;
     si el nombre ya existe se añade un sufijo numérico y nunca se sobrescribe (§6).
 
     Devuelve la ruta del snapshot, o `None` si `paths` está vacío.
@@ -101,7 +101,7 @@ def _snapshot_definition(paths: Sequence[Path], root: Path) -> AppDefinition:
 
 def _default_dir(root: Path) -> Path:
     """Directorio por defecto de los snapshots bajo el home (§6)."""
-    return root / "Library" / "Application Support" / "kamino" / "snapshots"
+    return default_snapshots_dir(root)
 
 
 def _check_timestamp(timestamp: str) -> None:

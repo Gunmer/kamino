@@ -408,7 +408,7 @@ def test_apps_are_cloned_in_id_order(tmp_path: Path) -> None:
 # --- ubicación y nombre del clon (§6) ---
 
 
-def test_default_output_name_in_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_default_output_name_in_vault(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     workdir = tmp_path / "workdir"
     workdir.mkdir()
     monkeypatch.chdir(workdir)
@@ -425,9 +425,34 @@ def test_default_output_name_in_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPa
         now=datetime(2026, 10, 28, 12, 0),
     )
 
-    expected = workdir / "clone-20261028.tar.gz"
+    expected = home / ".config" / "kamino" / "vault" / "clone-20261028.tar.gz"
     assert result.output == expected
     assert expected.exists()
+
+
+def test_default_output_dry_run_does_not_create_vault(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    workdir = tmp_path / "workdir"
+    workdir.mkdir()
+    monkeypatch.chdir(workdir)
+    home = tmp_path / "home"
+    _write_config(home, "a.toml")
+
+    result = run_clone(
+        home=home,
+        output=None,
+        dry_run=True,
+        catalog=_catalog(_app(paths=["a.toml"])),
+        application_dirs=[],
+        path=_fake_path(tmp_path, "foo"),
+        metadata=_metadata(),
+        now=datetime(2026, 10, 28, 12, 0),
+    )
+
+    expected = home / ".config" / "kamino" / "vault" / "clone-20261028.tar.gz"
+    assert result.plan_output == expected
+    assert not (home / ".config" / "kamino" / "vault").exists()
 
 
 def test_default_output_existing_requires_force(
@@ -453,10 +478,11 @@ def test_default_output_existing_requires_force(
         run_clone(**kwargs)
     second = run_clone(**kwargs, force=True)
 
-    assert first.output == workdir / "clone-20261028.tar.gz"
+    expected = home / ".config" / "kamino" / "vault" / "clone-20261028.tar.gz"
+    assert first.output == expected
     assert second.output == first.output
     assert first.output is not None and first.output.exists()
-    assert not list(workdir.glob(".*.tmp"))
+    assert not list((home / ".config" / "kamino" / "vault").glob(".*.tmp"))
 
 
 def test_explicit_output_is_never_overwritten(tmp_path: Path) -> None:

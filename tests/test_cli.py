@@ -12,6 +12,7 @@ from typer.testing import CliRunner
 
 import kamino.cli as cli
 from kamino.commands import CloneOutcome, DeployOutcome
+from kamino.config import config_path
 from kamino.errors import ArchiveError, UpdateError
 
 runner = CliRunner()
@@ -168,8 +169,6 @@ def test_clone_error_exit_1(monkeypatch) -> None:
 
 def test_clone_tui_skips_screens_with_valid_arguments(monkeypatch) -> None:
     monkeypatch.setattr(cli, "_interactive", lambda: True)
-    monkeypatch.setattr(cli, "load_catalog", lambda: {"git": SimpleNamespace(id="git")})
-    monkeypatch.setattr(cli, "is_installed", lambda app: True)
     calls: dict = {}
 
     def fake_flow(**kwargs):
@@ -180,15 +179,13 @@ def test_clone_tui_skips_screens_with_valid_arguments(monkeypatch) -> None:
     result = runner.invoke(cli.app, ["clone", "-a", "git", "-o", "out.tar.gz"])
 
     assert result.exit_code == 0
-    assert calls["selected"] == ["git"]
+    assert calls["requested"] == ["git"]
     assert calls["output"] == Path("out.tar.gz").resolve()
-    assert calls["apps_error"] is None
     assert calls["output_error"] is None
 
 
 def test_clone_tui_invalid_output_opens_destination(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(cli, "_interactive", lambda: True)
-    monkeypatch.setattr(cli, "load_catalog", lambda: {})
     calls: dict = {}
 
     def fake_flow(**kwargs):
@@ -248,15 +245,10 @@ def test_deploy_exit_3_when_omitted(monkeypatch, flag: str) -> None:
     assert result.exit_code == 3
 
 
-def test_deploy_tui_validates_apps_and_passes_session(monkeypatch, tmp_path: Path) -> None:
+def test_deploy_tui_passes_requested_apps(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(cli, "_interactive", lambda: True)
     clone = tmp_path / "clone.tar.gz"
     clone.write_bytes(b"x")
-    session = SimpleNamespace(
-        deployable_apps=[SimpleNamespace(id="git")],
-        close=lambda: None,
-    )
-    monkeypatch.setattr(cli, "prepare_deploy", lambda path: session)
     calls: dict = {}
 
     def fake_flow(**kwargs):
@@ -267,9 +259,8 @@ def test_deploy_tui_validates_apps_and_passes_session(monkeypatch, tmp_path: Pat
     result = runner.invoke(cli.app, ["deploy", str(clone), "-a", "git"])
 
     assert result.exit_code == 0
-    assert calls["selected"] == ["git"]
-    assert calls["apps_error"] is None
-    assert calls["session"] is session
+    assert calls["requested"] == ["git"]
+    assert calls.get("file_error") is None
 
 
 def test_deploy_tui_missing_file_opens_d0(monkeypatch, tmp_path: Path) -> None:
@@ -399,7 +390,6 @@ def test_deploy_dry_run_never_opens_tui(monkeypatch) -> None:
 
 def test_clone_dry_run_with_tty_opens_review(monkeypatch) -> None:
     monkeypatch.setattr(cli, "_interactive", lambda: True)
-    monkeypatch.setattr(cli, "load_catalog", lambda: {})
     called: list[dict] = []
 
     def fake_flow(**kwargs):
@@ -417,10 +407,70 @@ def test_kamino_plain_keeps_commands_non_interactive(monkeypatch) -> None:
     monkeypatch.setenv("KAMINO_PLAIN", "1")
     monkeypatch.setattr(cli.sys.stdin, "isatty", lambda: True)
     monkeypatch.setattr(cli.sys.stdout, "isatty", lambda: True)
-    monkeypatch.setattr(cli, "load_catalog", lambda: {})
     monkeypatch.setattr(cli, "execute_clone", lambda **kwargs: _clone_outcome())
     monkeypatch.setattr(cli, "run_clone_flow", lambda **kwargs: pytest.fail("no debe abrir la TUI"))
 
     result = runner.invoke(cli.app, ["clone", "--apps", "git"])
 
     assert result.exit_code == 0
+
+
+def test_cli_clone_ignores_config_and_preserves_it(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    target = config_path(home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    original = (
+        f'[catalog]\ndir = "{home / "catalog"}"\n\n[clone]\noutput_dir = "{home / "clones"}"\n'
+    )
+    target.write_text(original, encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    calls: dict = {}
+    monkeypatch.setattr(
+        cli,
+        "execute_clone",
+        lambda **kwargs: calls.update(kwargs) or _clone_outcome(),
+    )
+
+    result = runner.invoke(cli.app, ["clone"])
+
+    assert result.exit_code == 0
+    assert calls["output"] is None
+    assert target.read_text(encoding="utf-8") == original
+
+
+def test_cli_does_not_create_config(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(cli, "execute_clone", lambda **kwargs: _clone_outcome())
+
+    result = runner.invoke(cli.app, ["clone"])
+
+    assert result.exit_code == 0
+    assert not config_path(home).exists()
+
+
+def test_cli_invalid_config_does_not_affect_commands(tmp_path: Path, monkeypatch) -> None:
+    home = tmp_path / "home"
+    target = config_path(home)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("[ui]\nplain = false\n", encoding="utf-8")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.setattr(cli, "execute_clone", lambda **kwargs: _clone_outcome())
+    monkeypatch.setattr(cli, "execute_deploy", lambda path, **kwargs: _deploy_outcome())
+    update_result = SimpleNamespace(
+        current_version="0.4.0",
+        latest_version="0.5.0",
+        target=Path("/tmp/kamino"),
+        updated=True,
+    )
+    monkeypatch.setattr(cli, "execute_update", lambda version: update_result)
+    monkeypatch.setattr(cli.ui, "print_update_start", lambda: None)
+    monkeypatch.setattr(cli.ui, "print_update_result", lambda result: None)
+
+    clone_result = runner.invoke(cli.app, ["clone"])
+    deploy_result = runner.invoke(cli.app, ["deploy", "clone.tar.gz", "--yes"])
+    update_result_invocation = runner.invoke(cli.app, ["update"])
+
+    assert clone_result.exit_code == 0
+    assert deploy_result.exit_code == 0
+    assert update_result_invocation.exit_code == 0

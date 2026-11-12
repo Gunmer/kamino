@@ -311,7 +311,7 @@ def test_cli_yes_applies_conflicts_without_tui(tmp_path: Path) -> None:
 
     assert result.exit_code == 0, result.output
     assert (target / ".config/foo/config.conf").read_text() == clone_text
-    snapshots = target / "Library" / "Application Support" / "kamino" / "snapshots"
+    snapshots = target / ".config" / "kamino" / "vault" / "snapshot"
     assert list(snapshots.glob("*.tar.gz"))
 
 
@@ -326,5 +326,5 @@ def test_cli_dry_run_prints_diff_without_writing(tmp_path: Path) -> None:
     assert "+++ clon/.config/foo/config.conf" in result.output
     assert "LINE ONE" in result.output
     assert (target / ".config/foo/config.conf").read_text() == local
-    snapshots = target / "Library" / "Application Support" / "kamino" / "snapshots"
+    snapshots = target / ".config" / "kamino" / "vault" / "snapshot"
     assert not snapshots.exists()

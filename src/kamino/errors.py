@@ -17,6 +17,10 @@ class CatalogError(KaminoError):
     """Una definición del catálogo es inválida o no se puede cargar."""
 
 
+class ConfigError(KaminoError):
+    """La configuración de la TUI es inválida o no se puede leer/escribir."""
+
+
 class DetectionError(KaminoError):
     """No se pudo detectar si una app está instalada o su versión."""
 

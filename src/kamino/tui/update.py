@@ -276,7 +276,13 @@ def run_update_flow(
 ) -> int:
     from kamino.tui.app import run_app
 
+    screen = UpdateScreen(current_version=current_version, target=target, release=release)
     return run_app(
         mode="direct",
-        initial=UpdateScreen(current_version=current_version, target=target, release=release),
+        initial=screen,
+        after_config=lambda _app: UpdateScreen(
+            current_version=current_version,
+            target=target,
+            release=release,
+        ),
     )

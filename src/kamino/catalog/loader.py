@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from pydantic import ValidationError
 
 from kamino.catalog.models import AppDefinition
+from kamino.defaults import catalog_dir
 from kamino.errors import CatalogError
 
 if TYPE_CHECKING:
@@ -43,7 +44,7 @@ def load_catalog(*, user_dir: Path | None = None) -> dict[str, AppDefinition]:
 
 
 def _default_user_dir() -> Path:
-    return Path.home() / ".config" / "kamino" / "apps"
+    return catalog_dir()
 
 
 def _load_embedded() -> dict[str, AppDefinition]:

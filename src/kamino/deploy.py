@@ -56,6 +56,8 @@ from kamino.conflicts import (
     row_count,
     validate_merge,
 )
+from kamino.defaults import catalog_dir as default_catalog_dir
+from kamino.defaults import snapshots_dir as default_snapshots_dir
 from kamino.detect import is_installed
 from kamino.errors import (
     ConcurrentChangeError,
@@ -229,7 +231,7 @@ class DeploySession:
         """Directory where the previous-state snapshot will be written."""
         if self.snapshots_dir is not None:
             return self.snapshots_dir
-        return self.home / "Library" / "Application Support" / "kamino" / "snapshots"
+        return default_snapshots_dir(self.home)
 
     def plan(
         self,
@@ -635,6 +637,7 @@ def prepare_deploy(
     *,
     home: Path | None = None,
     catalog: dict[str, AppDefinition] | None = None,
+    catalog_dir: Path | None = None,
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
     snapshots_dir: Path | None = None,
@@ -644,7 +647,9 @@ def prepare_deploy(
     definitions = (
         catalog
         if catalog is not None
-        else load_catalog(user_dir=root / ".config" / "kamino" / "apps")
+        else load_catalog(
+            user_dir=catalog_dir if catalog_dir is not None else default_catalog_dir(root)
+        )
     )
     manifest = read_manifest(clone_file)
     deployable: list[AppEntry] = []
@@ -671,6 +676,7 @@ def run_deploy(
     selected: list[str] | None = None,
     dry_run: bool = False,
     catalog: dict[str, AppDefinition] | None = None,
+    catalog_dir: Path | None = None,
     application_dirs: Sequence[Path] | None = None,
     path: str | None = None,
     snapshots_dir: Path | None = None,
@@ -684,6 +690,7 @@ def run_deploy(
         clone_file,
         home=home,
         catalog=catalog,
+        catalog_dir=catalog_dir,
         application_dirs=application_dirs,
         path=path,
         snapshots_dir=snapshots_dir,

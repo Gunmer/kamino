@@ -69,11 +69,13 @@ DIFF_WARNING = (
 MENU_CLONE = "Clonar"
 MENU_DEPLOY = "Desplegar"
 MENU_UPDATE = "Actualizar"
+MENU_CONFIG = "Configuración"
 MENU_EXIT = "Abandonar Kamino"
 
 MENU_CLONE_HELP = "Crea un clon de las apps instaladas."
 MENU_DEPLOY_HELP = "Despliega desde un archivo del clon."
 MENU_UPDATE_HELP = "Actualiza a la última versión publicada."
+MENU_CONFIG_HELP = "Edita las rutas de la TUI."
 MENU_EXIT_HELP = "Cierra kamino."
 
 LAST_MISSION = "Última misión: {summary}"
@@ -150,7 +152,7 @@ CLONE_SIZE_LABEL = "Tamaño"
 CLONE_PATH_LABEL = "Ruta"
 
 DEPLOY_TITLE = "Desplegar un clon"
-DEPLOY_FILE_TITLE = "Elige el archivo del clon"
+DEPLOY_FILE_TITLE = "Elige el clon que quieres desplegar"
 DEPLOY_APPS_TITLE = "Elige las apps que quieres desplegar"
 DEPLOY_CONFLICTS_TITLE = "Conflictos"
 DEPLOY_DETAIL_TITLE = "Revisión por bloques"
@@ -159,6 +161,17 @@ DEPLOY_SUMMARY_TITLE = "Despliegue completado"
 DEPLOY_INCOMPLETE_TITLE = "Despliegue incompleto"
 DEPLOY_NO_FILE = "Escribe o elige un archivo .tar.gz."
 DEPLOY_FILE_INVALID = "El archivo no es un clon válido: {message}"
+DEPLOY_FILE_MISSING = "no existe o no es un archivo"
+DEPLOY_OTHER_FILE = "Otro archivo..."
+DEPLOY_ORIGIN_DEFAULT = "por defecto"
+DEPLOY_ORIGIN_CWD = "este directorio"
+DEPLOY_ORIGIN_MANUAL = "ruta manual"
+DEPLOY_SOURCE_MISSING = "{origin}: no existe {path}"
+DEPLOY_SOURCE_UNREADABLE = "{origin}: no se puede leer {path}: {message}"
+DEPLOY_SOURCE_EMPTY = "{origin}: sin clones en {path}"
+DEPLOY_PREVIEW = "{path} · {date} · {size}"
+DEPLOY_PREVIEW_MANUAL = "Ruta manual: escribe la ruta completa de un clon .tar.gz."
+DEPLOY_DATE_FORMAT = "%Y-%m-%d %H:%M"
 DEPLOY_MANIFEST_WARNINGS = "Avisos del manifiesto"
 DEPLOY_ARCH_WARNING = "Arquitectura distinta: {message}"
 DEPLOY_MACOS_WARNING = "Versión de macOS distinta: {message}"
@@ -262,7 +275,6 @@ def shortcut_line(*entries: tuple[str, str]) -> str:
 SHORTCUTS_MENU = shortcut_line(
     ("↑↓", "mover"),
     ("Enter", "aceptar"),
-    ("c/d/u/q", "atajos"),
     ("?", "ayuda"),
 )
 SHORTCUTS_C1 = shortcut_line(
@@ -304,10 +316,11 @@ SHORTCUTS_C4 = shortcut_line(
     ("?", "ayuda"),
 )
 SHORTCUTS_D0 = shortcut_line(
-    ("↑↓", "archivo"),
-    ("Tab", "foco"),
+    ("↑↓", "mover"),
+    ("/", "filtrar"),
+    ("o", "otro archivo"),
     ("Enter", "continuar"),
-    ("Esc", "cancelar"),
+    ("Esc", "volver"),
     ("?", "ayuda"),
 )
 SHORTCUTS_D1 = shortcut_line(
@@ -353,6 +366,18 @@ SHORTCUTS_U1 = shortcut_line(
     ("?", "ayuda"),
 )
 SHORTCUTS_HELP = shortcut_line(("Enter/Esc/?", "cerrar"))
+SHORTCUTS_SETTINGS = shortcut_line(
+    ("Tab/Mayús+Tab", "mover"),
+    ("Ctrl+S", "guardar"),
+    ("Esc", "volver"),
+    ("?", "ayuda"),
+)
+SHORTCUTS_SETTINGS_ERROR = shortcut_line(
+    ("Tab/Mayús+Tab", "mover"),
+    ("Ctrl+S", "guardar"),
+    ("Esc", "salir sin guardar"),
+    ("?", "ayuda"),
+)
 SHORTCUTS_DIALOG = shortcut_line(
     ("↑↓", "mover"),
     ("Enter", "aceptar"),
@@ -446,6 +471,7 @@ BUTTON_BACK_TO_DETAIL = "Volver al detalle"
 COLUMN_APP = "App"
 COLUMN_ARCHIVOS = "Archivos"
 COLUMN_ARCHIVO = "Archivo"
+COLUMN_ORIGEN = "Origen"
 COLUMN_TAMANO = "Tamaño"
 COLUMN_TIPO = "Tipo"
 COLUMN_DETALLE = "Detalle"
@@ -458,6 +484,25 @@ LABEL_CLONE_FILE_PLACEHOLDER = "Ruta del clon (.tar.gz)"
 LABEL_SCREEN = "Pantalla: {screen}"
 LABEL_SHORTCUTS = "Atajos de esta pantalla:"
 LABEL_FLOW = "Flujo:"
+
+SETTINGS_TITLE = "Configuración"
+SETTINGS_SUBTITLE = "Rutas de Kamino · ~/.config/kamino/config.toml"
+SETTINGS_CLI_NOTE = "La CLI no usa estos valores; solo la TUI."
+SETTINGS_CATALOG_LABEL = "Catálogo de aplicaciones"
+SETTINGS_CLONE_LABEL = "Destino de los clones"
+SETTINGS_SNAPSHOTS_LABEL = "Directorio de holocrones"
+SETTINGS_CATALOG_HINT = "Definiciones TOML de apps del usuario. Por defecto: ~/.config/kamino/apps."
+SETTINGS_CLONE_HINT = "Carpeta de clone-AAAAMMDD.tar.gz. Por defecto: ~/.config/kamino/vault."
+SETTINGS_SNAPSHOTS_HINT = (
+    "Copia del estado anterior antes de desplegar. Por defecto: ~/.config/kamino/vault/snapshot."
+)
+SETTINGS_PATH_PLACEHOLDER = "Ruta absoluta o que empiece por ~"
+SETTINGS_WARN_CATALOG_MISSING = "no existe; se usarán solo las definiciones integradas"
+SETTINGS_WARN_CLONE_MISSING = "no existe; se creará al clonar"
+SETTINGS_WARN_SNAPSHOTS_MISSING = "no existe; se creará al desplegar"
+SETTINGS_WARN_NO_FILE = "no existe config.toml; se creará al guardar"
+SETTINGS_SAVED = "configuración guardada"
+SETTINGS_SAVE_ERROR = "no se pudo guardar. El archivo anterior no cambió"
 
 STATUS_RENAME_STARTED = "El renombrado ya había empezado: no se puede cancelar."
 STATUS_CANCELLING = "Cancelando…"
@@ -479,6 +524,14 @@ TITLE_PREPARING = "Preparando el despliegue"
 TITLE_RETRY_ADVICE = "Vuelve a D0 y elige un clon válido."
 TITLE_CANCEL_PREPARE = "Cancelando…"
 
+HELP_SETTINGS = (
+    ("Tab", "siguiente campo"),
+    ("Mayús+Tab", "campo anterior"),
+    ("Enter", "siguiente campo"),
+    ("Ctrl+S", "guardar la configuración"),
+    ("F1", "abrir esta ayuda"),
+    ("Esc", "volver o salir sin guardar"),
+)
 HELP_C1 = (
     ("↑↓", "recorrer apps"),
     ("Espacio", "marcar o desmarcar sin perder el foco"),
@@ -509,11 +562,12 @@ HELP_C4 = (
     ("Enter/Esc", "continuar"),
 )
 HELP_D0 = (
-    ("↑↓", "recorrer los clones del directorio"),
-    ("Tab", "alternar entre la tabla y la ruta"),
-    ("Enter", "continuar con el archivo elegido"),
+    ("↑↓", "recorrer los clones de la lista"),
+    ("/", "filtrar por nombre u origen"),
+    ("o", "ir a Otro archivo... y escribir una ruta"),
+    ("Enter", "continuar con la fila resaltada o abrir la ruta manual"),
+    ("Esc", "volver a la tabla, cerrar el filtro o cancelar"),
     ("F1", "abrir esta ayuda"),
-    ("Esc", "cancelar el flujo"),
 )
 HELP_D1 = (
     ("↑↓", "recorrer apps"),
@@ -562,12 +616,8 @@ HELP_U1 = (
     ("Esc", "cancelar antes del reemplazo o salir al terminar"),
 )
 HELP_MENU = (
-    ("↑↓", "mover la selección"),
+    ("↑↓", "mover la selección, incluida Configuración"),
     ("Enter", "aceptar la opción seleccionada"),
-    ("c", "clonar"),
-    ("d", "desplegar"),
-    ("u", "actualizar"),
-    ("q", "salir con el último código"),
 )
 
 
@@ -599,7 +649,7 @@ def help_texts(
     return "\n".join(lines)
 
 
-SCREEN_D0 = "D0 · archivo del clon"
+SCREEN_D0 = "D0 · clon"
 SCREEN_D1 = "D1 · apps"
 SCREEN_D2 = "D2 · conflictos"
 SCREEN_D3 = "D3 · detalle por bloques"
@@ -610,6 +660,7 @@ SCREEN_C2 = "C2 · destino"
 SCREEN_C3 = "C3 · revisión"
 SCREEN_C4 = "C4 · resumen"
 SCREEN_U1 = "U1 · actualización"
+SCREEN_SETTINGS = "Configuración"
 SCREEN_MENU = "menú principal"
 SCREEN_ERROR = "error"
 SCREEN_SMALL = "terminal pequeña"
