@@ -8,7 +8,7 @@ Hacer que la TUI de despliegue respete la paleta ANSI del terminal en el que se 
 
 ### Requirement: Paleta ANSI del terminal
 
-La TUI DEBE (`MUST`) usar un tema ANSI propio para que el fondo, el texto y los colores de énfasis provengan de la paleta del terminal. NO DEBE (`MUST NOT`) imponer colores truecolor propios para esos elementos, incluidos el wordmark, las cápsulas, los iconos y los estados. Los colores semánticos DEBEN ser verde para éxito, amarillo para aviso, rojo para error y gris para secundario; el original DEBE ir en amarillo y además con el glifo `◉`.
+La TUI DEBE (`MUST`) usar un tema ANSI para que el fondo, el texto y los colores de énfasis provengan de la paleta del terminal. NO DEBE (`MUST NOT`) imponer colores truecolor propios para esos elementos, incluidos el wordmark, las cápsulas, los iconos y los estados. Los colores semánticos DEBEN ser verde para éxito, amarillo para aviso, rojo para error y gris para secundario; el original DEBE ir en amarillo y además con el glifo `◉`.
 
 #### Scenario: Tema ANSI activo
 
