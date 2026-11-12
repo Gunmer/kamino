@@ -90,7 +90,9 @@ func (m *Model) frame(lines []string) string {
 	if len(result) > m.Height-1 {
 		result = result[:m.Height-1]
 	}
-	return strings.Join(result, "\n") + "\n"
+	// Raw mode disables OPOST, so "\n" only moves the cursor down. Each line
+	// must return to column 0 explicitly or the frame drifts to the right.
+	return strings.Join(result, "\r\n") + "\r\n"
 }
 
 func stripANSI(value string) string {

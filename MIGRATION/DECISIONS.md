@@ -50,3 +50,28 @@ exige una entrada aquí cuando cambian esos archivos.
   desde el menú vuelven a él y actualizan la última misión.
 - **Consecuencia:** los fixtures de texto y los tests de la TUI se actualizan de
   forma coherente; no cambia el formato del archivo ni los códigos de salida.
+
+## D005 — Formato de gofumpt 0.12
+
+- **Fecha:** 2026-11-12
+- **Contexto:** la verificación con `gofumpt` real (antes no había red para
+  instalarlo) marca tres archivos: `internal/archive/archive_test.go`,
+  `internal/archive/manifest.go` y `internal/texts/texts.go`.
+- **Decisión:** aplicar `gofumpt -w` a esos archivos. En el test protegido el
+  cambio es solo de formato (coma final del parámetro agrupado); no altera
+  aserciones ni comportamiento.
+- **Consecuencia:** `gofumpt -l .` queda vacío y la guardia de tests protegidos
+  conserva su propósito con este cambio documentado.
+
+## D006 — Saltos de línea de la TUI en modo raw
+
+- **Fecha:** 2026-11-12
+- **Contexto:** el modo raw desactiva `OPOST`, así que un `\n` solo baja el
+  cursor y no vuelve a la columna 0. La TUI unía las líneas del frame con `\n`
+  y cada línea empezaba donde terminaba la anterior, produciendo el efecto de
+  escalera y el texto desalineado.
+- **Decisión:** `frame` emite `\r\n` al final de cada línea. Se añade
+  `TestViewReturnsToColumnZero` para fijar el contrato del framebuffer.
+- **Consecuencia:** todas las pantallas de la TUI empiezan en la columna 0 con
+  independencia del ancho del terminal; no cambia el contenido ni la disposición
+  de las pantallas.

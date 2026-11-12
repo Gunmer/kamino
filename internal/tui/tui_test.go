@@ -87,6 +87,21 @@ func TestHelpAndNoColor(t *testing.T) {
 	}
 }
 
+func TestViewReturnsToColumnZero(t *testing.T) {
+	model := NewModel(CloneFlowOptions{})
+	model.NoColor = true
+	model.Width, model.Height = 80, 24
+	view := model.View()
+	for index, character := range view {
+		if character == '\n' && (index == 0 || view[index-1] != '\r') {
+			t.Fatalf("bare newline at byte %d leaves the cursor in the previous column", index)
+		}
+	}
+	if count := strings.Count(view, "\r\n"); count != model.Height-1 {
+		t.Fatalf("expected %d lines, got %d", model.Height-1, count)
+	}
+}
+
 func TestCloneFlowDryRun(t *testing.T) {
 	home := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(home, ".config", "test"), 0o755); err != nil {
