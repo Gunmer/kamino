@@ -75,3 +75,17 @@ exige una entrada aquí cuando cambian esos archivos.
 - **Consecuencia:** todas las pantallas de la TUI empiezan en la columna 0 con
   independencia del ancho del terminal; no cambia el contenido ni la disposición
   de las pantallas.
+
+## D007 — Fixture canónico del clon versionado
+
+- **Fecha:** 2026-11-12
+- **Contexto:** `testdata/golden/clone.tar.gz` no estaba versionado porque
+  `.gitignore` ignoraba todos los `*.tar.gz`. Los tests pasaban en local pero
+  fallaban en CI al no encontrar el fixture.
+- **Decisión:** versionar el fixture (436 bytes, SHA-256
+  `71db5ba0afd0d87c571d17662dc163e3f880164087f0973b0300e265e8cd20bc`) y
+  excluir solo `testdata/golden/*.tar.gz` de la regla de ignorados. Añadir un
+  README propio a `legacy/python/` para que Hatchling construya el paquete
+  desde su directorio tras la migración.
+- **Consecuencia:** CI dispone de todos los fixtures dorados y `uv sync`
+  funciona en `legacy/python/` sin depender del README de la raíz.

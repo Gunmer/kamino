@@ -23,3 +23,4 @@ htmlcov/
 
 # Clones generados localmente
 *.tar.gz
+!testdata/golden/*.tar.gz
