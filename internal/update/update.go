@@ -253,7 +253,7 @@ func QueryUpdate(currentVersion string, target string, release *ReleaseInfo) (Ch
 	}
 	currentParts, _ := ParseVersion(current)
 	foundParts, _ := ParseVersion(found.Version)
-	outcome := OutcomeUpToDate
+	var outcome Outcome
 	shouldUpdate := false
 	switch {
 	case compareParts(foundParts, currentParts) > 0:

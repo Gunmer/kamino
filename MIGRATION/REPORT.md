@@ -15,10 +15,10 @@ Fecha: 2026-11-12 · Rama: `migrate/go` · Cambio: `migrate-to-go`
 
 | Medición | Python PyInstaller | Python `.venv` | Go | Presupuesto |
 |---|---:|---:|---:|---:|
-| `--version` | 5964.27 ms | 240.56 ms | 5.68 ms | < 30 ms |
-| `--help` | 5966.94 ms | 268.40 ms | 5.73 ms | < 30 ms |
-| `clone -n -a git` | 5967.18 ms | 252.80 ms | 8.36 ms | — |
-| Primer frame TUI | 6045.31 ms | 236.10 ms | 15.90 ms | < 150 ms |
+| `--version` | 5964.27 ms | 240.56 ms | 6.39 ms | < 30 ms |
+| `--help` | 5966.94 ms | 268.40 ms | 5.72 ms | < 30 ms |
+| `clone -n -a git` | 5967.18 ms | 252.80 ms | 8.72 ms | — |
+| Primer frame TUI | 6045.31 ms | 236.10 ms | 25.97 ms | < 150 ms |
 
 Detalle y método en `MIGRATION/baseline-python.md` y
 `MIGRATION/benchmark-after.md`.
@@ -41,7 +41,7 @@ Todas las decisiones que afectan a tests protegidos están en
 
 | Bloqueo | Mitigación |
 |---|---|
-| Sin red para `golangci-lint`, `gofumpt`, `goreleaser` y `hyperfine` | `go vet`, `gofmt`, `go build` con las mismas ldflags y arneses de medición propios |
+| Sin red para `golangci-lint`, `gofumpt`, `goreleaser` y `hyperfine` | Resuelto: herramientas instaladas y verificaciones repetidas el 2026-11-12 |
 | Firma GPG de commits no configurada | commits locales con `-c commit.gpgsign=false`; no se hizo push |
 | Python/uv no sincronizan sin red | se usó el `.venv` existente y `PYTHONPATH=legacy/python/src` para el oráculo |
 
@@ -60,29 +60,33 @@ Las verificaciones exactas con esas herramientas quedan como pasos manuales.
 - Los mensajes internos de parser TOML/JSON/INI/plist pueden diferir; el estado
   de validación es el contrato.
 - La release no se firmó ni notarizó; macOS puede aplicar cuarentena.
-- No se ejecutó GoReleaser real por falta de red; se validó el binario con las
-  mismas ldflags y el smoke test.
+- GoReleaser se ejecutó en modo snapshot; la release firmada y notarizada sigue
+  pendiente.
 - El workflow de release conserva semantic-release para el versionado; la
   decisión 0.8.0/1.0.0 sigue diferida.
 
 ## Pasos manuales pendientes
 
-1. Instalar `golangci-lint`, `gofumpt`, `goreleaser` y `hyperfine` y repetir las
-   verificaciones exactas.
-2. Ejecutar `goreleaser release --snapshot --clean` en macOS arm64.
-3. Revisar `review-request-phase2.md`, `review-request-3a.md` y
+Completados el 2026-11-12: instalación de `golangci-lint`, `gofumpt`,
+`goreleaser` y `hyperfine`, y `goreleaser release --snapshot --clean` en macOS
+arm64.
+
+1. Revisar `review-request-phase2.md`, `review-request-3a.md` y
    `review-request-3d.md` con otro modelo.
-4. Notarizar el binario y crear el Homebrew tap cuando se decida publicar.
-5. Retirar `legacy/python/` solo después de que la compatibilidad cruzada deje de
+2. Notarizar el binario y crear el Homebrew tap cuando se decida publicar.
+3. Retirar `legacy/python/` solo después de que la compatibilidad cruzada deje de
    ser necesaria.
 
 ## Verificación final
 
 ```sh
+gofmt -l .
+gofumpt -l .
 go vet ./...
+golangci-lint run ./...
 go test ./... -race
 go test ./internal/integration -run Cross -v
 scripts/guard.sh
 scripts/check_catalog_sync.sh
-make release-snapshot
+goreleaser release --snapshot --clean
 ```

@@ -21,9 +21,7 @@ const (
 	manifestIndentSize = 2
 )
 
-var (
-	sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
-)
+var sha256Pattern = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 // FileEntry is one manifest file: regular (sha256) or symlink (link).
 type FileEntry struct {

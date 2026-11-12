@@ -272,9 +272,7 @@ func ShortcutLine(entries ...[2]string) string {
 	return strings.Join(parts, " · ")
 }
 
-var (
-	ShortcutsMenu = ShortcutLine([2]string{"↑↓", "mover"}, [2]string{"Enter", "aceptar"}, [2]string{"?", "ayuda"})
-)
+var ShortcutsMenu = ShortcutLine([2]string{"↑↓", "mover"}, [2]string{"Enter", "aceptar"}, [2]string{"?", "ayuda"})
 
 const (
 	StatusOK     = "✔ listo"
@@ -397,20 +395,22 @@ const (
 	TitleCancelPrepare   = "Cancelando…"
 )
 
-var HelpSettings = [][2]string{{"Tab", "siguiente campo"}, {"Mayús+Tab", "campo anterior"}, {"Enter", "siguiente campo"}, {"Ctrl+S", "guardar la configuración"}, {"F1", "abrir esta ayuda"}, {"Esc", "volver o salir sin guardar"}}
-var HelpC1 = [][2]string{{"↑↓", "recorrer apps"}, {"Espacio", "marcar o desmarcar sin perder el foco"}, {"a", "seleccionar todas las visibles"}, {"n", "quitar todas las visibles"}, {"/", "filtrar"}, {"Enter", "continuar con la selección"}, {"Esc", "volver o cancelar"}}
-var HelpC2 = [][2]string{{"Enter", "continuar con el destino"}, {"F2", "usar el directorio actual"}, {"F3", "usar Descargas"}, {"F4", "usar Escritorio"}, {"F1", "abrir esta ayuda"}, {"Esc", "volver a C1 sin perder la selección"}}
-var HelpC3 = [][2]string{{"d", "rutas omitidas y su motivo"}, {"f", "archivos incluidos por app"}, {"Enter", "clonar cuando el plan esté listo"}, {"Ctrl+C", "cancelar antes del renombrado"}, {"Esc", "volver"}}
-var HelpC4 = [][2]string{{"d", "rutas omitidas"}, {"c", "copiar la ruta con OSC 52"}, {"Enter/Esc", "continuar"}}
-var HelpD0 = [][2]string{{"↑↓", "recorrer los clones de la lista"}, {"/", "filtrar por nombre u origen"}, {"o", "ir a Otro archivo... y escribir una ruta"}, {"Enter", "continuar con la fila resaltada o abrir la ruta manual"}, {"Esc", "volver a la tabla, cerrar el filtro o cancelar"}, {"F1", "abrir esta ayuda"}}
-var HelpD1 = [][2]string{{"↑↓", "recorrer apps"}, {"Espacio", "marcar o desmarcar sin perder el foco"}, {"a", "seleccionar todas"}, {"n", "quitar todas"}, {"Enter", "continuar"}, {"Esc", "volver sin desplegar"}}
-var HelpPrepare = [][2]string{{"Esc", "detener antes de escribir"}, {"Ctrl+C", "detener antes de escribir"}}
-var HelpD2 = [][2]string{{"↑↓", "recorrer conflictos"}, {"r", "revisar el conflicto seleccionado"}, {"c", "aplicar el clon completo"}, {"o", "conservar el original"}, {"C", "aplicar el clon a todos"}, {"O", "conservar el original en todos"}, {"Enter", "confirmar cuando todo esté decidido"}, {"Esc", "retirada: descarta decisiones tras confirmar"}}
-var HelpD3 = [][2]string{{"↑↓", "recorrer líneas decidibles"}, {"Espacio/Enter", "alternar original/clon"}, {"c/o", "bloque actual al clon u original"}, {"C/O", "todo el archivo al clon u original"}, {"Tab/Mayús+Tab", "cambiar de bloque"}, {"Esc", "volver y validar"}}
-var HelpD4 = [][2]string{{"↑↓", "elegir una acción"}, {"Enter", "aceptar la acción seleccionada"}, {"Retirada", "volver sin escribir ni crear holocrón"}, {"Abortar misión", "cancelar el despliegue"}, {"Desplegar", "crear el holocrón y escribir"}, {"Esc", "retroceder"}}
-var HelpD5 = [][2]string{{"c", "copiar la ruta del holocrón"}, {"Enter/Esc", "continuar y cerrar el flujo"}}
-var HelpU1 = [][2]string{{"Enter", "continuar al terminar"}, {"Esc", "cancelar antes del reemplazo o salir al terminar"}}
-var HelpMenu = [][2]string{{"↑↓", "mover la selección, incluida Configuración"}, {"Enter", "aceptar la opción seleccionada"}}
+var (
+	HelpSettings = [][2]string{{"Tab", "siguiente campo"}, {"Mayús+Tab", "campo anterior"}, {"Enter", "siguiente campo"}, {"Ctrl+S", "guardar la configuración"}, {"F1", "abrir esta ayuda"}, {"Esc", "volver o salir sin guardar"}}
+	HelpC1       = [][2]string{{"↑↓", "recorrer apps"}, {"Espacio", "marcar o desmarcar sin perder el foco"}, {"a", "seleccionar todas las visibles"}, {"n", "quitar todas las visibles"}, {"/", "filtrar"}, {"Enter", "continuar con la selección"}, {"Esc", "volver o cancelar"}}
+	HelpC2       = [][2]string{{"Enter", "continuar con el destino"}, {"F2", "usar el directorio actual"}, {"F3", "usar Descargas"}, {"F4", "usar Escritorio"}, {"F1", "abrir esta ayuda"}, {"Esc", "volver a C1 sin perder la selección"}}
+	HelpC3       = [][2]string{{"d", "rutas omitidas y su motivo"}, {"f", "archivos incluidos por app"}, {"Enter", "clonar cuando el plan esté listo"}, {"Ctrl+C", "cancelar antes del renombrado"}, {"Esc", "volver"}}
+	HelpC4       = [][2]string{{"d", "rutas omitidas"}, {"c", "copiar la ruta con OSC 52"}, {"Enter/Esc", "continuar"}}
+	HelpD0       = [][2]string{{"↑↓", "recorrer los clones de la lista"}, {"/", "filtrar por nombre u origen"}, {"o", "ir a Otro archivo... y escribir una ruta"}, {"Enter", "continuar con la fila resaltada o abrir la ruta manual"}, {"Esc", "volver a la tabla, cerrar el filtro o cancelar"}, {"F1", "abrir esta ayuda"}}
+	HelpD1       = [][2]string{{"↑↓", "recorrer apps"}, {"Espacio", "marcar o desmarcar sin perder el foco"}, {"a", "seleccionar todas"}, {"n", "quitar todas"}, {"Enter", "continuar"}, {"Esc", "volver sin desplegar"}}
+	HelpPrepare  = [][2]string{{"Esc", "detener antes de escribir"}, {"Ctrl+C", "detener antes de escribir"}}
+	HelpD2       = [][2]string{{"↑↓", "recorrer conflictos"}, {"r", "revisar el conflicto seleccionado"}, {"c", "aplicar el clon completo"}, {"o", "conservar el original"}, {"C", "aplicar el clon a todos"}, {"O", "conservar el original en todos"}, {"Enter", "confirmar cuando todo esté decidido"}, {"Esc", "retirada: descarta decisiones tras confirmar"}}
+	HelpD3       = [][2]string{{"↑↓", "recorrer líneas decidibles"}, {"Espacio/Enter", "alternar original/clon"}, {"c/o", "bloque actual al clon u original"}, {"C/O", "todo el archivo al clon u original"}, {"Tab/Mayús+Tab", "cambiar de bloque"}, {"Esc", "volver y validar"}}
+	HelpD4       = [][2]string{{"↑↓", "elegir una acción"}, {"Enter", "aceptar la acción seleccionada"}, {"Retirada", "volver sin escribir ni crear holocrón"}, {"Abortar misión", "cancelar el despliegue"}, {"Desplegar", "crear el holocrón y escribir"}, {"Esc", "retroceder"}}
+	HelpD5       = [][2]string{{"c", "copiar la ruta del holocrón"}, {"Enter/Esc", "continuar y cerrar el flujo"}}
+	HelpU1       = [][2]string{{"Enter", "continuar al terminar"}, {"Esc", "cancelar antes del reemplazo o salir al terminar"}}
+	HelpMenu     = [][2]string{{"↑↓", "mover la selección, incluida Configuración"}, {"Enter", "aceptar la opción seleccionada"}}
+)
 
 // HelpTexts composes the help body from a screen and its shortcuts.
 func HelpTexts(screen string, shortcuts [][2]string, flowSteps []string, currentStep string, secrets bool, unicode bool) string {

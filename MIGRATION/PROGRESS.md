@@ -5,7 +5,7 @@ Actualizado: 2026-11-12
 ## Fase actual
 
 - **Fase:** 4 completada
-- **Tarea actual:** cierre y revisión del cambio
+- **Tarea actual:** verificación con herramientas reales completada; revisión y archivo pendientes
 - **Rama:** `migrate/go`
 
 ## Estado por fase
@@ -33,16 +33,19 @@ Actualizado: 2026-11-12
 | 2026-11-12 | 10.1-10.3 | `update` con GitHub, SemVer, SHA-256 y reemplazo atómico | `go test ./internal/update` |
 | 2026-11-12 | 11.1-11.5 | TUI de menú, C1-C4, D0-D5, U1, configuración y guardia 80x24 | `go test ./internal/tui -race` |
 | 2026-11-12 | 12.1-12.8 | GoReleaser, smoke, benchmark, documentación, corte y informe | `make release-snapshot`, `scripts/guard.sh` |
+| 2026-11-12 | Verificación pendiente | Herramientas instaladas; 1 hallazgo de `ineffassign` corregido; formato, lint, release y benchmarks en verde | `golangci-lint run ./...`, `gofumpt -l .`, `goreleaser release --snapshot --clean`, `hyperfine` |
 
 ## Verificación final
 
 | Comando | Resultado |
 |---|---|
+| `gofmt -l .` / `gofumpt -l .` | sin archivos pendientes |
 | `go vet ./...` | sin errores |
+| `golangci-lint run ./...` | 0 issues (se corrigió un `ineffassign` en `internal/update`) |
 | `go test ./... -race` | todo en verde (la matriz cruzada se ejecuta con `KAMINO_PYTHON`) |
 | `go test ./internal/integration -run Cross -v` | 3 pruebas en verde |
 | `scripts/check_catalog_sync.sh` | catálogo sincronizado |
-| `scripts/guard.sh` | sin cambios protegidos sin decisión |
-| `make release-snapshot` | `kamino 0.8.0` |
-| `scripts/bench_startup.py` | CLI 5.68-8.36 ms |
-| `scripts/bench_tui.py` | primer frame 15.90 ms |
+| `scripts/guard.sh` | cambios protegidos documentados en `DECISIONS.md` (D005) |
+| `goreleaser release --snapshot --clean` | snapshot correcta; binario `kamino migration/phase-4-SNAPSHOT-755e93c` |
+| `hyperfine` (CLI) | `--version` 6.39 ms, `--help` 5.72 ms, `clone -n` 8.72 ms |
+| `scripts/bench_tui.py` | primer frame 25.97 ms |

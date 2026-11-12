@@ -172,7 +172,8 @@ func rawArchive(t *testing.T, members []struct {
 	name string
 	data []byte
 	link string
-}) string {
+},
+) string {
 	t.Helper()
 	output := filepath.Join(t.TempDir(), "raw.tar.gz")
 	file, err := os.Create(output)

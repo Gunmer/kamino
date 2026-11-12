@@ -9,8 +9,9 @@
   fallan. El módulo usa únicamente la caché local de Go.
 - **Mitigación aplicada:** `go vet`, `gofmt`, `go test`, un arnés de medición
   propio y `go build` con las ldflags de release.
-- **Pendiente manual:** instalar `golangci-lint`, `gofumpt`, `goreleaser` y
-  `hyperfine` y repetir las verificaciones exactas cuando haya red.
+- **Estado:** resuelto el 2026-11-12. Se instalaron `golangci-lint` 2.15.0,
+  `gofumpt` 0.12.0, `goreleaser` 2.20.0 y `hyperfine` 2.0.0 omitiendo el proxy
+  caído solo durante la descarga, y se repitieron las verificaciones exactas.
 
 ## B002 — Firma de commits
 

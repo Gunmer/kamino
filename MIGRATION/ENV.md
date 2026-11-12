@@ -9,10 +9,13 @@ Registrado: 2026-11-12
 | Python (`.venv`) | 3.12.7 | disponible |
 | Python (sistema) | 3.11.1 | no usado |
 | `uv` | en `~/.local/bin/uv` | sin red para sincronizar |
-| `golangci-lint` | — | no instalado (sin red) |
-| `gofumpt` | — | no instalado (sin red) |
-| `goreleaser` | — | no instalado (sin red) |
-| `hyperfine` | — | no instalado (sin red) |
+| `golangci-lint` | 2.15.0 | instalado con Homebrew |
+| `gofumpt` | 0.12.0 | instalado con Homebrew |
+| `goreleaser` | 2.20.0 | instalado con Homebrew |
+| `hyperfine` | 2.0.0 | instalado con Homebrew |
+
+Los binarios se instalaron omitiendo el proxy local caído (`127.0.0.1:8999`)
+solo durante la descarga; el proxy sigue configurado en `~/.zshrc`.
 
 ## Dependencias Go disponibles en caché
 
