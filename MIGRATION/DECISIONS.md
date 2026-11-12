@@ -37,3 +37,16 @@ exige una entrada aquí cuando cambian esos archivos.
   no se comparan entre lenguajes; se compara el modelo semántico.
 - **Consecuencia:** Python puede leer clones Go y viceversa con
   `format_version = 1`.
+
+## D004 — Ajustes de conformidad de la TUI
+
+- **Fecha:** 2026-11-12
+- **Contexto:** las pruebas de la TUI y la revisión contra `clone-tui` y
+  `tui-navigation` detectaron diferencias: selección inicial vacía, recuento por
+  app, diálogo de clon existente, numeración y menú degradado por altura.
+- **Decisión:** C1 parte sin apps marcadas y deshabilita las de cero archivos;
+  C2 muestra el diálogo de reemplazo con Volver preseleccionada; el menú no usa
+  atajos de una tecla y degrada cabecera según la altura; los flujos iniciados
+  desde el menú vuelven a él y actualizan la última misión.
+- **Consecuencia:** los fixtures de texto y los tests de la TUI se actualizan de
+  forma coherente; no cambia el formato del archivo ni los códigos de salida.

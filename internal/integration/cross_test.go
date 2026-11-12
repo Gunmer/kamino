@@ -23,18 +23,24 @@ func pythonPath(t *testing.T) string {
 	if value := os.Getenv("KAMINO_PYTHON"); value != "" {
 		return value
 	}
-	candidate := filepath.Join(repoRoot(t), ".venv", "bin", "python")
-	if _, err := os.Stat(candidate); err != nil {
-		t.Skip("Python no disponible; define KAMINO_PYTHON")
+	candidates := []string{
+		filepath.Join(repoRoot(t), "legacy", "python", ".venv", "bin", "python"),
+		filepath.Join(repoRoot(t), ".venv", "bin", "python"),
 	}
-	return candidate
+	for _, candidate := range candidates {
+		if _, err := os.Stat(candidate); err == nil {
+			return candidate
+		}
+	}
+	t.Skip("Python no disponible; define KAMINO_PYTHON")
+	return ""
 }
 
 func runCommand(t *testing.T, directory, home string, name string, args ...string) string {
 	t.Helper()
 	command := exec.Command(name, args...)
 	command.Dir = directory
-	command.Env = append(os.Environ(), "HOME="+home, "KAMINO_PLAIN=1")
+	command.Env = append(os.Environ(), "HOME="+home, "KAMINO_PLAIN=1", "PYTHONPATH="+filepath.Join(repoRoot(t), "legacy", "python", "src"))
 	output, err := command.CombinedOutput()
 	if err != nil {
 		t.Fatalf("%s %v: %v\n%s", name, args, err, output)

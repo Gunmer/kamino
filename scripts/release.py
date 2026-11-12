@@ -8,6 +8,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import tomllib
 from pathlib import Path
@@ -43,9 +44,16 @@ def validate_release(tag: str) -> None:
         f"chore(release): {version} [skip ci]"
     ):
         raise ValueError("El tag no identifica un commit de release de Kamino")
-    metadata = tomllib.loads(run("git", "show", f"{tag}:pyproject.toml", capture=True))
-    lock = tomllib.loads(run("git", "show", f"{tag}:uv.lock", capture=True))
-    source = ast.parse(run("git", "show", f"{tag}:src/kamino/__init__.py", capture=True))
+    if not Path("legacy/python/pyproject.toml").exists():
+        source = run("git", "show", f"{tag}:internal/version/version.go", capture=True)
+        if f'var Version = "{version}"' not in source:
+            raise ValueError("El tag y la versión Go no coinciden")
+        run("git", "cat-file", "-e", f"{tag}:scripts/build_release.py")
+        release_notes(run("git", "show", f"{tag}:CHANGELOG.md", capture=True), tag)
+        return
+    metadata = tomllib.loads(run("git", "show", f"{tag}:legacy/python/pyproject.toml", capture=True))
+    lock = tomllib.loads(run("git", "show", f"{tag}:legacy/python/uv.lock", capture=True))
+    source = ast.parse(run("git", "show", f"{tag}:legacy/python/src/kamino/__init__.py", capture=True))
     runtime_versions = [
         ast.literal_eval(node.value)
         for node in source.body
@@ -82,12 +90,12 @@ def prepare_release(sha: str) -> str | None:
     if run("git", "branch", "--show-current", capture=True) != "main":
         raise ValueError("La publicación automática requiere la rama main")
 
-    tag = run("uv", "run", "--no-sync", "semantic-release", "version", "--print-tag", capture=True)
+    tag = run("uv", "run", "--directory", "legacy/python", "--no-sync", "semantic-release", "version", "--print-tag", capture=True)
     validate_tag(tag)
     if run("git", "tag", "--list", tag, capture=True):
         print("No hay cambios publicables desde el último tag; no se genera una versión.")
         return None
-    run("uv", "run", "--no-sync", "semantic-release", "version", "--no-push", "--no-vcs-release")
+    run("uv", "run", "--directory", "legacy/python", "--no-sync", "semantic-release", "version", "--no-push", "--no-vcs-release")
     validate_release(tag)
     if run("git", "rev-parse", "HEAD^", capture=True) != sha or remote_main() != sha:
         raise RuntimeError("main cambió durante la construcción; se cancela el push de la release")
@@ -176,8 +184,9 @@ def main(*, sha: str | None = None, tag: str | None = None) -> None:
         run("git", "merge-base", "--is-ancestor", tag, "origin/main")
         run("git", "switch", "--detach", tag)
         # Never bump or regenerate history when recovering an existing tag.
-        run("uv", "sync", "--locked", "--all-extras")
-        run("uv", "run", "--no-sync", "python", "scripts/build_release.py")
+        if Path("legacy/python/pyproject.toml").exists():
+            run("uv", "sync", "--locked", "--all-extras", "--directory", "legacy/python")
+        run(sys.executable, "scripts/build_release.py")
     elif sha:
         tag = prepare_release(sha)
     else:

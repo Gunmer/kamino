@@ -16,6 +16,7 @@ import subprocess
 import sys
 import termios
 import time
+from pathlib import Path
 
 
 def measure(command: list[str], runs: int) -> float:
@@ -25,6 +26,7 @@ def measure(command: list[str], runs: int) -> float:
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 24, 80, 0, 0))
         environment = dict(os.environ)
         environment.pop("KAMINO_PLAIN", None)
+        environment["PYTHONPATH"] = str(Path(__file__).resolve().parent.parent / "legacy" / "python" / "src")
         environment["TERM"] = "xterm-256color"
         start = time.perf_counter()
         process = subprocess.Popen(
@@ -68,7 +70,7 @@ def select_read(fd: int, timeout: float) -> tuple[bool, bool, bool]:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--runs", type=int, default=7)
-    parser.add_argument("--command", default=".venv/bin/python -m kamino")
+    parser.add_argument("--command", default="legacy/python/.venv/bin/python -m kamino")
     args = parser.parse_args()
     command = args.command.split()
     seconds = measure(command, args.runs)

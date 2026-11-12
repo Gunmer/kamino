@@ -14,6 +14,7 @@ import (
 	"github.com/Gunmer/kamino/internal/defaults"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
+	"github.com/Gunmer/kamino/internal/plan"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/update"
 )
@@ -44,6 +45,7 @@ type appChoice struct {
 	Name     string
 	Detected bool
 	Selected bool
+	Count    int
 }
 
 type conflictState struct {
@@ -75,24 +77,30 @@ type Model struct {
 	ApplicationDirs []string
 	PathValue       string
 
-	MenuIndex int
+	MenuIndex   int
+	MenuMode    bool
+	LastMission string
+	Phrase      string
 
-	CloneRequested   *[]string
-	CloneOutput      string
-	CloneForce       bool
-	CloneDryRun      bool
-	CloneVerbose     bool
-	CloneOutputError string
-	CloneApps        []appChoice
-	CloneIndex       int
-	CloneFilter      string
-	CloneFiltering   bool
-	ClonePlan        *clone.ClonePlan
-	CloneResult      *clone.CloneResult
-	CloneError       string
-	CloneShowSkipped bool
-	CloneShowFiles   bool
-	CloneWriting     bool
+	CloneRequested       *[]string
+	CloneOutput          string
+	CloneSkipDestination bool
+	CloneForce           bool
+	CloneDryRun          bool
+	CloneVerbose         bool
+	CloneOutputError     string
+	CloneApps            []appChoice
+	CloneIndex           int
+	CloneFilter          string
+	CloneFiltering       bool
+	ClonePlan            *clone.ClonePlan
+	CloneResult          *clone.CloneResult
+	CloneError           string
+	CloneShowSkipped     bool
+	CloneShowFiles       bool
+	CloneWriting         bool
+	ReplaceDialog        bool
+	ReplaceIndex         int
 
 	DeployFile         string
 	DeployRequested    *[]string
@@ -140,13 +148,23 @@ type Model struct {
 // NewModel builds an initial model.
 func NewModel(options CloneFlowOptions) *Model {
 	home, _ := os.UserHomeDir()
+	theme := os.Getenv("TEXTUAL_THEME")
+	if theme != "ansi-light" {
+		theme = "ansi-dark"
+	}
+	phrases := texts.Phrases
+	phrase := ""
+	if len(phrases) > 0 {
+		phrase = phrases[int(time.Now().UnixNano())%len(phrases)]
+	}
 	model := &Model{
-		Screen: ScreenMenu, Width: 80, Height: 24, Theme: "ansi-dark",
-		Home: home, NoColor: os.Getenv("NO_COLOR") != "",
+		Screen: ScreenMenu, Width: 80, Height: 24, Theme: theme,
+		Home: home, NoColor: os.Getenv("NO_COLOR") != "", Phrase: phrase,
 		Now: time.Now,
 	}
 	model.CloneRequested = options.Requested
 	model.CloneOutput = options.Output
+	model.CloneSkipDestination = options.Output != ""
 	model.CloneForce = options.Force
 	model.CloneDryRun = options.DryRun
 	model.CloneVerbose = options.Verbose
@@ -157,7 +175,7 @@ func NewModel(options CloneFlowOptions) *Model {
 // Update applies one key press.
 func (m *Model) Update(key Key) {
 	if m.Screen == ScreenHelp {
-		if key.Kind == KeyEsc || key.Kind == KeyEnter || key.Kind == KeyRune && key.Rune == '?' {
+		if key.Kind == KeyEsc || key.Kind == KeyEnter || key.Kind == KeyF1 || key.Kind == KeyRune && key.Rune == '?' {
 			m.Screen = m.HelpReturn
 			m.Stack = popScreen(m.Stack)
 		}
@@ -182,7 +200,7 @@ func (m *Model) Update(key Key) {
 		}
 		return
 	}
-	if key.Kind == KeyRune && key.Rune == '?' {
+	if key.Kind == KeyF1 || (key.Kind == KeyRune && key.Rune == '?') {
 		m.openHelp()
 		return
 	}
@@ -269,11 +287,6 @@ func (m *Model) updateMenu(key Key) {
 		case 4:
 			m.Quit = true
 		}
-	case KeyRune:
-		switch key.Rune {
-		case 'q':
-			m.Quit = true
-		}
 	}
 }
 
@@ -289,13 +302,29 @@ func (m *Model) startClone() {
 	for _, id := range m.Catalog.SortedIDs() {
 		definition := m.Catalog[id]
 		detected := detectInstalled(definition, m.Home, m.ApplicationDirs, m.PathValue)
-		choice := appChoice{ID: id, Name: definition.Name, Detected: detected, Selected: selected[id] || (m.CloneRequested == nil && detected)}
+		count := 0
+		if detected {
+			if counted, err := plan.CountFiles([]*catalog.AppDefinition{definition}, m.Home, nil); err == nil {
+				count = counted.Counts[id]
+			}
+		}
+		choice := appChoice{ID: id, Name: definition.Name, Detected: detected, Selected: selected[id], Count: count}
 		m.CloneApps = append(m.CloneApps, choice)
+	}
+	if m.CloneOutput == "" {
+		loaded := config.LoadConfig(m.Home, "")
+		if loaded.Config.CloneOutputDir != "" {
+			m.CloneOutput = filepath.Join(loaded.Config.CloneOutputDir, clone.DefaultName(m.Now()))
+		}
 	}
 	m.Screen = ScreenC1
 	m.Stack = nil
-	if m.CloneOutput != "" && m.CloneOutputError == "" && m.CloneRequested != nil {
-		m.planClone()
+	if m.CloneRequested != nil && len(*m.CloneRequested) > 0 {
+		if m.CloneSkipDestination && m.CloneOutput != "" && m.CloneOutputError == "" {
+			m.planClone()
+		} else {
+			m.Screen = ScreenC2
+		}
 	}
 }
 

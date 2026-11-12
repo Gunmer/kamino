@@ -2,7 +2,7 @@
 # Falla si la copia embebida del catálogo difiere de src/kamino/catalog/apps.
 set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-source_dir="$root/src/kamino/catalog/apps"
+source_dir="$root/legacy/python/src/kamino/catalog/apps"
 embedded_dir="$root/internal/catalog/apps"
 if [ ! -d "$source_dir" ]; then
     echo "no existe $source_dir" >&2

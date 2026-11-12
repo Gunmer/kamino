@@ -101,14 +101,13 @@ func TestCloneFlowDryRun(t *testing.T) {
 	if model.Screen != ScreenC1 {
 		t.Fatalf("expected C1, got %s", model.Screen)
 	}
-	if !model.CloneApps[0].Selected {
-		t.Fatal("detected app must start selected")
-	}
-	model.Update(keyRune(' '))
 	if model.CloneApps[0].Selected {
-		t.Fatal("space must deselect")
+		t.Fatal("apps must start unselected")
 	}
 	model.Update(keyRune(' '))
+	if !model.CloneApps[0].Selected {
+		t.Fatal("space must select")
+	}
 	model.Update(Key{Kind: KeyEnter})
 	if model.Screen != ScreenC2 {
 		t.Fatalf("expected C2, got %s", model.Screen)
@@ -130,10 +129,17 @@ func TestCloneFlowDryRun(t *testing.T) {
 
 func TestCloneCancelBeforeWrite(t *testing.T) {
 	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".config", "test"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".config", "test", "config"), []byte("value\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	bin, _, definitions := fakeCatalog(t)
 	model := modelFor(t, home, bin, definitions)
 	model.startClone()
 	model.CloneDryRun = true
+	model.Update(keyRune(' '))
 	model.Update(Key{Kind: KeyEnter})
 	model.Update(Key{Kind: KeyEnter})
 	if model.Screen != ScreenC3 {
@@ -260,6 +266,7 @@ func TestDeployConflictDetailAndError(t *testing.T) {
 
 func TestUpdateFlowInjected(t *testing.T) {
 	model := NewModel(CloneFlowOptions{})
+	model.MenuMode = true
 	model.UpdateCheckFunc = func() (update.Result, error) {
 		return update.Result{CurrentVersion: "0.8.0", LatestVersion: "0.9.0", Target: "/tmp/kamino", Updated: true, Outcome: update.OutcomeUpdated}, nil
 	}

@@ -8,7 +8,7 @@ Hacer que la TUI de despliegue respete la paleta ANSI del terminal en el que se 
 
 ### Requirement: Paleta ANSI del terminal
 
-La TUI DEBE (`MUST`) usar un tema ANSI de Textual para que el fondo, el texto y los colores de énfasis provengan de la paleta del terminal. NO DEBE (`MUST NOT`) imponer colores truecolor propios para esos elementos, incluidos el wordmark, las cápsulas, los iconos y los estados. Los colores semánticos DEBEN ser verde para éxito, amarillo para aviso, rojo para error y gris para secundario; el original DEBE ir en amarillo y además con el glifo `◉`.
+La TUI DEBE (`MUST`) usar un tema ANSI propio para que el fondo, el texto y los colores de énfasis provengan de la paleta del terminal. NO DEBE (`MUST NOT`) imponer colores truecolor propios para esos elementos, incluidos el wordmark, las cápsulas, los iconos y los estados. Los colores semánticos DEBEN ser verde para éxito, amarillo para aviso, rojo para error y gris para secundario; el original DEBE ir en amarillo y además con el glifo `◉`.
 
 #### Scenario: Tema ANSI activo
 
@@ -28,7 +28,7 @@ La TUI DEBE (`MUST`) usar un tema ANSI de Textual para que el fondo, el texto y 
 
 ### Requirement: Tema sobrescribible
 
-El tema `ansi-dark` DEBE (`MUST`) ser el valor por defecto, pero la variable de entorno `TEXTUAL_THEME` DEBE (`MUST`) poder sobrescribirlo con cualquier tema válido de Textual. Elegir un tema no ANSI DEBE considerarse una decisión explícita de la persona usuaria y no un incumplimiento del valor por defecto.
+El tema `ansi-dark` DEBE (`MUST`) ser el valor por defecto. `TEXTUAL_THEME` DEBE (`MUST`) aceptar `ansi-dark` y `ansi-light`. Cualquier otro valor DEBE (`MUST`) caer a `ansi-dark` y la interfaz DEBE seguir siendo legible con icono y palabra en cada estado.
 
 #### Scenario: Selección explícita de otro tema
 
@@ -37,9 +37,9 @@ El tema `ansi-dark` DEBE (`MUST`) ser el valor por defecto, pero la variable de 
 
 #### Scenario: Tema no ANSI explícito
 
-- **GIVEN** `TEXTUAL_THEME` con un tema no ANSI
+- **GIVEN** `TEXTUAL_THEME` con un valor distinto de `ansi-dark` o `ansi-light`
 - **WHEN** se abre la TUI
-- **THEN** se respeta la elección y la interfaz sigue siendo legible con icono y palabra en cada estado
+- **THEN** la TUI usa `ansi-dark` y la interfaz sigue siendo legible con icono y palabra en cada estado
 
 ### Requirement: NO_COLOR y monocromo
 

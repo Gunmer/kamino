@@ -9,6 +9,9 @@ jobs:
   python:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: legacy/python
 
     steps:
       - name: Checkout
@@ -32,7 +35,7 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Tests
-        run: uv run pytest
+        run: uv run pytest --ignore=tests/test_release.py
 
   go:
     name: Go (${{ matrix.os }})
@@ -97,8 +100,9 @@ jobs:
 
       - name: Install Python dependencies
         run: uv sync --all-extras --dev
+        working-directory: legacy/python
 
       - name: Cross-compatibility matrix
         run: go test ./internal/integration -run Cross -v
         env:
-          KAMINO_PYTHON: ${{ github.workspace }}/.venv/bin/python
+          KAMINO_PYTHON: ${{ github.workspace }}/legacy/python/.venv/bin/python

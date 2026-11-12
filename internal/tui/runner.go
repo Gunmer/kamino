@@ -5,12 +5,18 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Gunmer/kamino/internal/config"
 	"github.com/Gunmer/kamino/internal/texts"
 )
 
 func runMenu() int {
 	model := NewModel(CloneFlowOptions{})
+	model.MenuMode = true
 	model.Screen = ScreenMenu
+	loaded := config.LoadConfig(model.Home, "")
+	if loaded.Error != nil {
+		model.startSettings()
+	}
 	return runModel(model)
 }
 

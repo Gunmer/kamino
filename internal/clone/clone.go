@@ -66,6 +66,15 @@ type CloneResult struct {
 	PlanOutput string
 }
 
+// Size returns the planned total size.
+func (c CloneResult) Size() int64 {
+	total := int64(0)
+	for _, operation := range c.Plan.Operations {
+		total += operation.Size
+	}
+	return total
+}
+
 // PlanClone builds the plan, manifest and destination without writing.
 func PlanClone(options PlanOptions) (*ClonePlan, error) {
 	root := options.Home

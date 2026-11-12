@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/Gunmer/kamino/internal/conflicts"
@@ -113,10 +114,21 @@ func stripANSI(value string) string {
 
 func (m *Model) viewMenu() string {
 	lines := make([]string, 0)
-	for _, line := range texts.Wordmark {
-		lines = append(lines, m.paint(colorCyan+colorBold, line))
+	showLogo := os.Getenv("KAMINO_NO_LOGO") == ""
+	if showLogo {
+		for _, line := range texts.Wordmark {
+			lines = append(lines, m.paint(colorCyan+colorBold, line))
+		}
 	}
-	lines = append(lines, "", m.paint(colorGray, texts.Subtitle), "")
+	if m.Height >= 30 {
+		lines = append(lines, "", m.paint(colorGray, texts.Subtitle))
+		if m.Phrase != "" {
+			lines = append(lines, m.paint(colorGray, m.Phrase))
+		}
+		lines = append(lines, m.paint(colorYellow, capsules()))
+	} else if m.Height >= 26 {
+		lines = append(lines, m.paint(colorYellow, capsules()))
+	}
 	options := []string{texts.MenuClone, texts.MenuDeploy, texts.MenuUpdate, texts.MenuConfig, texts.MenuExit}
 	helps := []string{texts.MenuCloneHelp, texts.MenuDeployHelp, texts.MenuUpdateHelp, texts.MenuConfigHelp, texts.MenuExitHelp}
 	for index, option := range options {
@@ -130,9 +142,18 @@ func (m *Model) viewMenu() string {
 		}
 		lines = append(lines, line)
 	}
+	if m.Height >= 30 && m.LastMission != "" {
+		lines = append(lines, "", m.paint(colorGray, strings.ReplaceAll(texts.LastMission, "{summary}", m.LastMission)))
+	}
 	lines = append(lines, "", m.paint(colorGray, texts.ShortcutsMenu))
-	lines = append(lines, m.paint(colorGray, texts.PrivacyWarning))
+	if m.Height >= 30 {
+		lines = append(lines, m.paint(colorGray, texts.PrivacyWarning))
+	}
 	return m.frame(lines)
+}
+
+func capsules() string {
+	return "○ ○ ○ ○ ○ ○ ○ ◉"
 }
 
 func (m *Model) viewCloneApps() string {
@@ -166,7 +187,12 @@ func (m *Model) viewCloneApps() string {
 		if choice.Selected {
 			marker = texts.MarkerChosen
 		}
-		line := fmt.Sprintf("%s %-22s %s", marker, choice.Name, m.paint(colorGray, choice.ID))
+		countLabel := strings.ReplaceAll(texts.CloneFiles, "{count}", fmt.Sprintf("%d", choice.Count))
+		if choice.Count == 0 {
+			countLabel = texts.CloneZeroFiles
+			marker = "–"
+		}
+		line := fmt.Sprintf("%s %-22s %s", marker, choice.Name, m.paint(colorGray, countLabel))
 		if !choice.Detected {
 			line = m.paint(colorGray, line+" · sin detectar")
 		}
@@ -189,9 +215,30 @@ func (m *Model) viewCloneDestination() string {
 		"",
 		m.paint(colorGray, texts.LabelDefaultName),
 		m.paint(colorGray, texts.CloneSecrets),
-		"",
-		m.paint(colorGray, "Enter continuar · F2 directorio actual · F3 Descargas · F4 Escritorio · Esc volver"),
 	}
+	if m.CloneForce {
+		lines = append(lines, m.paint(colorYellow, texts.CloneForceNotice))
+	}
+	if m.ReplaceDialog {
+		info, _ := os.Stat(m.CloneOutput)
+		created := ""
+		size := int64(0)
+		if info != nil {
+			created = info.ModTime().Format("2006-01-02 15:04")
+			size = info.Size()
+		}
+		body := strings.NewReplacer("{path}", m.CloneOutput, "{created}", created, "{size}", texts.SizeLabel(size)).Replace(texts.CloneReplaceBody)
+		lines = append(lines, "", m.paint(colorYellow, texts.CloneReplaceTitle), body)
+		options := []string{texts.CloneReplaceBack, texts.CloneReplaceOther, texts.CloneReplaceForce}
+		for index, option := range options {
+			line := "  " + option
+			if index == m.ReplaceIndex {
+				line = m.paint(colorGreen, "> "+option)
+			}
+			lines = append(lines, line)
+		}
+	}
+	lines = append(lines, "", m.paint(colorGray, "Enter continuar · F2 directorio actual · F3 Descargas · F4 Escritorio · Esc volver"))
 	lines = append(lines, m.messageLine())
 	return m.frame(lines)
 }
@@ -213,6 +260,10 @@ func (m *Model) viewCloneReview() string {
 	)
 	if m.CloneDryRun {
 		lines = append(lines, m.paint(colorYellow, texts.CloneDryRunNote))
+	}
+	lines = append(lines, m.paint(colorYellow, texts.CloneSecrets))
+	if m.CloneForce {
+		lines = append(lines, m.paint(colorYellow, texts.CloneForceNotice))
 	}
 	if m.CloneShowSkipped {
 		lines = append(lines, "", m.paint(colorBold, texts.CloneSkippedTitle))
@@ -249,18 +300,19 @@ func (m *Model) viewCloneSummary() string {
 	lines = append(lines,
 		fmt.Sprintf("%s: %d", texts.CloneAppsLabel, len(m.CloneResult.Manifest.Apps)),
 		fmt.Sprintf("%s: %d", texts.CloneFileCount, len(m.CloneResult.Plan.Operations)),
+		fmt.Sprintf("%s: %s", texts.CloneSizeLabel, texts.SizeLabel(m.CloneResult.Size())),
 	)
 	if m.CloneResult.Output != "" {
 		lines = append(lines, fmt.Sprintf("%s: %s", texts.ClonePathLabel, m.CloneResult.Output))
 	}
-	if len(m.CloneResult.Plan.Skipped) > 0 {
+	if m.CloneShowSkipped && len(m.CloneResult.Plan.Skipped) > 0 {
 		lines = append(lines, "", m.paint(colorYellow, texts.CloneSkippedTitle))
 		for _, skipped := range m.CloneResult.Plan.Skipped {
 			lines = append(lines, fmt.Sprintf("  ~ %s (%s)", skipped.Path, skipped.Reason))
 		}
 		lines = append(lines, m.paint(colorYellow, texts.CloneExitLine))
 	}
-	lines = append(lines, "", m.paint(colorGray, "c copiar ruta · Enter/Esc continuar"))
+	lines = append(lines, "", m.paint(colorGray, "d omitidos · c copiar ruta · Enter/Esc continuar"))
 	lines = append(lines, m.messageLine())
 	return m.frame(lines)
 }
@@ -590,7 +642,11 @@ func (m *Model) viewError() string {
 	if m.ErrorDetail && m.Error.Detail != "" {
 		lines = append(lines, "", texts.ErrorDetail+":", m.Error.Detail)
 	}
-	lines = append(lines, "", m.paint(colorGray, texts.ErrorShowDetail), m.paint(colorGray, texts.ErrorBackToMenu+": Esc"))
+	back := texts.ErrorBackToMenu + ": Esc"
+	if !m.MenuMode {
+		back = texts.ErrorExit + ": Esc"
+	}
+	lines = append(lines, "", m.paint(colorGray, texts.ErrorShowDetail), m.paint(colorGray, back))
 	return m.frame(lines)
 }
 

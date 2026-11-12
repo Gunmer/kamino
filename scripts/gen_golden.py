@@ -21,9 +21,19 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "src"
+SRC = ROOT / "legacy" / "python" / "src"
 OUTPUT = ROOT / "testdata" / "golden"
-PYTHON = os.environ.get("KAMINO_PYTHON", str(ROOT / ".venv" / "bin" / "python"))
+def default_python() -> str:
+    for candidate in (
+        ROOT / "legacy" / "python" / ".venv" / "bin" / "python",
+        ROOT / ".venv" / "bin" / "python",
+    ):
+        if candidate.exists():
+            return str(candidate)
+    return sys.executable
+
+
+PYTHON = os.environ.get("KAMINO_PYTHON", default_python())
 sys.path.insert(0, str(SRC))
 
 from kamino import texts  # noqa: E402
@@ -196,6 +206,7 @@ def dump_codes(home: Path, clone_file: Path) -> None:
         environment = dict(os.environ)
         environment["HOME"] = str(home)
         environment["KAMINO_PLAIN"] = "1"
+        environment["PYTHONPATH"] = str(SRC)
         completed = subprocess.run(
             [PYTHON, "-m", "kamino", *args],
             cwd=ROOT,

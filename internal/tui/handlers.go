@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,7 +21,7 @@ import (
 func (m *Model) selectedCloneIDs() []string {
 	selected := make([]string, 0)
 	for _, choice := range m.CloneApps {
-		if choice.Selected && choice.Detected {
+		if choice.Selected && choice.Detected && choice.Count > 0 {
 			selected = append(selected, choice.ID)
 		}
 	}
@@ -63,7 +64,7 @@ func (m *Model) updateCloneApps(key Key) {
 			m.toggleVisible(visible, m.CloneIndex)
 		case 'a':
 			for index := range m.CloneApps {
-				if m.CloneApps[index].Detected && m.matchesCloneFilter(m.CloneApps[index]) {
+				if m.CloneApps[index].Detected && m.CloneApps[index].Count > 0 && m.matchesCloneFilter(m.CloneApps[index]) {
 					m.CloneApps[index].Selected = true
 				}
 			}
@@ -79,14 +80,14 @@ func (m *Model) updateCloneApps(key Key) {
 			m.Message = texts.CloneNoSelection
 			return
 		}
-		if m.CloneOutput == "" {
+		if !m.CloneSkipDestination {
 			m.Screen = ScreenC2
 			if m.CloneOutput == "" {
 				m.CloneOutput = filepath.Join(defaults.VaultDir(m.Home), clone.DefaultName(m.Now()))
 			}
 			return
 		}
-		m.planClone()
+		m.continueClone()
 	case KeyEsc:
 		m.Screen = ScreenMenu
 		m.Stack = nil
@@ -116,6 +117,10 @@ func (m *Model) toggleVisible(visible []appChoice, index int) {
 		return
 	}
 	target := visible[index%len(visible)]
+	if target.Count == 0 {
+		m.Message = "esta app no tiene archivos para clonar"
+		return
+	}
 	for position := range m.CloneApps {
 		if m.CloneApps[position].ID == target.ID {
 			m.CloneApps[position].Selected = !m.CloneApps[position].Selected
@@ -124,7 +129,47 @@ func (m *Model) toggleVisible(visible []appChoice, index int) {
 	}
 }
 
+func (m *Model) continueClone() {
+	if !m.CloneForce {
+		if info, err := os.Lstat(m.CloneOutput); err == nil && !info.IsDir() {
+			m.ReplaceDialog = true
+			m.ReplaceIndex = 0
+			return
+		}
+	}
+	m.planClone()
+}
+
+func (m *Model) updateReplaceDialog(key Key) {
+	switch key.Kind {
+	case KeyUp:
+		m.ReplaceIndex = (m.ReplaceIndex + 2) % 3
+	case KeyDown:
+		m.ReplaceIndex = (m.ReplaceIndex + 1) % 3
+	case KeyEsc:
+		m.ReplaceDialog = false
+	case KeyEnter:
+		switch m.ReplaceIndex {
+		case 0:
+			m.ReplaceDialog = false
+		case 1:
+			if free, err := clone.FreeSuffix(m.CloneOutput); err == nil {
+				m.CloneOutput = free
+			}
+			m.ReplaceDialog = false
+		case 2:
+			m.CloneForce = true
+			m.ReplaceDialog = false
+			m.planClone()
+		}
+	}
+}
+
 func (m *Model) updateCloneDestination(key Key) {
+	if m.ReplaceDialog {
+		m.updateReplaceDialog(key)
+		return
+	}
 	switch key.Kind {
 	case KeyEsc:
 		m.Screen = ScreenC1
@@ -138,7 +183,7 @@ func (m *Model) updateCloneDestination(key Key) {
 			m.Message = message
 			return
 		}
-		m.planClone()
+		m.continueClone()
 	case KeyF2:
 		if current, err := os.Getwd(); err == nil {
 			m.CloneOutput = filepath.Join(current, clone.DefaultName(m.Now()))
@@ -218,12 +263,15 @@ func (m *Model) updateCloneSummary(key Key) {
 	case KeyEnter, KeyEsc:
 		m.finishClone()
 	case KeyRune:
-		if key.Rune == 'c' {
+		switch key.Rune {
+		case 'c':
 			path := ""
 			if m.CloneResult != nil {
 				path = m.CloneResult.Output
 			}
 			m.copy(path)
+		case 'd':
+			m.CloneShowSkipped = !m.CloneShowSkipped
 		}
 	}
 }
@@ -232,6 +280,14 @@ func (m *Model) finishClone() {
 	m.ExitCode = 0
 	if m.CloneResult != nil && len(m.CloneResult.Plan.Skipped) > 0 {
 		m.ExitCode = 3
+	}
+	if m.MenuMode {
+		if m.CloneResult != nil {
+			m.LastMission = fmt.Sprintf("clon: %d archivos", len(m.CloneResult.Plan.Operations))
+		}
+		m.Screen = ScreenMenu
+		m.Stack = nil
+		return
 	}
 	m.Quit = true
 }
@@ -573,6 +629,14 @@ func (m *Model) updateDeploySummary(key Key) {
 		if m.DeployResult != nil {
 			m.ExitCode = deploy.ResultCode(*m.DeployResult)
 		}
+		if m.MenuMode {
+			if m.DeployResult != nil {
+				m.LastMission = fmt.Sprintf("despliegue: %d desplegados, %d híbridos", len(m.DeployResult.Deployed), len(m.DeployResult.Merged))
+			}
+			m.Screen = ScreenMenu
+			m.Stack = nil
+			return
+		}
 		m.Quit = true
 	case KeyRune:
 		if key.Rune == 'c' && m.DeployResult != nil {
@@ -599,7 +663,12 @@ func (m *Model) updateUpdate(key Key) {
 			m.UpdateResult = &result
 			return
 		}
-		m.Screen = ScreenMenu
+		if m.MenuMode {
+			m.LastMission = "actualización: " + string(m.UpdateResult.Outcome)
+			m.Screen = ScreenMenu
+			return
+		}
+		m.Quit = true
 	}
 }
 
@@ -642,6 +711,11 @@ func (m *Model) saveSettings() {
 	m.Settings = value
 	m.SettingsError = ""
 	m.Message = texts.SettingsSaved
+	if m.MenuMode {
+		m.LastMission = texts.SettingsSaved
+		m.Screen = ScreenMenu
+		m.Stack = nil
+	}
 }
 
 func (m *Model) copy(value string) {

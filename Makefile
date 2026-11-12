@@ -31,10 +31,12 @@ bench-startup:
 	$(GO) test ./internal/performance -run Startup -v
 
 golden:
-	@if [ -x .venv/bin/python ]; then \
+	@if [ -x legacy/python/.venv/bin/python ]; then \
+		legacy/python/.venv/bin/python scripts/gen_golden.py; \
+	elif [ -x .venv/bin/python ]; then \
 		.venv/bin/python scripts/gen_golden.py; \
 	else \
-		echo "se requiere .venv/bin/python para generar los fixtures dorados"; \
+		echo "se requiere un entorno Python (legacy/python/.venv) para generar los fixtures dorados"; \
 		exit 1; \
 	fi
 
