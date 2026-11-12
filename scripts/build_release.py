@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 import os
 import platform
 import re
@@ -15,12 +14,6 @@ BINARY = ROOT / "dist" / "kamino-arm64"
 
 
 def project_version() -> str:
-    pyproject = ROOT / "pyproject.toml"
-    if pyproject.exists():
-        import tomllib
-
-        metadata = tomllib.loads(pyproject.read_text(encoding="utf-8"))
-        return metadata["project"]["version"]
     source = ROOT / "internal" / "version" / "version.go"
     match = re.search(r'var Version = "([^"]+)"', source.read_text(encoding="utf-8"))
     if match is None:
@@ -59,11 +52,9 @@ def check_binary(binary: Path, version: str) -> None:
             raise RuntimeError("La comprobación del binario escribió en el HOME temporal")
 
 
-def build(*, update_lock: bool = False) -> None:
+def build() -> None:
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise RuntimeError("El binario de release debe construirse en macOS ARM64")
-    if update_lock:
-        raise RuntimeError("uv.lock ya no participa en la construcción del binario Go")
 
     version = project_version()
     if os.environ.get("NEW_VERSION", version) != version:
@@ -91,6 +82,4 @@ def build(*, update_lock: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Construye y comprueba el binario ARM64.")
-    parser.add_argument("--update-lock", action="store_true", help="Obsoleto: el binario es Go.")
-    build(update_lock=parser.parse_args().update_lock)
+    build()

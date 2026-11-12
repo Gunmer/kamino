@@ -1,0 +1,25 @@
+[tool.semantic_release]
+version_variables = ["internal/version/version.go:Version"]
+commit_parser = "conventional"
+commit_author = "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+build_command = "uv run --project legacy/python --no-sync python scripts/build_release.py"
+allow_zero_version = true
+major_on_zero = false
+commit_message = "chore(release): {version} [skip ci]"
+
+[tool.semantic_release.branches.main]
+match = "^main$"
+prerelease = false
+
+[tool.semantic_release.commit_parser_options]
+minor_tags = ["feat"]
+patch_tags = ["fix"]
+other_allowed_tags = ["build", "chore", "ci", "docs", "perf", "style", "refactor", "test"]
+default_bump_level = 0
+parse_squash_commits = true
+ignore_merge_commits = true
+
+[tool.semantic_release.changelog]
+template_dir = ".github/release-templates"
+mode = "update"
+insertion_flag = "<!-- version list -->"
