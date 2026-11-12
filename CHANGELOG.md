@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.8.0 (2026-11-12)
+
+### Funcionalidades
+
+- add D0 clone picker ([`ba1d53f`](https://github.com/Gunmer/kamino/commit/ba1d53f5bf89fd1897ac34608f5b4cc10924cb70))
+- remove menu keyboard shortcuts ([`5e28982`](https://github.com/Gunmer/kamino/commit/5e28982e8243e8a091e71c7630e6b74343001e72))
+
+  **Cambio incompatible.** `c`, `d`, `u` and `q` no longer trigger menu actions. Use arrow keys plus `Enter`; exit by selecting Abandonar Kamino.
+- add TUI-managed user configuration ([`a05f909`](https://github.com/Gunmer/kamino/commit/a05f909ebf21100702e28c4d345e2e96748518dc))
+
+  **Cambio incompatible.** clone writes to ~/.config/kamino/vault by default and snapshots move to ~/.config/kamino/vault/snapshot; existing snapshots under ~/Library/Application Support/kamino/snapshots are not migrated.
+
+
 ## v0.7.0 (2026-11-09)
 
 ### Mantenimiento
