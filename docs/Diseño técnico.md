@@ -159,9 +159,12 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
 
 ### 5.2 Despliegue
 
-1. D0 abre el archivo y valida solo el manifiesto: un único `manifest.json` regular, tamaño máximo
-   de 4 MiB, tope de miembros y `format_version`. Envuelve errores de `tarfile`/OS. Los avisos de
-   arquitectura o macOS no bloquean.
+1. D0 descubre los `.tar.gz` hijos directos de `clone.output_dir` y del directorio actual,
+   deduplica por ruta resuelta, ordena por `mtime` descendente y construye la tabla
+   `Archivo`/`Origen`/`Tamaño` con preview de ruta, fecha y tamaño, filtro `/` y la fila
+   `Otro archivo...` para la ruta manual. Abre el archivo y valida solo el manifiesto: un único
+   `manifest.json` regular, tamaño máximo de 4 MiB, tope de miembros y `format_version`. Envuelve
+   errores de `tarfile`/OS. Los avisos de arquitectura o macOS no bloquean.
 2. D1 detecta las apps instaladas y cruza el manifiesto. Las no instaladas se informan como “sin
    base en este Mac”. La verificación completa ocurre antes de extraer; la preparación es
    cancelable y limpia el staging si falla.
@@ -202,7 +205,9 @@ Menú -> U1 actualización
 - **C3:** planificando, revisión y en curso; `d` omitidos con motivo, `f` archivos incluidos, aviso
   de secretos y dry-run sin acción de clonar.
 - **C4:** resumen, `d` omitidos, `c` copiar ruta y línea de salida solo con código 3.
-- **D0:** lista de `.tar.gz` del directorio actual, campo de ruta y validación del manifiesto.
+- **D0:** tabla `Archivo`/`Origen`/`Tamaño` con los clones de `clone.output_dir` y del directorio
+  actual, orden por fecha, deduplicación por ruta resuelta, preview con ruta/fecha/tamaño, filtro
+  `/`, ruta manual en `Otro archivo...` (`o`) y validación del manifiesto.
 - **D1:** apps instaladas con número de archivos, no instaladas informativas y preparación
   cancelable.
 - **D2:** tabla de conflictos con conteos y acciones `r`/`c`/`o`/`C`/`O`.

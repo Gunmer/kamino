@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -82,6 +83,7 @@ class DeployState:
     application_dirs: Sequence[Path] | None = None
     path: str | None = None
     snapshots_dir: Path | None = None
+    clone_output_dir: Path | None = None
     clone_file: Path | None = None
     selected: list[str] | None = None
     requested: list[str] | None = None
@@ -154,10 +156,102 @@ def _warnings_text(session: DeploySession) -> str:
     return "\n".join(values)
 
 
+OTHER_CLONE_KEY = "__other_file__"
+
+
+@dataclass(frozen=True)
+class CloneCandidate:
+    """Un clon descubierto en una de las fuentes de D0."""
+
+    path: Path
+    origin: str
+    size: int
+    mtime: float
+
+
+def _resolved(path: Path) -> Path:
+    try:
+        return path.expanduser().resolve()
+    except (OSError, RuntimeError):
+        return path.expanduser().absolute()
+
+
+def _display_path(path: Path) -> str:
+    try:
+        relative = path.relative_to(Path.home())
+    except (OSError, RuntimeError, ValueError):
+        return str(path)
+    return f"~/{relative}"
+
+
+def _scan_clones(directory: Path, origin: str) -> tuple[list[CloneCandidate], str | None]:
+    """Lista los .tar.gz hijos directos de una fuente, sin tratarla como error fatal."""
+    if not directory.exists():
+        return [], texts.DEPLOY_SOURCE_MISSING.format(origin=origin, path=directory)
+    try:
+        entries = list(directory.iterdir())
+    except OSError as exc:
+        return [], texts.DEPLOY_SOURCE_UNREADABLE.format(
+            origin=origin,
+            path=directory,
+            message=exc.strerror or str(exc),
+        )
+    candidates: list[CloneCandidate] = []
+    for entry in entries:
+        if not entry.name.endswith(".tar.gz"):
+            continue
+        try:
+            if not entry.is_file():
+                continue
+            info = entry.stat()
+        except OSError:
+            continue
+        candidates.append(
+            CloneCandidate(
+                path=_resolved(entry),
+                origin=origin,
+                size=info.st_size,
+                mtime=info.st_mtime,
+            )
+        )
+    if not candidates:
+        return [], texts.DEPLOY_SOURCE_EMPTY.format(origin=origin, path=directory)
+    return candidates, None
+
+
+def _discover_clones(clone_output_dir: Path | None) -> tuple[list[CloneCandidate], list[str]]:
+    """Combina la carpeta configurada y el directorio actual sin duplicar archivos."""
+    cwd = Path.cwd()
+    sources: list[tuple[Path, str]] = []
+    if clone_output_dir is not None:
+        configured = clone_output_dir.expanduser()
+        sources.append((configured, texts.DEPLOY_ORIGIN_DEFAULT))
+        if _resolved(configured) != _resolved(cwd):
+            sources.append((cwd, texts.DEPLOY_ORIGIN_CWD))
+    else:
+        sources.append((cwd, texts.DEPLOY_ORIGIN_CWD))
+    candidates: list[CloneCandidate] = []
+    notices: list[str] = []
+    seen: set[Path] = set()
+    for directory, origin in sources:
+        found, notice = _scan_clones(directory, origin)
+        if notice is not None:
+            notices.append(notice)
+        for candidate in found:
+            if candidate.path in seen:
+                continue
+            seen.add(candidate.path)
+            candidates.append(candidate)
+    candidates.sort(key=lambda candidate: (candidate.mtime, candidate.path.name), reverse=True)
+    return candidates, notices
+
+
 class DeployFileScreen(Screen[None]):
-    """D0: elige un .tar.gz del directorio actual y valida su manifiesto."""
+    """D0: elige un clon de la lista o escribe una ruta y valida su manifiesto."""
 
     BINDINGS = [
+        Binding("slash", "filter", "Filtro"),
+        Binding("o", "other", "Otro archivo"),
         Binding("enter", "continue", "Continuar", priority=True),
         Binding("escape", "back", "Atrás"),
         Binding("f1", "help", "Ayuda"),
@@ -168,6 +262,10 @@ class DeployFileScreen(Screen[None]):
         super().__init__()
         self.state = state
         self.error = error
+        self.candidates: list[CloneCandidate] = []
+        self._by_path: dict[str, CloneCandidate] = {}
+        self._filter = ""
+        self._source_notices: list[str] = []
 
     @property
     def kamino(self) -> KaminoApp:
@@ -177,37 +275,151 @@ class DeployFileScreen(Screen[None]):
         if self.state.include_file:
             yield Static(step_label(self.state, "clon"), id="step")
         yield Static(texts.DEPLOY_FILE_TITLE, id="title")
+        yield Input(placeholder=texts.LABEL_FILTER, id="filter")
         yield DataTable(id="files")
+        yield Static("", id="preview")
         yield Input(placeholder=texts.LABEL_CLONE_FILE_PLACEHOLDER, id="path")
         yield Static("", id="warnings")
         yield Static("", id="status")
         yield ShortcutBar(texts.SHORTCUTS_D0)
 
     def on_mount(self) -> None:
-        table = self.query_one(DataTable)
+        table = self.query_one("#files", DataTable)
         table.cursor_type = "row"
-        table.add_columns(texts.COLUMN_ARCHIVO, texts.COLUMN_TAMANO)
-        for candidate in sorted(Path.cwd().glob("*.tar.gz")):
-            table.add_row(candidate.name, format_size(candidate.stat().st_size), key=str(candidate))
+        table.add_column(texts.COLUMN_ARCHIVO, width=38)
+        table.add_column(texts.COLUMN_ORIGEN, width=16)
+        table.add_column(texts.COLUMN_TAMANO, width=9)
+        self.candidates, self._source_notices = _discover_clones(self.state.clone_output_dir)
+        self._by_path = {str(candidate.path): candidate for candidate in self.candidates}
+        self.query_one("#filter", Input).display = False
         path_input = self.query_one("#path", Input)
-        if self.state.clone_file is not None:
-            path_input.value = str(self.state.clone_file)
-        path_input.focus()
-        if self.error or self.state.file_error:
-            self.query_one("#status", Static).update(self.error or self.state.file_error)
+        path_input.display = False
+        self._rebuild_table()
+        error = self.error or self.state.file_error
+        self.query_one("#status", Static).update(
+            error if error is not None else "\n".join(self._source_notices)
+        )
+        selected = self._matching_candidate(self.state.clone_file)
+        if self.state.file_error is not None or (
+            self.state.clone_file is not None and selected is None
+        ):
+            if self.state.clone_file is not None:
+                path_input.value = str(self.state.clone_file)
+            self._reveal_manual()
+            return
+        table.focus()
+        if selected is not None:
+            table.move_cursor(row=self._row_of(selected))
+        elif self.candidates:
+            table.move_cursor(row=0)
+        else:
+            self._reveal_manual()
+        self._refresh_preview()
+
+    def on_screen_resume(self) -> None:
+        """Recupera la selección y el foco al volver de D1 o de la ayuda."""
+        clone_file = self.state.clone_file
+        if clone_file is None:
+            return
+        selected = self._matching_candidate(clone_file)
+        if selected is None:
+            path_input = self.query_one("#path", Input)
+            if path_input.value.strip() != str(clone_file):
+                path_input.value = str(clone_file)
+            self._reveal_manual()
+            return
+        table = self.query_one("#files", DataTable)
+        if str(selected.path) not in {
+            str(candidate.path) for candidate in self._visible_candidates()
+        }:
+            filter_input = self.query_one("#filter", Input)
+            filter_input.value = ""
+            filter_input.display = False
+            self._filter = ""
+            self._rebuild_table()
+        table.move_cursor(row=self._row_of(selected))
+        table.focus()
+        self._refresh_preview()
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        if event.row_key is not None:
-            self.query_one("#path", Input).value = str(event.row_key.value)
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        self.query_one("#path", Input).value = str(event.row_key.value)
+        self._refresh_preview()
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        self._validate()
+        if event.input.id != "filter":
+            return
+        self._filter = event.value
+        self._rebuild_table()
 
-    def _path(self) -> Path:
-        return Path(self.query_one("#path", Input).value.strip()).expanduser()
+    def _selected_key(self) -> str | None:
+        table = self.query_one("#files", DataTable)
+        if not table.row_count:
+            return None
+        row_key = table.coordinate_to_cell_key((table.cursor_row, 0)).row_key
+        return str(row_key.value)
+
+    def _matching_candidate(self, path: Path | None) -> CloneCandidate | None:
+        if path is None:
+            return None
+        return self._by_path.get(str(_resolved(path)))
+
+    def _row_of(self, candidate: CloneCandidate) -> int:
+        table = self.query_one("#files", DataTable)
+        return table.get_row_index(str(candidate.path))
+
+    def _visible_candidates(self) -> list[CloneCandidate]:
+        needle = self._filter.strip().casefold()
+        if not needle:
+            return self.candidates
+        return [
+            candidate
+            for candidate in self.candidates
+            if needle in candidate.path.name.casefold() or needle in candidate.origin.casefold()
+        ]
+
+    def _rebuild_table(self) -> None:
+        table = self.query_one("#files", DataTable)
+        previous = self._selected_key()
+        visible = self._visible_candidates()
+        table.clear()
+        for candidate in visible:
+            table.add_row(
+                candidate.path.name,
+                candidate.origin,
+                format_size(candidate.size),
+                key=str(candidate.path),
+            )
+        table.add_row(
+            texts.DEPLOY_OTHER_FILE,
+            texts.DEPLOY_ORIGIN_MANUAL,
+            "",
+            key=OTHER_CLONE_KEY,
+        )
+        visible_keys = [str(candidate.path) for candidate in visible]
+        visible_keys.append(OTHER_CLONE_KEY)
+        row = visible_keys.index(previous) if previous in visible_keys else 0
+        table.move_cursor(row=row)
+        self._refresh_preview()
+
+    def _refresh_preview(self) -> None:
+        key = self._selected_key()
+        candidate = self._by_path.get(key) if key is not None else None
+        preview = self.query_one("#preview", Static)
+        if candidate is None:
+            preview.update(texts.DEPLOY_PREVIEW_MANUAL)
+            return
+        stamp = datetime.fromtimestamp(candidate.mtime).strftime(texts.DEPLOY_DATE_FORMAT)
+        preview.update(
+            texts.DEPLOY_PREVIEW.format(
+                path=_display_path(candidate.path),
+                date=stamp,
+                size=format_size(candidate.size),
+            )
+        )
+
+    def _reveal_manual(self) -> None:
+        path_input = self.query_one("#path", Input)
+        path_input.display = True
+        path_input.focus()
 
     def _validate(self) -> Path | None:
         text = self.query_one("#path", Input).value.strip()
@@ -215,35 +427,67 @@ class DeployFileScreen(Screen[None]):
         if not text:
             status.update(texts.DEPLOY_NO_FILE)
             return None
-        path = Path(text).expanduser().resolve()
+        path = Path(text).expanduser()
         if not path.is_file():
-            status.update(texts.DEPLOY_FILE_INVALID.format(message="no existe o no es un archivo"))
+            status.update(texts.DEPLOY_FILE_INVALID.format(message=texts.DEPLOY_FILE_MISSING))
             return None
-        status.update("")
-        return path
+        return path.resolve()
 
-    def action_continue(self) -> None:
-        path = self._validate()
-        if path is None:
-            return
+    def _continue_with(self, path: Path) -> None:
         try:
-            manifest = read_manifest(path)
+            read_manifest(path)
         except KaminoError as exc:
             self.query_one("#status", Static).update(texts.DEPLOY_FILE_INVALID.format(message=exc))
             return
+        if self.state.session is not None:
+            self.state.session.close()
+            self.state.session = None
         try:
             session = _prepare_session(self.state, path)
         except KaminoError as exc:
             self.query_one("#status", Static).update(texts.DEPLOY_FILE_INVALID.format(message=exc))
             return
-        del manifest
         self.state.clone_file = path
+        self.state.file_error = None
+        self.state.last_error = None
+        self.error = None
         self.state.session = session
         self.kamino.cleanup = session.close
         _apply_requested(self.state)
-        warnings = _warnings_text(session)
-        self.query_one("#warnings", Static).update(warnings)
+        self.query_one("#warnings", Static).update(_warnings_text(session))
         self._advance()
+
+    def action_filter(self) -> None:
+        filter_input = self.query_one("#filter", Input)
+        filter_input.display = True
+        filter_input.focus()
+
+    def action_other(self) -> None:
+        table = self.query_one("#files", DataTable)
+        if not table.row_count:
+            return
+        table.move_cursor(row=table.row_count - 1)
+        table.focus()
+        self._refresh_preview()
+
+    def action_continue(self) -> None:
+        path_input = self.query_one("#path", Input)
+        if path_input.has_focus:
+            path = self._validate()
+            if path is not None:
+                self._continue_with(path)
+            return
+        table = self.query_one("#files", DataTable)
+        if not table.row_count:
+            self._reveal_manual()
+            return
+        key = self._selected_key()
+        if key is None or key == OTHER_CLONE_KEY:
+            self._reveal_manual()
+            return
+        candidate = self._by_path.get(key)
+        if candidate is not None:
+            self._continue_with(candidate.path)
 
     def _advance(self) -> None:
         if self.state.include_apps:
@@ -252,6 +496,18 @@ class DeployFileScreen(Screen[None]):
             self.app.push_screen(DeployPrepareScreen(self.state))
 
     def action_back(self) -> None:
+        filter_input = self.query_one("#filter", Input)
+        if filter_input.has_focus:
+            filter_input.value = ""
+            self._filter = ""
+            filter_input.display = False
+            self._rebuild_table()
+            self.query_one("#files", DataTable).focus()
+            return
+        path_input = self.query_one("#path", Input)
+        if path_input.has_focus:
+            self.query_one("#files", DataTable).focus()
+            return
         _finish_flow(self.state, self.kamino, texts.TITLE_DEPLOY_CANCELLED, 1)
 
     def action_interrupt(self) -> None:
@@ -1343,6 +1599,7 @@ def start_deploy_from_menu(app: KaminoApp) -> None:
     state = DeployState(
         catalog_dir=app.config.catalog_dir,
         snapshots_dir=app.config.snapshots_dir,
+        clone_output_dir=app.config.clone_output_dir,
     )
     app.push_screen(DeployFileScreen(state))
 
@@ -1377,6 +1634,7 @@ def run_deploy_flow(
             application_dirs=application_dirs,
             path=path,
             snapshots_dir=snapshots_dir if snapshots_dir is not None else config.snapshots_dir,
+            clone_output_dir=config.clone_output_dir,
             clone_file=clone_file,
             selected=selected,
             requested=requested,

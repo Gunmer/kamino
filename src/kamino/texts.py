@@ -152,7 +152,7 @@ CLONE_SIZE_LABEL = "Tamaño"
 CLONE_PATH_LABEL = "Ruta"
 
 DEPLOY_TITLE = "Desplegar un clon"
-DEPLOY_FILE_TITLE = "Elige el archivo del clon"
+DEPLOY_FILE_TITLE = "Elige el clon que quieres desplegar"
 DEPLOY_APPS_TITLE = "Elige las apps que quieres desplegar"
 DEPLOY_CONFLICTS_TITLE = "Conflictos"
 DEPLOY_DETAIL_TITLE = "Revisión por bloques"
@@ -161,6 +161,17 @@ DEPLOY_SUMMARY_TITLE = "Despliegue completado"
 DEPLOY_INCOMPLETE_TITLE = "Despliegue incompleto"
 DEPLOY_NO_FILE = "Escribe o elige un archivo .tar.gz."
 DEPLOY_FILE_INVALID = "El archivo no es un clon válido: {message}"
+DEPLOY_FILE_MISSING = "no existe o no es un archivo"
+DEPLOY_OTHER_FILE = "Otro archivo..."
+DEPLOY_ORIGIN_DEFAULT = "por defecto"
+DEPLOY_ORIGIN_CWD = "este directorio"
+DEPLOY_ORIGIN_MANUAL = "ruta manual"
+DEPLOY_SOURCE_MISSING = "{origin}: no existe {path}"
+DEPLOY_SOURCE_UNREADABLE = "{origin}: no se puede leer {path}: {message}"
+DEPLOY_SOURCE_EMPTY = "{origin}: sin clones en {path}"
+DEPLOY_PREVIEW = "{path} · {date} · {size}"
+DEPLOY_PREVIEW_MANUAL = "Ruta manual: escribe la ruta completa de un clon .tar.gz."
+DEPLOY_DATE_FORMAT = "%Y-%m-%d %H:%M"
 DEPLOY_MANIFEST_WARNINGS = "Avisos del manifiesto"
 DEPLOY_ARCH_WARNING = "Arquitectura distinta: {message}"
 DEPLOY_MACOS_WARNING = "Versión de macOS distinta: {message}"
@@ -305,10 +316,11 @@ SHORTCUTS_C4 = shortcut_line(
     ("?", "ayuda"),
 )
 SHORTCUTS_D0 = shortcut_line(
-    ("↑↓", "archivo"),
-    ("Tab", "foco"),
+    ("↑↓", "mover"),
+    ("/", "filtrar"),
+    ("o", "otro archivo"),
     ("Enter", "continuar"),
-    ("Esc", "cancelar"),
+    ("Esc", "volver"),
     ("?", "ayuda"),
 )
 SHORTCUTS_D1 = shortcut_line(
@@ -459,6 +471,7 @@ BUTTON_BACK_TO_DETAIL = "Volver al detalle"
 COLUMN_APP = "App"
 COLUMN_ARCHIVOS = "Archivos"
 COLUMN_ARCHIVO = "Archivo"
+COLUMN_ORIGEN = "Origen"
 COLUMN_TAMANO = "Tamaño"
 COLUMN_TIPO = "Tipo"
 COLUMN_DETALLE = "Detalle"
@@ -549,11 +562,12 @@ HELP_C4 = (
     ("Enter/Esc", "continuar"),
 )
 HELP_D0 = (
-    ("↑↓", "recorrer los clones del directorio"),
-    ("Tab", "alternar entre la tabla y la ruta"),
-    ("Enter", "continuar con el archivo elegido"),
+    ("↑↓", "recorrer los clones de la lista"),
+    ("/", "filtrar por nombre u origen"),
+    ("o", "ir a Otro archivo... y escribir una ruta"),
+    ("Enter", "continuar con la fila resaltada o abrir la ruta manual"),
+    ("Esc", "volver a la tabla, cerrar el filtro o cancelar"),
     ("F1", "abrir esta ayuda"),
-    ("Esc", "cancelar el flujo"),
 )
 HELP_D1 = (
     ("↑↓", "recorrer apps"),
@@ -635,7 +649,7 @@ def help_texts(
     return "\n".join(lines)
 
 
-SCREEN_D0 = "D0 · archivo del clon"
+SCREEN_D0 = "D0 · clon"
 SCREEN_D1 = "D1 · apps"
 SCREEN_D2 = "D2 · conflictos"
 SCREEN_D3 = "D3 · detalle por bloques"

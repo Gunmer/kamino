@@ -209,6 +209,15 @@ kamino deploy clone-20261109.tar.gz -y -v      # aplica todo sin preguntar
 kamino deploy clone-20261109.tar.gz -n         # simulación: imprime diffs, no escribe
 ```
 
+Desde el menú, **Desplegar** abre D0 con una sola lista que combina los clones de
+`clone.output_dir` (por defecto `~/.config/kamino/vault/`) y los `.tar.gz` del directorio actual.
+La lista se ordena por fecha de modificación, deduplica los archivos que aparecen en ambas rutas y
+muestra el origen de cada fila, además de la ruta completa, la fecha y el tamaño del clon
+resaltado. La tabla recibe el foco y deja seleccionado el clon más reciente; `/` filtra por nombre
+u origen y `o` salta a `Otro archivo...`, que abre el campo de ruta manual. Si `kamino deploy`
+recibe una ruta inexistente o inválida, D0 se abre con esa ruta precargada, el error visible y la
+lista de clones disponible.
+
 Sin terminal interactiva, un despliegue real requiere `-y` o `--yes`; la simulación con `-n`
 no lo requiere. `deploy -n` y `deploy --yes` no abren la TUI aunque haya terminal. `-a` valida los
 ids contra las apps desplegables: los desconocidos o no instalados se avisan y cuentan como

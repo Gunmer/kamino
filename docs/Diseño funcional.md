@@ -63,6 +63,15 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 
 ### 2.2 Despliegue (`deploy`)
 
+- D0 combina en una sola tabla los `.tar.gz` hijos directos de `clone.output_dir` (por defecto
+  `~/.config/kamino/vault/`) y del directorio actual, sin recorrer subdirectorios. Los ordena por
+  fecha de modificación descendente, deduplica por ruta resuelta y muestra el origen (`por defecto`,
+  `este directorio` o `ruta manual`) y el tamaño. El preview de la fila resaltada muestra la ruta
+  completa con `~`, la fecha y el tamaño; si una fuente no existe, está vacía o no se puede leer, se
+  informa sin ocultar los clones de la otra. La tabla arranca con el foco y el clon más reciente
+  seleccionado. `/` filtra por nombre u origen, `o` salta a `Otro archivo...` y `Esc` vuelve a la
+  tabla, cierra el filtro o cancela el flujo según el foco. Al volver de D1 se conserva el clon
+  elegido; si era una ruta manual fuera de la lista, el campo aparece precargado.
 - D0 valida solo el manifiesto del clon: rechaza un `tar.gz` dañado, con más de un `manifest.json`,
   con un manifiesto de más de 4 MiB o con un formato más nuevo. Los avisos de arquitectura o macOS
   no bloquean. Un manifiesto válido no implica que la integridad esté verificada.
