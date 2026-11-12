@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v0.9.0 (2026-11-12)
+
+### Correcciones
+
+- configure semantic-release for the Go layout ([`9856e54`](https://github.com/Gunmer/kamino/commit/9856e54e9fdd6aba7fd6f2a9c9668054525158d8))
+- restore golden fixture and Python readme ([`8b3286c`](https://github.com/Gunmer/kamino/commit/8b3286c185714353976edddfac449df639ede9b5))
+- return to column zero after each line ([`767670b`](https://github.com/Gunmer/kamino/commit/767670be2fa8f831b343fe5f61d4a21d5b65a1af))
+
+### Mantenimiento
+
+- verify with the real toolchain ([`6841bec`](https://github.com/Gunmer/kamino/commit/6841bec0b31d1fa159ba820669ee94f1fb089f57))
+
+### Documentación
+
+- add migrate-to-go change ([`b58b456`](https://github.com/Gunmer/kamino/commit/b58b456c14161ddc7fe34b165c03c86d32f41fe9))
+
+### Funcionalidades
+
+- migrate to Go ([`755e93c`](https://github.com/Gunmer/kamino/commit/755e93c44b37e3abd0e051d8754b4b8154a4b36e))
+
+  **Cambio incompatible.** la distribución pasa a un binario Go estático; uv y pip dejan de ser vías de instalación y la TUI solo admite ansi-dark y ansi-light.
+- add Go distribution, core packages and TUI ([`f1b2d43`](https://github.com/Gunmer/kamino/commit/f1b2d430feec169aba957918ec58bb32d166c99e))
+
+
 ## v0.8.0 (2026-11-12)
 
 ### Funcionalidades
