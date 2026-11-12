@@ -1,0 +1,5 @@
+id = "lazygit"
+name = "LazyGit"
+command = "lazygit"
+optional_paths = ["Library/Application Support/lazygit/config.yml", ".config/lazygit/config.yml"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

@@ -1,0 +1,5 @@
+id = "navi"
+name = "Navi"
+command = "navi"
+optional_paths = [".config/navi/config.yaml"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

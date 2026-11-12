@@ -1,0 +1,50 @@
+{
+  "compose_clone": "line 0\nline 1\nline 2\nline 3\nLINE FOUR\nline 5\nline 6\nline 7\nline 8\nline 9\n",
+  "compose_local": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\n",
+  "hunks": [
+    {
+      "clone_end": 9,
+      "clone_start": 2,
+      "index": 1,
+      "local_end": 9,
+      "local_start": 2,
+      "rows": [
+        {
+          "clone": "line 1\n",
+          "kind": "equal",
+          "local": "line 1\n"
+        },
+        {
+          "clone": "line 2\n",
+          "kind": "equal",
+          "local": "line 2\n"
+        },
+        {
+          "clone": "line 3\n",
+          "kind": "equal",
+          "local": "line 3\n"
+        },
+        {
+          "clone": "LINE FOUR\n",
+          "kind": "replace",
+          "local": "line 4\n"
+        },
+        {
+          "clone": "line 5\n",
+          "kind": "equal",
+          "local": "line 5\n"
+        },
+        {
+          "clone": "line 6\n",
+          "kind": "equal",
+          "local": "line 6\n"
+        },
+        {
+          "clone": "line 7\n",
+          "kind": "equal",
+          "local": "line 7\n"
+        }
+      ]
+    }
+  ]
+}

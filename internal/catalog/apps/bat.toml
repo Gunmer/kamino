@@ -1,0 +1,5 @@
+id = "bat"
+name = "bat"
+command = "bat"
+optional_paths = [".config/bat/config", ".config/bat/themes"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

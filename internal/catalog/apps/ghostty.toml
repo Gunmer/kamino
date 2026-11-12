@@ -1,0 +1,7 @@
+id = "ghostty"
+name = "Ghostty"
+bundle_id = "com.mitchellh.ghostty"
+paths = [".config/ghostty/config", "Library/Application Support/com.mitchellh.ghostty/config"]
+optional_paths = [".config/ghostty/config.ghostty", "Library/Application Support/com.mitchellh.ghostty/config.ghostty", ".config/ghostty/themes", "Library/Application Support/com.mitchellh.ghostty/themes"]
+xdg_paths = ["ghostty/config", "ghostty/config.ghostty", "ghostty/themes"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

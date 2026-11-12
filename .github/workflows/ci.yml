@@ -1,12 +1,12 @@
 name: CI
-          
+
 on:
   push:
     branches: ["main"]
   pull_request:
 
 jobs:
-  test:
+  python:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -33,3 +33,72 @@ jobs:
 
       - name: Tests
         run: uv run pytest
+
+  go:
+    name: Go (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, ubuntu-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify modules
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Format check
+        run: test -z "$(gofmt -l .)"
+
+      - name: Lint
+        uses: golangci/golangci-lint-action@v7
+        with:
+          version: latest
+          args: --timeout=5m
+
+      - name: Tests
+        run: go test ./... -race
+
+  compatibility:
+    name: Python/Go compatibility
+    runs-on: macos-15
+    timeout-minutes: 20
+    needs: go
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install Python dependencies
+        run: uv sync --all-extras --dev
+
+      - name: Cross-compatibility matrix
+        run: go test ./internal/integration -run Cross -v
+        env:
+          KAMINO_PYTHON: ${{ github.workspace }}/.venv/bin/python

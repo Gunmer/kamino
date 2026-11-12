@@ -1,0 +1,32 @@
+{
+  "format_version": 1,
+  "tool_version": "0.8.0",
+  "created_at": "2026-11-12T00:00:00Z",
+  "macos_version": "15.0",
+  "arch": "arm64",
+  "hostname": "golden-host",
+  "apps": [
+    {
+      "id": "bat",
+      "name": "bat",
+      "bundle_id": null,
+      "version": null,
+      "files": []
+    },
+    {
+      "id": "git",
+      "name": "Git",
+      "bundle_id": null,
+      "version": null,
+      "files": [
+        {
+          "path": ".gitconfig",
+          "sha256": "f32f13cf635ee00784d29bd743b35ebec2497e6e07804cc478cf7ec1be75ffe1",
+          "size": 22,
+          "mode": "0644",
+          "link": null
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+id = "github-cli"
+name = "GitHub CLI"
+command = "gh"
+optional_paths = [".config/gh/config.yml"]
+exclude = ["**/hosts.yml", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

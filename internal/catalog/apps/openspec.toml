@@ -1,0 +1,5 @@
+id = "openspec"
+name = "OpenSpec"
+command = "openspec"
+optional_paths = [".config/openspec/config.json"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

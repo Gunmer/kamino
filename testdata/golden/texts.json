@@ -1,0 +1,12 @@
+{
+  "glossary": {
+    "hybrid": "híbrido",
+    "not_installed": "sin base en este Mac",
+    "original": "original",
+    "perfect_clone": "clon perfecto",
+    "snapshot": "holocrón de seguridad"
+  },
+  "help_c1": "Pantalla: C1 · apps\n\nAtajos de esta pantalla:\n  ↑↓  recorrer apps\n  Espacio  marcar o desmarcar sin perder el foco\n  a  seleccionar todas las visibles\n  n  quitar todas las visibles\n  /  filtrar\n  Enter  continuar con la selección\n  Esc  volver o cancelar\n\nGlobal: ? ayuda · F1 ayuda en campos · Esc volver · Ctrl+C cancelar si se permite\n\nFlujo:\n  ◉ apps\n  ○ destino\n  ○ revisión",
+  "help_d2": "Pantalla: D2 · conflictos\n\nAtajos de esta pantalla:\n  ↑↓  recorrer conflictos\n  r  revisar el conflicto seleccionado\n  c  aplicar el clon completo\n  o  conservar el original\n  C  aplicar el clon a todos\n  O  conservar el original en todos\n  Enter  confirmar cuando todo esté decidido\n  Esc  retirada: descarta decisiones tras confirmar\n\nGlobal: ? ayuda · F1 ayuda en campos · Esc volver · Ctrl+C cancelar si se permite\n\nFlujo:\n  ○ clon\n  ○ apps\n  ◉ conflictos\n  ○ confirmación\n\nLos diffs pueden contener datos sensibles (tokens, claves o rutas). No se guardan ni se registran fuera de esta pantalla.",
+  "summary_deploy": "Despliegue: {deployed} desplegados, {merged} híbridos"
+}

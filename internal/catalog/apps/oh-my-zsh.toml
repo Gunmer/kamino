@@ -1,0 +1,6 @@
+id = "oh-my-zsh"
+name = "Oh My Zsh"
+command = "zsh"
+install_marker = ".oh-my-zsh/oh-my-zsh.sh"
+optional_paths = [".zshrc", ".zprofile", ".zshenv", ".oh-my-zsh/custom"]
+exclude = ["**/plugins", "**/plugins/**", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]
