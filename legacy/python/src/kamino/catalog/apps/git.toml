@@ -1,0 +1,7 @@
+id = "git"
+name = "Git"
+command = "git"
+search_paths = ["/opt/homebrew/bin", "/usr/local/bin"]
+paths = [".gitconfig", ".config/git/ignore"]
+optional_paths = [".config/git/config"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

@@ -1,0 +1,5 @@
+id = "micro"
+name = "Micro"
+command = "micro"
+optional_paths = [".config/micro/settings.json", ".config/micro/bindings.json", ".config/micro/colorschemes"]
+exclude = ["**/backups", "**/backups/**", "**/buffers", "**/buffers/**", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

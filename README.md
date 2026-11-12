@@ -6,16 +6,16 @@ corresponda a las apps que estén instaladas.
 
 ## Estado
 
-MVP v1 implementado: `clone` y `deploy` funcionales con catálogo declarativo, detección de
-apps, archivado `tar.gz` con manifiesto y checksums, CLI interactiva y revisión de conflictos por
-líneas dentro de cada bloque en una TUI de `textual`.
+Distribución Go estática implementada: `clone` y `deploy` funcionales con catálogo declarativo,
+detección de apps, archivado `tar.gz` con manifiesto y checksums, CLI interactiva y revisión de
+conflictos por líneas dentro de cada bloque en una TUI ANSI propia. El binario no requiere Python.
 
 ## Requisitos
 
 - **Instalación con el binario:** macOS con Apple Silicon (`arm64`) y `curl`. El binario es
   autocontenido y no requiere instalar Python.
-- **Instalación desde el código fuente o desarrollo:** macOS y Python 3.11.4 o superior (`tarfile`
-  usa `filter="data"`).
+- **Compilación desde el código fuente o desarrollo:** Go 1.25 o superior. Las pruebas de
+  compatibilidad con el oráculo Python requieren `uv` y Python 3.11.4 o superior.
 
 ## Instalación con script
 
@@ -77,9 +77,9 @@ ejecución de forma atómica. No requiere `sudo` y no toca configuraciones, clon
 instantáneas. Si ya estás en la última versión, o tienes una más reciente, no descarga ni escribe
 nada.
 
-La actualización solo está disponible para el binario autocontenido. En una instalación desde
-código o con `uv`/`pip`, actualiza con `uv sync`, `uv tool upgrade kamino-cli` o el comando
-equivalente de tu gestor.
+La actualización solo está disponible para el binario autocontenido. Una compilación de
+desarrollo (`go run` o un binario sin la marca de autocontenido) rechaza `kamino update` e indica
+que no se descargó nada.
 
 El comando termina con código 0 tanto si actualiza como si ya está al día, y con 1 ante cualquier
 error. La opción también aparece en el menú que se abre al ejecutar `kamino` sin argumentos.
@@ -87,28 +87,13 @@ error. La opción también aparece en el menú que se abre al ejecutar `kamino` 
 ## Instalación (desarrollo)
 
 ```bash
-uv sync --all-extras
-uv run kamino --help
+go build ./...
+go run ./cmd/kamino --help
 ```
 
-Sin `uv`, con `pip`:
-
-```bash
-python3.11 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
-.venv/bin/kamino --help
-```
-
-## Distribución
-
-Instalación como herramienta con `uv` (diseño técnico §8):
-
-```bash
-uv tool install git+https://github.com/Gunmer/kamino
-```
-
-El paquete se publica como `kamino-cli` (el nombre `kamino` ya está ocupado en PyPI) y expone el
-comando `kamino`.
+La distribución se publica como el asset `kamino-arm64`; `uv` y `pip` ya no son vías de
+instalación. La referencia Python permanece en `legacy/python/` para ejecutar la matriz de
+compatibilidad.
 
 ## Versionado y releases
 
@@ -124,11 +109,11 @@ El versionado sigue [SemVer](https://semver.org/) y se automatiza con
    de compatibilidad, no se genera versión ni release.
 3. Durante las versiones `0.x`, los cambios incompatibles aumentan minor (`major_on_zero = false`).
    Desde `1.0.0`, aumentan major. Se toma el mayor incremento entre los commits pendientes.
-4. Se actualizan `pyproject.toml`, `src/kamino/__init__.py`, `uv.lock` y `CHANGELOG.md`. El binario
-   se construye y comprueba antes de empujar el commit de release y el tag `vX.Y.Z`.
+4. Se actualizan `CHANGELOG.md`, `internal/version/version.go` y el tag `vX.Y.Z`. El binario Go se
+   construye con `scripts/build_release.py` y se comprueba antes de empujar el commit de release.
 5. Se crea una GitHub Release con las notas y el binario autocontenido `kamino-arm64`
-   (PyInstaller `onefile`, Apple Silicon), incluido el catálogo de aplicaciones. No se distribuye
-   actualmente un binario Intel. La release permanece en borrador hasta subir el binario.
+   (Go estático, Apple Silicon), incluido el catálogo de aplicaciones. No se distribuye actualmente
+   un binario Intel. La release permanece en borrador hasta subir el binario.
 
 Por ejemplo, desde `0.1.0`, `fix: corrige el despliegue` produce `0.1.1`, mientras que
 `feat: añade una aplicación` o `feat!: cambia el formato` produce `0.2.0`. Un merge que solo
@@ -242,7 +227,7 @@ no cambian: el formato del archivo y los holocrones antiguos siguen siendo compa
 
 ### La TUI
 
-Una sola app de Textual reúne menú, clonación, despliegue y actualización. El menú muestra el
+Una sola app de terminal con ANSI propio reúne menú, clonación, despliegue y actualización. El menú muestra el
 wordmark KAMINO, ocho cápsulas con la última marcada como el original, una frase fija por sesión y
 las opciones Clonar, Desplegar, Actualizar, Configuración y Abandonar Kamino. Las flechas mueven la
 selección y `Enter` acepta la opción seleccionada; no hay atajos de una tecla. Escape nunca cierra. La línea de última misión aparece tras el primer flujo de la sesión y no se persiste.
@@ -262,7 +247,7 @@ desplegar, antes de crear el holocrón; en actualizar, antes de `os.replace`. De
 se ignora con aviso. La barra de progreso avanza por archivos y `Ctrl+C` elimina el temporal.
 
 La TUI usa la paleta ANSI del terminal: el tema por defecto es `ansi-dark` y `TEXTUAL_THEME`
-permite elegir otro tema válido de Textual, por ejemplo `ansi-light`. Con `NO_COLOR` se muestra en
+admite `ansi-light`; cualquier otro valor cae a `ansi-dark`. Con `NO_COLOR` se muestra en
 monocromo y cada estado conserva icono y palabra. El wordmark se oculta sin UTF-8 o con
 `KAMINO_NO_LOGO`. `KAMINO_PLAIN` fuerza la salida de texto para scripting.
 
@@ -413,38 +398,43 @@ plugins.
 ## Desarrollo
 
 ```bash
-uv run pytest          # pruebas
-uv run ruff check .    # lint
-uv run ruff format .   # formato
+go build ./...               # compilar
+go test ./... -race          # pruebas
+go vet ./...                 # vet
+gofmt -l .                   # formato (debe estar vacío)
+golangci-lint run ./...      # lint (si está instalado)
+make release-snapshot        # binario local dist/kamino-arm64
+go test ./internal/integration -run Cross  # compatibilidad con Python
 ```
 
 ## Estructura
 
 ```
-src/kamino/
-├── cli.py            # argumentos, gating de TUI, salida y códigos
-├── commands.py       # flujos de texto compartidos con la CLI
-├── texts.py          # única fuente de textos visibles y glosario
-├── ui.py             # salida no interactiva con Rich
-├── defaults.py       # rutas por defecto compartidas
-├── config.py         # configuración TOML exclusiva de la TUI
-├── clone.py          # plan_clone y write_clone (progreso y cancelación)
-├── deploy.py         # sesión, plan, clasificación y aplicación
-├── update.py         # consulta, descarga/verificación y reemplazo
-├── conflicts.py      # diff por líneas, composición y validación de híbridos
-├── progress.py       # contrato de progreso y cancelación
-├── tui/              # app única: menú, C1-C4, D0-D5, U1, configuración y transversales
-├── plan.py           # Plan, Operation y recuento compartido
-├── catalog/
-│   ├── models.py     # AppDefinition (validación)
-│   ├── loader.py     # catálogo embebido y del usuario
-│   └── apps/*.toml   # una definición por app
-├── detect.py         # ¿está instalada? ¿qué versión?
-├── archive.py        # tar.gz, manifiesto, checksums
-├── ghostty.py        # lectura acotada de config-file y temas de Ghostty
-├── paths.py          # normalización y acceso seguro relativo al home
-├── snapshot.py       # holocrón de seguridad previo a desplegar
-└── errors.py         # excepciones propias
+cmd/kamino/            # punto de entrada del binario
+internal/
+├── cli/               # argumentos, gating de TUI, salida y códigos
+├── app/               # flujos de texto compartidos con la CLI
+├── texts/             # única fuente de textos visibles y glosario
+├── ui/                # salida no interactiva
+├── defaults/          # rutas por defecto compartidas
+├── config/            # configuración TOML exclusiva de la TUI
+├── clone/             # plan_clone y write_clone
+├── deploy/            # sesión, plan, clasificación y aplicación
+├── update/            # consulta, descarga/verificación y reemplazo
+├── conflicts/         # SequenceMatcher, diff, composición y validación
+├── progress/          # contrato de progreso y cancelación
+├── tui/               # app única: menú, C1-C4, D0-D5, U1, configuración
+├── plan/              # Plan, Operation y recuento compartido
+├── catalog/           # AppDefinition y apps/*.toml embebidos
+├── detect/            # detección de apps y versiones
+├── archive/           # tar.gz, manifiesto y checksums
+├── ghostty/           # lectura acotada de config-file y temas
+├── paths/             # SafeHome con openat/O_NOFOLLOW
+├── snapshot/          # holocrón de seguridad previo a desplegar
+└── errors/            # errores propios
 ```
+
+`legacy/python/` conserva el oráculo Python y `testdata/golden/` los fixtures de compatibilidad.
+
 
 Los diseños de referencia están en `docs/` (`Diseño funcional.md` y `Diseño técnico.md`).

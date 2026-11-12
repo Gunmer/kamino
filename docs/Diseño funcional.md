@@ -10,7 +10,7 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 
 ### 2.0 Menú interactivo (TUI)
 
-- Una sola app de Textual reúne menú, clonación, despliegue, actualización y pantallas
+- Una sola app de terminal con ANSI propio reúne menú, clonación, despliegue, actualización y pantallas
   transversales. Se abre solo si la entrada y la salida son terminales y no se definió
   `KAMINO_PLAIN`.
 - El menú muestra el wordmark KAMINO, un separador de ocho cápsulas con la última marcada como el
@@ -115,7 +115,7 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 
 ### 2.4 Actualización (`update`)
 
-- Solo está disponible para el binario autocontenido. En instalaciones desde código, `uv` o `pip`
+- Solo está disponible para el binario autocontenido. En compilaciones desde código sin la marca de autocontenido
   se indica la vía de actualización correspondiente y no se descarga ni escribe nada.
 - U1 muestra los estados consultando, descargando y verificando tamaño y SHA-256, reemplazando y
   resultado. La descarga reporta progreso y comprueba la cancelación por chunk; cancelar antes del
@@ -243,11 +243,11 @@ binario de forma atómica → pide reiniciar.
 
 ## 6. Decisiones de diseño
 
-- **Lenguaje:** Python 3.11 o superior, para usar `tomllib` de la librería estándar.
+- **Lenguaje:** Go 1.25 o superior, con binario estático para macOS Apple Silicon.
 - **Formato del archivo del clon:** `tar.gz` estándar con un `manifest.json` dentro. Conserva permisos y enlaces simbólicos, y se puede inspeccionar con herramientas comunes.
 - **Formato de las definiciones de apps:** TOML, con comentarios y sin dependencias externas.
-- **Distribución:** `uv`/`pipx` desde GitHub, Homebrew tap y binario autocontenido, todos a partir del mismo proyecto empaquetado con `pyproject.toml`.
-- **Interfaz:** una sola app de Textual con modos `menu` y `direct`; la salida de texto se conserva
+- **Distribución:** asset `kamino-arm64` publicado por GoReleaser, instalador `scripts/install.sh` y, más adelante, Homebrew tap. `uv` y `pip` dejan de ser vías de instalación.
+- **Interfaz:** una sola app ANSI con modos `menu` y `direct`; la salida de texto se conserva
   para scripts y terminales no interactivas.
 - **Vocabulario visible:** original, holocrón de seguridad, híbrido, clon perfecto y “sin base en
   este Mac”. Los identificadores internos y el formato no cambian.

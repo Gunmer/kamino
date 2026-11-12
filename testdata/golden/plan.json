@@ -1,0 +1,12 @@
+{
+  "notices": [],
+  "operations": [
+    {
+      "app_id": "git",
+      "path": ".gitconfig",
+      "sha256": "f32f13cf635ee00784d29bd743b35ebec2497e6e07804cc478cf7ec1be75ffe1",
+      "size": 22
+    }
+  ],
+  "skipped": []
+}

@@ -1,0 +1,5 @@
+id = "gentle-ai"
+name = "Gentle AI"
+command = "gentle-ai"
+optional_paths = [".gentle-ai/state.json"]
+exclude = ["**/backups", "**/backups/**", "**/*.lock", "**/telemetry*", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

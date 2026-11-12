@@ -1,0 +1,5 @@
+id = "claude-code"
+name = "Claude Code"
+command = "claude"
+optional_paths = [".claude/settings.json", ".claude/keybindings.json", ".claude/CLAUDE.md", ".claude/themes", ".claude/commands", ".claude/agents", ".claude/skills"]
+exclude = ["**/.claude.json", "**/projects", "**/projects/**", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]

@@ -1,20 +1,37 @@
-"""Build and smoke-test the standalone macOS ARM64 executable."""
+"""Build and smoke-test the standalone macOS ARM64 Go executable."""
 
 from __future__ import annotations
 
 import argparse
 import os
 import platform
+import re
 import subprocess
 import tempfile
-import tomllib
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+BINARY = ROOT / "dist" / "kamino-arm64"
+
+
+def project_version() -> str:
+    pyproject = ROOT / "pyproject.toml"
+    if pyproject.exists():
+        import tomllib
+
+        metadata = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+        return metadata["project"]["version"]
+    source = ROOT / "internal" / "version" / "version.go"
+    match = re.search(r'var Version = "([^"]+)"', source.read_text(encoding="utf-8"))
+    if match is None:
+        raise RuntimeError("No se pudo resolver la versión del proyecto")
+    return match.group(1)
 
 
 def check_binary(binary: Path, version: str) -> None:
     with tempfile.TemporaryDirectory(prefix="kamino-smoke-") as directory:
         home = Path(directory)
-        env = {**os.environ, "HOME": str(home)}
+        env = {**os.environ, "HOME": str(home), "KAMINO_PLAIN": "1"}
         subprocess.run([str(binary), "--help"], env=env, check=True, capture_output=True)
         result = subprocess.run(
             [str(binary), "--version"], env=env, check=True, capture_output=True, text=True
@@ -22,7 +39,6 @@ def check_binary(binary: Path, version: str) -> None:
         if result.stdout.strip() != f"kamino {version}":
             raise RuntimeError("La versión del binario no coincide con la release")
 
-        # User definitions load after embedded ones, before detection or clone planning.
         apps = home / ".config" / "kamino" / "apps"
         apps.mkdir(parents=True)
         invalid_definition = apps / "smoke.toml"
@@ -35,7 +51,7 @@ def check_binary(binary: Path, version: str) -> None:
             capture_output=True,
             text=True,
         )
-        if result.returncode != 1 or "TOML inválido en 'smoke.toml'" not in result.stderr:
+        if result.returncode != 1 or "TOML inválido" not in result.stderr:
             raise RuntimeError(f"Falló la comprobación del catálogo embebido: {result.stderr}")
         if set(home.rglob("*")) != before or (
             invalid_definition.read_text(encoding="utf-8") != "invalid = ["
@@ -47,43 +63,34 @@ def build(*, update_lock: bool = False) -> None:
     if platform.system() != "Darwin" or platform.machine() != "arm64":
         raise RuntimeError("El binario de release debe construirse en macOS ARM64")
     if update_lock:
-        subprocess.run(["uv", "lock"], check=True)
-        subprocess.run(["git", "add", "uv.lock"], check=True)
+        raise RuntimeError("uv.lock ya no participa en la construcción del binario Go")
 
-    metadata = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-    version = metadata["project"]["version"]
+    version = project_version()
     if os.environ.get("NEW_VERSION", version) != version:
         raise RuntimeError("La versión del proyecto no coincide con la calculada")
-    source = Path("src/kamino").resolve()
+    BINARY.parent.mkdir(parents=True, exist_ok=True)
+    environment = {**os.environ, "CGO_ENABLED": "0"}
     subprocess.run(
         [
-            "uv",
-            "run",
-            "--no-sync",
-            "pyinstaller",
-            "--noconfirm",
-            "--clean",
-            "--onefile",
-            "--target-architecture",
-            "arm64",
-            "--name",
-            "kamino-arm64",
-            "--specpath",
+            "go",
             "build",
-            "--add-data",
-            f"{source / 'catalog/apps'}:kamino/catalog/apps",
-            "--add-data",
-            f"{source / 'tui/styles.tcss'}:kamino/tui",
-            "--collect-data",
-            "textual",
-            str(source / "__main__.py"),
+            "-trimpath",
+            "-ldflags",
+            "-s -w "
+            f"-X github.com/Gunmer/kamino/internal/version.Version={version} "
+            "-X github.com/Gunmer/kamino/internal/buildinfo.SelfContained=true",
+            "-o",
+            str(BINARY),
+            "./cmd/kamino",
         ],
+        cwd=ROOT,
+        env=environment,
         check=True,
     )
-    check_binary(Path("dist/kamino-arm64").resolve(), version)
+    check_binary(BINARY, version)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Construye y comprueba el binario ARM64.")
-    parser.add_argument("--update-lock", action="store_true", help="Actualiza y prepara uv.lock.")
+    parser.add_argument("--update-lock", action="store_true", help="Obsoleto: el binario es Go.")
     build(update_lock=parser.parse_args().update_lock)

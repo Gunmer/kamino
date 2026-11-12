@@ -54,15 +54,21 @@ jobs:
       - name: Preparar uv
         uses: astral-sh/setup-uv@v5
 
+      - name: Preparar Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Instalar dependencias bloqueadas
-        run: uv sync --locked --all-extras
+        run: uv sync --locked --all-extras --directory legacy/python
 
       - name: Versionar, comprobar y publicar
         if: github.event_name == 'workflow_run'
         run: |
-          uv run --no-sync python scripts/release.py --sha "$RELEASE_SHA"
+          python scripts/release.py --sha "$RELEASE_SHA"
 
       - name: Completar publicación de un tag existente
         if: github.event_name == 'workflow_dispatch'
         run: |
-          uv run --no-sync python scripts/release.py --tag "$RELEASE_TAG"
+          python scripts/release.py --tag "$RELEASE_TAG"

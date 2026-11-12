@@ -1,0 +1,55 @@
+[
+  {
+    "args": [
+      "--version"
+    ],
+    "code": 0
+  },
+  {
+    "args": [
+      "does-not-exist"
+    ],
+    "code": 2
+  },
+  {
+    "args": [
+      "clone",
+      "-a",
+      "git",
+      "-n"
+    ],
+    "code": 0
+  },
+  {
+    "args": [
+      "clone",
+      "-a",
+      "missing",
+      "-n"
+    ],
+    "code": 3
+  },
+  {
+    "args": [
+      "deploy",
+      "/Users/cristiamsosa/Workspace/Gunmer/kamino/testdata/golden/clone.tar.gz"
+    ],
+    "code": 1
+  },
+  {
+    "args": [
+      "deploy",
+      "/Users/cristiamsosa/Workspace/Gunmer/kamino/testdata/golden/clone.tar.gz",
+      "--dry-run"
+    ],
+    "code": 0
+  },
+  {
+    "args": [
+      "deploy",
+      "/Users/cristiamsosa/Workspace/Gunmer/kamino/testdata/golden/clone.tar.gz",
+      "--yes"
+    ],
+    "code": 0
+  }
+]

@@ -366,7 +366,7 @@ def test_run_update_requires_existing_target(monkeypatch, tmp_path: Path) -> Non
 
 
 def test_install_script_uses_same_repository_and_asset() -> None:
-    script = (Path(__file__).resolve().parents[1] / "scripts" / "install.sh").read_text(
+    script = (Path(__file__).resolve().parents[3] / "scripts" / "install.sh").read_text(
         encoding="utf-8"
     )
 

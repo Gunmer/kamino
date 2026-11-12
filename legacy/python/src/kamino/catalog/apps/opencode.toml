@@ -1,0 +1,5 @@
+id = "opencode"
+name = "OpenCode"
+command = "opencode"
+optional_paths = [".config/opencode/opencode.json", ".config/opencode/opencode.jsonc", ".config/opencode/cli.json", ".config/opencode/themes", ".config/opencode/commands", ".config/opencode/agents", ".config/opencode/skills"]
+exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]
