@@ -1,0 +1,24 @@
+kamino . Desplegar . Conflictos                            Paso 3 de 4   [36m*[0m [36m*[0m [36m*[0m [2mo[0m
+[2m--------------------------------------------------------------------------------[0m
+    [1m~/.config/herdr/config.toml[0m
+  
+    Original                              Clon
+    0 líneas elegidas                     8 líneas elegidas
+    bloque 1 de 2
+     1   # herdr                             1   # herdr
+  [2m>  2 o alpha = 1[0m                           2 * alpha = 10
+  [2m   3 o beta = 2[0m                            3 * beta = 20
+  [2m   4 o gamma = 3[0m                           4 * gamma = 30
+  [2m   5 o delta = 4[0m                           5 * delta = 40
+     6   one                                 6   one
+     7   two                                 7   two
+     8   three                               8   three
+     9   four                                9   four
+    10   five                               10   five
+    v 13 abajo
+  
+  
+  
+[33m! AVISO[0m  Los diffs pueden contener secretos.
+[2m--------------------------------------------------------------------------------[0m
+^v [2mlínea[0m[2m   [0m<>/Espacio [2melegir[0m[2m   [0mc/o [2mbloque[0m[2m   [0mC/O [2marchivo[0m[2m   [0mTab [2mbloque[0m[2m...[0m  ? [2mayuda[0m

@@ -1,81 +1,59 @@
 package tui
 
 import (
-	"encoding/base64"
 	"fmt"
 	"os"
 
-	"github.com/Gunmer/kamino/internal/config"
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/Gunmer/kamino/internal/texts"
 )
 
 func runMenu() int {
-	model := NewModel(CloneFlowOptions{})
-	model.MenuMode = true
-	model.Screen = ScreenMenu
-	loaded := config.LoadConfig(model.Home, "")
-	if loaded.Error != nil {
-		model.startSettings()
-	}
-	return runModel(model)
+	app := NewApp(AppOptions{MenuMode: true})
+	app.startMenu()
+	return runProgram(app)
 }
 
 func runCloneFlow(options CloneFlowOptions) int {
-	model := NewModel(options)
-	model.startClone()
-	return runModel(model)
+	app := NewApp(AppOptions{Clone: options})
+	app.startClone()
+	return runProgram(app)
 }
 
 func runDeployFlow(options DeployFlowOptions) int {
-	model := NewModel(CloneFlowOptions{})
-	model.DeployFile = options.CloneFile
-	model.DeployRequested = options.Requested
-	model.DeployVerbose = options.Verbose
-	model.DeployError = options.FileError
-	model.startDeploy()
-	return runModel(model)
+	app := NewApp(AppOptions{Deploy: options})
+	app.startDeploy()
+	return runProgram(app)
 }
 
 func runUpdateFlow() int {
-	model := NewModel(CloneFlowOptions{})
-	model.startUpdate()
-	return runModel(model)
+	app := NewApp(AppOptions{})
+	app.startUpdate()
+	return runProgram(app)
 }
 
-func runModel(model *Model) int {
-	stdin := os.Stdin
-	stdout := os.Stdout
-	if !isTerminalFD(int(stdin.Fd())) || !isTerminalFD(int(stdout.Fd())) {
-		fmt.Fprintln(os.Stderr, "la TUI requiere una terminal interactiva")
+func runProgram(app *App) int {
+	if !isTerminal(os.Stdin) || !isTerminal(os.Stdout) {
+		fmt.Fprintln(os.Stderr, texts.TTYRequired)
 		return 1
 	}
-	model.Width, model.Height = terminalSize(int(stdout.Fd()))
-	state, err := makeRaw(int(stdin.Fd()))
+	program := tea.NewProgram(app, tea.WithAltScreen(), tea.WithInput(os.Stdin), tea.WithOutput(os.Stdout))
+	final, err := program.Run()
 	if err != nil {
-		fmt.Fprintln(os.Stderr, texts.ErrorSmallBody)
+		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
-	defer restoreTerminal(int(stdin.Fd()), state)
-	fmt.Fprint(stdout, "\x1b[?1049h\x1b[?25l")
-	defer fmt.Fprint(stdout, "\x1b[?25h\x1b[?1049l")
-
-	reader := newKeyReader(int(stdin.Fd()))
-	for {
-		width, height := terminalSize(int(stdout.Fd()))
-		model.Width, model.Height = width, height
-		fmt.Fprint(stdout, "\x1b[H\x1b[2J", model.View())
-		if model.Quit {
-			return model.ExitCode
-		}
-		key, err := reader.ReadKey()
-		if err != nil {
-			return 1
-		}
-		model.Update(key)
-		if model.Clipboard != "" {
-			encoded := base64.StdEncoding.EncodeToString([]byte(model.Clipboard))
-			fmt.Fprintf(stdout, "\x1b]52;c;%s\x07", encoded)
-			model.Clipboard = ""
-		}
+	if value, ok := final.(*App); ok {
+		return value.ExitCode()
 	}
+	return 0
+}
+
+func isTerminal(file *os.File) bool {
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }

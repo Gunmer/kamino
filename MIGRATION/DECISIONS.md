@@ -89,3 +89,18 @@ exige una entrada aquí cuando cambian esos archivos.
   desde su directorio tras la migración.
 - **Consecuencia:** CI dispone de todos los fixtures dorados y `uv sync`
   funciona en `legacy/python/` sin depender del README de la raíz.
+
+## D008 — Nueva suite de la TUI con Bubble Tea
+
+- **Fecha:** 2026-11-13
+- **Contexto:** el cambio `tui-redesign` sustituye el `Model` monolítico, el
+  lector de teclas, el modo raw y el render ANSI propio por Bubble Tea, Lip
+  Gloss y `bubbles`. Los tests antiguos de la TUI dependían de esos tipos.
+- **Decisión:** retirar `internal/tui/tui_test.go` y los tests acoplados al
+  runner anterior; añadir pruebas de `App`/`Frame`/`theme`, C1–C3, D0–D5, U1,
+  Configuración, ayuda, error y asincronía, además de goldens a 80×24, 100×26,
+  140×40 y 200×50 con variantes `NO_COLOR` y ASCII. El contrato exige exactamente
+  `h` líneas, ninguna más ancha que `w` y solo SGR ANSI.
+- **Consecuencia:** los fixtures dorados de la TUI pasan a
+  `internal/tui/testdata/golden/` y se regeneran con `-update`; el resto de
+  fixtures y el formato del clon no cambian.

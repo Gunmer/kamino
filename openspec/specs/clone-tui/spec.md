@@ -8,13 +8,13 @@ Definir el flujo interactivo de clonación: elegir apps instaladas, fijar el des
 
 ### Requirement: Selección de apps para clonar
 
-C1 DEBE (`MUST`) listar solo las apps instaladas, con su identificador y el número de archivos, sin marcar ninguna por defecto. Las flechas DEBEN recorrer las apps, `Espacio` DEBE marcar o desmarcar la app enfocada sin mover el cursor ni sacar el foco de la tabla, y `Enter` DEBE continuar. DEBE ofrecer filtro con `/`, seleccionar todas o ninguna con `a` y `n` sobre las filas visibles, y mostrar un contador; sin selección, `Enter` DEBE avisar y no avanzar. El pie DEBE mostrar la leyenda de teclas en lugar de botones. El recuento DEBE calcularse en segundo plano con las mismas exclusiones y el mismo confinamiento que el plan.
+C1 DEBE (`MUST`) listar solo las apps instaladas en una tabla con columnas `SEL`, `APP` y `ARCHIVOS`, con el número de archivos alineado a la derecha, sin marcar ninguna por defecto. Las casillas DEBEN ser `[x]`, `[ ]` y `[-]` para las apps sin archivos; el cursor DEBE ser `▌`. Las flechas DEBEN recorrer las apps, `Espacio` DEBE marcar o desmarcar la app enfocada sin mover el cursor ni sacar el foco de la tabla, y `Enter` DEBE continuar. DEBE ofrecer filtro con `/`, seleccionar todas o ninguna con `a` y `n` sobre las filas visibles, y mostrar el contador `N de M marcadas`. Sin selección, `Enter` DEBE avisar en la zona de mensajes y no avanzar. Las apps no detectadas DEBEN ir en una línea aparte y no ser seleccionables. El pie DEBE mostrar la leyenda de teclas en lugar de botones. El recuento DEBE calcularse en segundo plano con las mismas exclusiones y el mismo confinamiento que el plan.
 
 #### Scenario: Lista inicial sin selección
 
 - **GIVEN** varias apps instaladas con archivos
 - **WHEN** se abre C1
-- **THEN** se muestran todas con su identificador y número de archivos, y ninguna está marcada
+- **THEN** se muestran en una tabla con columnas `SEL`, `APP` y `ARCHIVOS`, con los conteos alineados a la derecha y ninguna app marcada
 
 #### Scenario: Marcar sin perder el foco
 
@@ -32,19 +32,31 @@ C1 DEBE (`MUST`) listar solo las apps instaladas, con su identificador y el núm
 
 - **GIVEN** C1 con un filtro `/` activo
 - **WHEN** se pulsa `a` o `n`
-- **THEN** solo cambian las filas visibles y el contador refleja la selección total
+- **THEN** solo cambian las filas visibles y el contador sigue reflejando la selección total
 
 #### Scenario: App instalada sin archivos
 
 - **GIVEN** una app instalada cuyo recuento es cero
 - **WHEN** se muestra C1
-- **THEN** su casilla aparece deshabilitada y no se puede seleccionar
+- **THEN** su casilla aparece como `[-]`, deshabilitada, y no se puede seleccionar
 
 #### Scenario: Apps no detectadas
 
 - **GIVEN** apps del catálogo que no están instaladas
 - **WHEN** se muestra C1
-- **THEN** se informa en una línea aparte y no aparecen como seleccionables
+- **THEN** se informan en una línea aparte y no aparecen como seleccionables
+
+#### Scenario: Aviso sin selección
+
+- **GIVEN** C1 sin apps seleccionadas
+- **WHEN** se pulsa `Enter`
+- **THEN** la zona de mensajes muestra un `AVISO` y no se avanza
+
+#### Scenario: Lista desplazada
+
+- **GIVEN** más apps de las que caben en el body
+- **WHEN** se mueve el cursor fuera de la ventana
+- **THEN** la tabla se desplaza y muestra el indicador de filas arriba y abajo
 
 #### Scenario: Recuento en segundo plano
 
@@ -60,19 +72,37 @@ C1 DEBE (`MUST`) listar solo las apps instaladas, con su identificador y el núm
 
 ### Requirement: Destino del clon
 
-C2 DEBE (`MUST`) proponer `clone-yyyyMMdd.tar.gz` con la fecha local en `~/.config/kamino/vault/` o, si la TUI tiene `clone.output_dir` configurado, en ese directorio; DEBE resolver la ruta a absoluta y validar en vivo. `Enter` DEBE continuar, `Esc` DEBE volver y `F2`, `F3` y `F4` DEBEN usar el directorio actual, Descargas y Escritorio. Si el clon existe, DEBE mostrar un diálogo con ruta, fecha y tamaño, con las opciones Volver, Otro nombre y Reemplazar clon navegables con flechas y `Enter`, y con Volver preseleccionada; Otro nombre DEBE proponer el primer sufijo libre. El destino NO DEBE crearse hasta que se inicie la clonación y NO DEBE limitarse al HOME. Si el directorio por defecto o configurado no existe, C2 DEBE aceptar la ruta propuesta y la clonación DEBE crear el directorio al empezar, nunca al abrir la pantalla.
+C2 DEBE (`MUST`) ofrecer tres opciones de carpeta: vault por defecto (o `clone.output_dir` si está configurado), carpeta actual (`pwd`) e indicar carpeta. «Indicar carpeta» DEBE convertirse en un input para la ruta; debajo DEBE mostrarse un input para el nombre, precargado con `clone-yyyyMMdd.tar.gz` y editable. `Enter` en el nombre DEBE fijar el destino; si el archivo existe, DEBE abrir un diálogo con ruta, fecha y tamaño y las opciones Sobrescribir, Cambiar nombre y Volver, con Volver preseleccionada. Cambiar nombre DEBE enfocar el nombre y proponer el primer sufijo libre. El destino NO DEBE (`MUST NOT`) crearse hasta que empiece la clonación y NO DEBE limitarse al HOME. Si el directorio no existe, C2 DEBE aceptarlo y la clonación DEBE crearlo al empezar. `F2`, `F3` y `F4` se retiran; las tres opciones los sustituyen.
 
 #### Scenario: Nombre por defecto
 
 - **GIVEN** una fecha local, `~/.config/kamino/vault/` existente o ausente y la TUI sin `clone.output_dir` configurado
 - **WHEN** se abre C2
-- **THEN** se propone `~/.config/kamino/vault/clone-yyyyMMdd.tar.gz` con la fecha local y la ruta absoluta resuelta
+- **THEN** la opción «Vault por defecto» está seleccionada, muestra `~/.config/kamino/vault/`, y el nombre propone `clone-20261113.tar.gz`
 
 #### Scenario: Directorio configurado en la TUI
 
 - **GIVEN** `clone.output_dir = "~/Descargas"` en la configuración de la TUI
 - **WHEN** se abre C2
-- **THEN** se propone `~/Descargas/clone-yyyyMMdd.tar.gz` con la fecha local y la ruta absoluta resuelta
+- **THEN** la opción «Vault por defecto» muestra `~/Descargas` y el nombre propone `clone-20261113.tar.gz`
+
+#### Scenario: Carpeta actual
+
+- **GIVEN** C2 abierta
+- **WHEN** se elige «Carpeta actual»
+- **THEN** la ruta del destino usa el directorio de trabajo actual (`pwd`) y el nombre conserva la sugerencia
+
+#### Scenario: Indicar carpeta
+
+- **GIVEN** C2 abierta
+- **WHEN** se elige «Indicar carpeta»
+- **THEN** la opción se convierte en un input para la ruta y el foco pasa a ese input
+
+#### Scenario: Nombre editable
+
+- **GIVEN** C2 con una carpeta elegida
+- **WHEN** se edita el input del nombre
+- **THEN** la ruta completa se actualiza y el nombre puede confirmarse con `Enter`
 
 #### Scenario: Directorio por defecto ausente
 
@@ -88,32 +118,39 @@ C2 DEBE (`MUST`) proponer `clone-yyyyMMdd.tar.gz` con la fecha local en `~/.conf
 
 #### Scenario: Validación en vivo
 
-- **GIVEN** un nombre o una ruta escrita manualmente en C2 que no es válida
+- **GIVEN** una carpeta o un nombre escrito manualmente en C2 que no es válido
 - **WHEN** se escribe en C2
-- **THEN** se muestra el error sin crear el archivo ni el directorio
-
-#### Scenario: Atajos de directorio
-
-- **WHEN** se elige el directorio actual, Descargas o Escritorio
-- **THEN** la ruta del destino se actualiza a la ubicación correspondiente
+- **THEN** se muestra un `ERROR` en la zona de mensajes sin crear el archivo ni el directorio
 
 #### Scenario: Clon existente
 
 - **GIVEN** un clon con el mismo nombre en el destino
-- **WHEN** se intenta continuar
+- **WHEN** se pulsa `Enter` en el nombre
 - **THEN** se muestra el diálogo con ruta, fecha, tamaño, Volver preseleccionada y las tres acciones
+
+#### Scenario: Sobrescribir
+
+- **GIVEN** el diálogo de clon existente abierto
+- **WHEN** se elige Sobrescribir
+- **THEN** se confirma el reemplazo y se continúa a la revisión sin escribir todavía
 
 #### Scenario: Otro nombre propone sufijo
 
 - **GIVEN** el diálogo de clon existente abierto
-- **WHEN** se elige Otro nombre
-- **THEN** se propone el primer sufijo libre para el mismo nombre base
+- **WHEN** se elige Cambiar nombre
+- **THEN** el foco vuelve al input del nombre y se propone el primer sufijo libre para el mismo nombre base
+
+#### Scenario: Volver desde el diálogo
+
+- **GIVEN** el diálogo de clon existente abierto
+- **WHEN** se elige Volver o se pulsa `Esc`
+- **THEN** el diálogo se cierra y el foco vuelve al input del nombre
 
 #### Scenario: Reemplazo forzado
 
 - **GIVEN** un clon iniciado con `--force` y un destino existente
 - **WHEN** se llega a C2
-- **THEN** no se muestra el diálogo y se avisa de que el clon existente se reemplazará al final
+- **THEN** no se muestra el diálogo y la zona de mensajes avisa de que el clon existente se reemplazará
 
 #### Scenario: --output omite el destino
 
@@ -125,17 +162,29 @@ C2 DEBE (`MUST`) proponer `clone-yyyyMMdd.tar.gz` con la fecha local en `~/.conf
 
 - **GIVEN** un clon iniciado con `--output` y un valor inválido
 - **WHEN** se inicia el flujo con terminal interactiva
-- **THEN** C2 se abre precargada con el error
+- **THEN** C2 se abre con «Indicar carpeta», los inputs precargados y un `ERROR` en la zona de mensajes
+
+#### Scenario: Atajos de directorio
+
+- **GIVEN** C2 abierta
+- **WHEN** se elige una de las tres opciones de carpeta
+- **THEN** la ruta del destino se actualiza a la opción elegida
+
+#### Scenario: Sin atajos F2, F3 y F4
+
+- **GIVEN** C2 abierta
+- **WHEN** se pulsa `F2`, `F3` o `F4`
+- **THEN** no se cambia la carpeta y las tres opciones siguen siendo la única forma de elegirla
 
 ### Requirement: Revisión del plan de clonación
 
-C3 DEBE (`MUST`) pasar por tres estados: planificando, revisión y en curso. En revisión DEBE mostrar apps, archivos, tamaño y destino; `d` DEBE mostrar los omitidos con su motivo; `f` DEBE mostrar la lista de archivos incluidos agrupada por app y solo rutas; `Enter` DEBE iniciar la clonación cuando el plan esté listo; y DEBE advertirse que el clon no está cifrado y puede contener secretos. Con `--dry-run`, C3 DEBE terminar en la revisión sin acción de clonar y `Enter` o `Esc` DEBEN cerrar la simulación sin escribir.
+C3 DEBE (`MUST`) usar una tabla única con filas Apps, Archivos, Tamaño, Ruta y Estado. La fila Estado DEBE mostrar Planificando, Listo para clonar, Escribiendo con barra de progreso, Completado, Simulación completada o Cancelado antes de escribir. En revisión DEBE permitir `d` para omitidos y `f` para archivos incluidos; `Enter` DEBE iniciar la clonación cuando el plan esté listo; el aviso de secretos DEBE ir en la zona de mensajes. En el estado final DEBE mostrar Completado, permitir `d` para omitidos y `c` para copiar la ruta, y `Enter`/`Esc` continuar. El código 3 DEBE mostrarse como `AVISO`. El header DEBE cambiar de Revisión a Resultado al terminar y conservar `Paso 3 de 3`. Con `--dry-run`, C3 DEBE terminar en Resultado con `Simulación completada` y no escribir.
 
 #### Scenario: Revisión con datos del plan
 
 - **GIVEN** un plan calculado con apps y archivos
 - **WHEN** se muestra C3
-- **THEN** se muestran apps, archivos, tamaño, destino y el aviso de contenido no cifrado
+- **THEN** la tabla muestra Apps, Archivos, Tamaño, Ruta y Estado `Listo para clonar`, y la zona de mensajes muestra el aviso de contenido no cifrado
 
 #### Scenario: Omitidos con motivo
 
@@ -149,21 +198,45 @@ C3 DEBE (`MUST`) pasar por tres estados: planificando, revisión y en curso. En 
 - **WHEN** se pulsa `f`
 - **THEN** se muestran agrupados por app y solo las rutas
 
+#### Scenario: Escritura en la misma tabla
+
+- **GIVEN** una clonación en curso
+- **WHEN** se escribe cada archivo
+- **THEN** la fila Estado muestra el progreso y la barra avanza dentro de la misma tabla
+
+#### Scenario: Estado final
+
+- **GIVEN** una clonación completada
+- **WHEN** se muestra C3
+- **THEN** la fila Estado muestra Completado y el header muestra `Resultado` con `Paso 3 de 3`
+
+#### Scenario: Resumen con omitidos
+
+- **GIVEN** una clonación con código 3
+- **WHEN** se muestra el estado final
+- **THEN** la zona de mensajes muestra un `AVISO` con el código 3 y `d` permite consultar los omitidos
+
+#### Scenario: Copiar la ruta
+
+- **GIVEN** C3 en el estado final con un clon creado
+- **WHEN** se pulsa `c`
+- **THEN** se intenta copiar la ruta con OSC 52 y se avisa del resultado en la zona de mensajes
+
 #### Scenario: Dry-run termina en revisión
 
 - **GIVEN** una clonación con `--dry-run` y terminal interactiva
 - **WHEN** termina la planificación
-- **THEN** C3 muestra la revisión sin acción de clonar, la leyenda ofrece terminar la simulación y no se escribe nada
+- **THEN** C3 muestra `Simulación completada` en la fila Estado, no ofrece copiar la ruta y `Enter` o `Esc` cierran sin escribir
 
 ### Requirement: Progreso y cancelación de la clonación
 
-En curso, C3 DEBE (`MUST`) mostrar una barra de progreso por archivos. La operación DEBE poder cancelarse hasta el renombrado final; al cancelar, el temporal DEBE borrarse y el clon anterior DEBE quedar intacto. Una vez iniciado el renombrado final, la cancelación NO DEBE interrumpirlo.
+En curso, C3 DEBE (`MUST`) mostrar la barra de progreso en la fila Estado de la misma tabla. La operación DEBE poder cancelarse hasta el renombrado final; al cancelar, el temporal DEBE borrarse y el clon anterior DEBE quedar intacto. Una vez iniciado el renombrado final, la cancelación NO DEBE interrumpirlo.
 
 #### Scenario: Progreso por archivos
 
 - **GIVEN** una clonación en curso con varios archivos
 - **WHEN** se escribe cada archivo
-- **THEN** la barra avanza y muestra el archivo actual
+- **THEN** la fila Estado muestra el archivo actual y la barra avanza
 
 #### Scenario: Cancelar antes del renombrado
 
@@ -182,25 +255,3 @@ En curso, C3 DEBE (`MUST`) mostrar una barra de progreso por archivos. La operac
 - **GIVEN** un fallo al escribir el temporal
 - **WHEN** la clonación termina con error
 - **THEN** el temporal se elimina y el clon anterior sigue intacto
-
-### Requirement: Resumen de la clonación
-
-C4 DEBE (`MUST`) mostrar apps, archivos, tamaño y ruta del clon; `d` DEBE mostrar los omitidos; la línea de salida DEBE aparecer solo si el código es 3; `c` DEBE copiar la ruta con OSC 52 y avisar si el terminal no lo soporta; `Enter` o `Esc` DEBEN continuar. NO DEBE existir un atajo para abrir el Finder.
-
-#### Scenario: Resumen completo
-
-- **GIVEN** una clonación completada
-- **WHEN** se muestra C4
-- **THEN** se muestran apps, archivos, tamaño y ruta, sin línea de salida si el código es 0
-
-#### Scenario: Resumen con omitidos
-
-- **GIVEN** una clonación con código 3
-- **WHEN** se muestra C4
-- **THEN** se muestra la línea de salida y `d` permite consultar los omitidos
-
-#### Scenario: Copiar la ruta
-
-- **GIVEN** C4 abierto
-- **WHEN** se pulsa `c`
-- **THEN** se intenta copiar la ruta con OSC 52 y se avisa si el terminal no lo soporta

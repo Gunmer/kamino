@@ -1,0 +1,26 @@
+kamino · Menú                                                    ○ ○ ○ ○ ○ ○ ○ ◉
+────────────────────────────────────────────────────────────────────────────────
+
+    [1m██╗  ██╗ █████╗ ███╗   ███╗██╗███╗   ██╗ ██████╗ [0m
+    [1m██║ ██╔╝██╔══██╗████╗ ████║██║████╗  ██║██╔═══██╗[0m
+    [1m█████╔╝ ███████║██╔████╔██║██║██╔██╗ ██║██║   ██║[0m
+    [1m██╔═██╗ ██╔══██║██║╚██╔╝██║██║██║╚██╗██║██║   ██║[0m
+    [1m██║  ██╗██║  ██║██║ ╚═╝ ██║██║██║ ╚████║╚██████╔╝[0m
+    [1m╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝╚═╝  ╚═══╝ ╚═════╝ [0m
+  
+  [1m  ▌ Clonar            Crea un clon de las apps instaladas.[0m
+      Desplegar         Despliega desde un archivo del clon.
+      Actualizar        Actualiza a la última versión publicada.
+      Configuración     Edita las rutas de la TUI.
+      Abandonar Kamino  Cierra kamino.
+  
+  
+  
+  
+  
+  
+  
+  
+  
+────────────────────────────────────────────────────────────────────────────────
+↑↓ mover   Enter aceptar                                                 ? ayuda

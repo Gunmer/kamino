@@ -1,0 +1,40 @@
+kamino . Desplegar . Conflictos                                                                                        Paso 3 de 4   [36m*[0m [36m*[0m [36m*[0m [2mo[0m
+[2m--------------------------------------------------------------------------------------------------------------------------------------------[0m
+
+            [1m~/.config/herdr/config.toml[0m
+          
+            Original                                                    Clon
+            0 líneas elegidas                                           8 líneas elegidas
+            bloque 1 de 2
+             1   # herdr                                                   1   # herdr
+          [2m>  2 o alpha = 1[0m                                                 2 * alpha = 10
+          [2m   3 o beta = 2[0m                                                  3 * beta = 20
+          [2m   4 o gamma = 3[0m                                                 4 * gamma = 30
+          [2m   5 o delta = 4[0m                                                 5 * delta = 40
+             6   one                                                       6   one
+             7   two                                                       7   two
+             8   three                                                     8   three
+             9   four                                                      9   four
+            10   five                                                     10   five
+            11   six                                                      11   six
+            12   gap1                                                     12   gap1
+            13   gap2                                                     13   gap2
+          [2m  14 o epsilon = 5[0m                                              14 * epsilon = 50
+          [2m  15 o zeta = 6[0m                                                 15 * zeta = 60
+          [2m  16 o eta = 7[0m                                                  16 * eta = 70
+          [2m  17 o theta = 8[0m                                                17 * theta = 80
+            18   seven                                                    18   seven
+            19   eight                                                    19   eight
+            20   nine                                                     20   nine
+            21   ten                                                      21   ten
+            22   eleven                                                   22   eleven
+            23   twelve                                                   23   twelve
+          
+          
+          
+          
+          
+          
+[33m! AVISO[0m  Los diffs pueden contener secretos.
+[2m--------------------------------------------------------------------------------------------------------------------------------------------[0m
+^v [2mlínea[0m[2m   [0m<>/Espacio [2melegir[0m[2m   [0mc/o [2mbloque[0m[2m   [0mC/O [2marchivo[0m[2m   [0mTab [2mbloque[0m[2m   [0mEsc [2mvolver[0m                                                    ? [2mayuda[0m

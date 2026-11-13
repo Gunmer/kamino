@@ -1,0 +1,26 @@
+kamino · Desplegar · Despliegue completado
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+
+    [1;32mDespliegue completado[0m
+  
+    Despliegue completado
+    [2m────────────────────────────────────────────────────────────────────────────────────────────[0m
+    Desplegados                                                                                9
+    Híbridos                                                                                   2
+    Sin desplegar                                                                              2
+    Sin cambios                                                                                2
+    Sin base en este Mac                                                                       2
+    Archivos protegidos                                                                        8
+  
+    Holocrón: ~/.config/kamino/vault/snapshot/20261113T103000Z.tar.gz
+    Para deshacer: kamino deploy ~/.config/kamino/vault/snapshot/20261113T103000Z.tar.gz
+  
+    c copiar holocrón
+  
+  
+  
+  
+  
+[33m⚠ AVISO[0m  Salida 3: se conservaron originales, no soportados o apps pedidas no cumplidas.
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+c [2mcopiar holocrón[0m[2m   [0mEnter/Esc [2mcontinuar[0m                                                      ? [2mayuda[0m
