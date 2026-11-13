@@ -1,179 +1,204 @@
 package tui
 
 import (
-	"unicode/utf8"
+	"github.com/charmbracelet/bubbles/key"
 
-	"golang.org/x/sys/unix"
+	"github.com/Gunmer/kamino/internal/texts"
 )
 
-// KeyKind identifies a key press.
-type KeyKind string
-
-const (
-	KeyRune      KeyKind = "rune"
-	KeyEnter     KeyKind = "enter"
-	KeyEsc       KeyKind = "esc"
-	KeyTab       KeyKind = "tab"
-	KeyShiftTab  KeyKind = "shift_tab"
-	KeyBackspace KeyKind = "backspace"
-	KeyUp        KeyKind = "up"
-	KeyDown      KeyKind = "down"
-	KeyLeft      KeyKind = "left"
-	KeyRight     KeyKind = "right"
-	KeyF1        KeyKind = "f1"
-	KeyF2        KeyKind = "f2"
-	KeyF3        KeyKind = "f3"
-	KeyF4        KeyKind = "f4"
-	KeyCtrlC     KeyKind = "ctrl_c"
-	KeyCtrlS     KeyKind = "ctrl_s"
-	KeyUnknown   KeyKind = "unknown"
-)
-
-// Key is one decoded key press.
-type Key struct {
-	Kind KeyKind
-	Rune rune
+func bind(keys []string, label, description string) key.Binding {
+	return key.NewBinding(key.WithKeys(keys...), key.WithHelp(label, description))
 }
 
-type keyReader struct {
-	fd      int
-	pending []byte
+func helpKey() key.Binding {
+	return bind([]string{"?"}, "?", texts.KeyHelp)
 }
 
-func newKeyReader(fd int) *keyReader { return &keyReader{fd: fd} }
-
-func (r *keyReader) nextByte() (byte, error) {
-	if len(r.pending) > 0 {
-		value := r.pending[0]
-		r.pending = r.pending[1:]
-		return value, nil
-	}
-	buf := make([]byte, 1)
-	for {
-		n, err := unix.Read(r.fd, buf)
-		if err != nil {
-			if err == unix.EINTR {
-				continue
-			}
-			return 0, err
-		}
-		if n == 1 {
-			return buf[0], nil
-		}
+func globalKeys() []key.Binding {
+	return []key.Binding{
+		helpKey(),
+		bind([]string{"f1"}, "F1", texts.KeyHelp),
 	}
 }
 
-func (r *keyReader) peekAvailable(timeoutMS int) []byte {
-	fds := []unix.PollFd{{Fd: int32(r.fd), Events: unix.POLLIN}}
-	count, err := unix.Poll(fds, timeoutMS)
-	if err != nil || count == 0 {
-		return nil
+func menuKeys() []key.Binding {
+	return []key.Binding{
+		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
+		bind([]string{"enter"}, "Enter", texts.KeyAccept),
 	}
-	buf := make([]byte, 8)
-	n, err := unix.Read(r.fd, buf)
-	if err != nil || n <= 0 {
-		return nil
-	}
-	return buf[:n]
 }
 
-// ReadKey decodes one key press.
-func (r *keyReader) ReadKey() (Key, error) {
-	first, err := r.nextByte()
-	if err != nil {
-		return Key{}, err
-	}
-	switch first {
-	case 0x03:
-		return Key{Kind: KeyCtrlC}, nil
-	case 0x13:
-		return Key{Kind: KeyCtrlS}, nil
-	case '\r', '\n':
-		return Key{Kind: KeyEnter}, nil
-	case '\t':
-		return Key{Kind: KeyTab}, nil
-	case 0x7f, 0x08:
-		return Key{Kind: KeyBackspace}, nil
-	case 0x1b:
-		rest := r.peekAvailable(15)
-		if len(rest) == 0 {
-			return Key{Kind: KeyEsc}, nil
+func cloneAppsKeys(filtering bool) []key.Binding {
+	if filtering {
+		return []key.Binding{
+			bind([]string{"enter"}, "Enter", "aplicar"),
+			bind([]string{"esc"}, "Esc", "cerrar"),
 		}
-		r.pending = append(rest, r.pending...)
-		return r.decodeEscape()
 	}
-	if first < utf8.RuneSelf {
-		return Key{Kind: KeyRune, Rune: rune(first)}, nil
+	return []key.Binding{
+		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
+		bind([]string{" "}, "Espacio", texts.KeyMark),
+		bind([]string{"a", "n"}, "a/n", texts.KeyAllNone),
+		bind([]string{"/"}, "/", texts.KeyFilter),
+		bind([]string{"enter"}, "Enter", texts.KeyContinue),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
 	}
-	width := 2
-	if first >= 0xF0 {
-		width = 4
-	} else if first >= 0xE0 {
-		width = 3
-	}
-	buf := []byte{first}
-	for len(buf) < width {
-		next, err := r.nextByte()
-		if err != nil {
-			return Key{Kind: KeyUnknown}, nil
-		}
-		buf = append(buf, next)
-	}
-	value, _ := utf8.DecodeRune(buf)
-	return Key{Kind: KeyRune, Rune: value}, nil
 }
 
-func (r *keyReader) decodeEscape() (Key, error) {
-	second, err := r.nextByte()
-	if err != nil {
-		return Key{Kind: KeyEsc}, nil
-	}
-	if second != '[' && second != 'O' {
-		return Key{Kind: KeyUnknown}, nil
-	}
-	third, err := r.nextByte()
-	if err != nil {
-		return Key{Kind: KeyUnknown}, nil
-	}
-	switch third {
-	case 'A':
-		return Key{Kind: KeyUp}, nil
-	case 'B':
-		return Key{Kind: KeyDown}, nil
-	case 'C':
-		return Key{Kind: KeyRight}, nil
-	case 'D':
-		return Key{Kind: KeyLeft}, nil
-	case 'Z':
-		return Key{Kind: KeyShiftTab}, nil
-	case 'P':
-		return Key{Kind: KeyF1}, nil
-	case 'Q':
-		return Key{Kind: KeyF2}, nil
-	case 'R':
-		return Key{Kind: KeyF3}, nil
-	case 'S':
-		return Key{Kind: KeyF4}, nil
-	case '1', '2', '3', '4':
-		number := string(third)
-		fourth, err := r.nextByte()
-		if err != nil {
-			return Key{Kind: KeyUnknown}, nil
-		}
-		if fourth >= '0' && fourth <= '9' {
-			number += string(fourth)
-			_, _ = r.nextByte()
-			switch number {
-			case "11":
-				return Key{Kind: KeyF1}, nil
-			case "12":
-				return Key{Kind: KeyF2}, nil
-			case "13":
-				return Key{Kind: KeyF3}, nil
-			case "14":
-				return Key{Kind: KeyF4}, nil
-			}
+func cloneDestinationKeys(option int, focus int, dialog bool) []key.Binding {
+	if dialog {
+		return []key.Binding{
+			bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
+			bind([]string{"enter"}, "Enter", texts.KeyAccept),
+			bind([]string{"esc"}, "Esc", texts.KeyBack),
 		}
 	}
-	return Key{Kind: KeyUnknown}, nil
+	keys := []key.Binding{bind([]string{"up", "k"}, "↑↓", texts.KeyMove)}
+	if option == 2 || focus > 0 {
+		keys = append(keys, bind([]string{"tab", "shift+tab"}, "Tab", texts.KeyField))
+	}
+	keys = append(keys,
+		bind([]string{"enter"}, "Enter", texts.KeyChoose),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+	)
+	return keys
+}
+
+func cloneReviewKeys(phase clonePhase, hasSkipped, canCopy bool) []key.Binding {
+	switch phase {
+	case clonePhaseWriting:
+		return []key.Binding{bind([]string{"ctrl+c"}, "Ctrl+C", texts.KeyCancel)}
+	case clonePhaseDone:
+		keys := []key.Binding{}
+		if hasSkipped {
+			keys = append(keys, bind([]string{"d"}, "d", texts.KeySkipped))
+		}
+		if canCopy {
+			keys = append(keys, bind([]string{"c"}, "c", texts.KeyCopyPath))
+		}
+		return append(keys, bind([]string{"enter", "esc"}, "Enter/Esc", texts.KeyContinue))
+	default:
+		keys := []key.Binding{
+			bind([]string{"d"}, "d", texts.KeySkipped),
+			bind([]string{"f"}, "f", texts.KeyFiles),
+			bind([]string{"enter"}, "Enter", texts.KeyClone),
+			bind([]string{"esc"}, "Esc", texts.KeyBack),
+			bind([]string{"ctrl+c"}, "Ctrl+C", texts.KeyCancel),
+		}
+		return keys
+	}
+}
+
+func deployFileKeys(manual, filtering bool) []key.Binding {
+	if manual || filtering {
+		return []key.Binding{
+			bind([]string{"enter"}, "Enter", "abrir"),
+			bind([]string{"esc"}, "Esc", texts.KeyBack),
+		}
+	}
+	return []key.Binding{
+		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
+		bind([]string{"/"}, "/", texts.KeyFilter),
+		bind([]string{"o"}, "o", texts.KeyOtherFile),
+		bind([]string{"enter"}, "Enter", texts.KeyContinue),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+	}
+}
+
+func deployAppsKeys(preparing bool) []key.Binding {
+	if preparing {
+		return []key.Binding{
+			bind([]string{"esc", "ctrl+c"}, "Esc/Ctrl+C", texts.KeyCancel),
+		}
+	}
+	return []key.Binding{
+		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
+		bind([]string{" "}, "Espacio", texts.KeyMark),
+		bind([]string{"a", "n"}, "a/n", texts.KeyAllNone),
+		bind([]string{"enter"}, "Enter", texts.KeyContinue),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+	}
+}
+
+func deployConflictsKeys() []key.Binding {
+	return []key.Binding{
+		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
+		bind([]string{"r"}, "r", texts.KeyReview),
+		bind([]string{"c", "o"}, "c/o", texts.KeyCloneOriginal),
+		bind([]string{"C", "O"}, "C/O", texts.KeyAll),
+		bind([]string{"enter"}, "Enter", texts.KeyConfirm),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+	}
+}
+
+func deployDetailKeys(whole bool) []key.Binding {
+	if whole {
+		return []key.Binding{
+			bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
+			bind([]string{"enter"}, "Enter", texts.KeyAccept),
+			bind([]string{"esc"}, "Esc", texts.KeyBack),
+		}
+	}
+	return []key.Binding{
+		bind([]string{"up", "k", "down", "j"}, "↑↓", texts.KeyLine),
+		bind([]string{"left", "right", " "}, "←→/Espacio", texts.KeyChooseVersion),
+		bind([]string{"c", "o"}, "c/o", texts.KeyBlock),
+		bind([]string{"C", "O"}, "C/O", "archivo"),
+		bind([]string{"tab", "shift+tab"}, "Tab", texts.KeyBlock),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+	}
+}
+
+func deployConfirmKeys() []key.Binding {
+	return []key.Binding{
+		bind([]string{"left", "right"}, "←→", texts.KeyMove),
+		bind([]string{"enter"}, "Enter", texts.KeyAccept),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+	}
+}
+
+func deploySummaryKeys(hasSnapshot bool) []key.Binding {
+	keys := []key.Binding{}
+	if hasSnapshot {
+		keys = append(keys, bind([]string{"c"}, "c", texts.KeyCopySnapshot))
+	}
+	return append(keys, bind([]string{"enter", "esc"}, "Enter/Esc", texts.KeyContinue))
+}
+
+func updateKeys(phase updatePhase) []key.Binding {
+	switch phase {
+	case updatePhaseDownloading, updatePhaseVerifying, updatePhaseReplacing:
+		return []key.Binding{bind([]string{"esc", "ctrl+c"}, "Esc/Ctrl+C", texts.KeyCancel)}
+	default:
+		return []key.Binding{
+			bind([]string{"enter"}, "Enter", texts.KeyContinue),
+			bind([]string{"esc"}, "Esc", "cancelar/salir"),
+		}
+	}
+}
+
+func settingsKeys() []key.Binding {
+	return []key.Binding{
+		bind([]string{"tab", "shift+tab"}, "Tab/Mayús+Tab", texts.KeyMove),
+		bind([]string{"ctrl+s"}, "Ctrl+S", texts.KeySave),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+	}
+}
+
+func helpKeys() []key.Binding {
+	return []key.Binding{bind([]string{"enter", "esc", "?"}, "Enter/Esc/?", texts.KeyClose)}
+}
+
+func errorKeys(menuMode bool) []key.Binding {
+	keys := []key.Binding{
+		bind([]string{"up", "down", "left", "right"}, "↑↓", texts.KeyMove),
+		bind([]string{"t"}, "t", texts.KeyDetail),
+		bind([]string{"c"}, "c", texts.KeyCopy),
+		bind([]string{"enter"}, "Enter", texts.KeyAccept),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+	}
+	if !menuMode {
+		return keys[:4]
+	}
+	return keys
 }

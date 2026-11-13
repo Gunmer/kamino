@@ -20,7 +20,7 @@ Este documento concreta cómo se construye la herramienta descrita en el diseño
 | --- | --- | --- |
 | Lenguaje | Go 1.25 o superior | binario estático, arranque inferior a 30 ms |
 | Comandos y opciones | parser propio | mismo contrato de alias, ayuda y códigos 0/1/2/3 |
-| Interfaz interactiva | terminal crudo y ANSI propio | sin framework; pila de pantallas y pruebas de modelo |
+| Interfaz interactiva | Bubble Tea, Lip Gloss y `bubbles` (`key`, `help`) | marco, pila de pantallas, comandos asíncronos y goldens |
 | Salida formateada | `internal/ui` | texto plano con tablas y diffs |
 | Lectura del catálogo | `BurntSushi/toml` + `go:embed` | TOML estricto y catálogo dentro del binario |
 | Validación del catálogo | `internal/catalog` | mismas reglas que el modelo Python |
@@ -51,7 +51,7 @@ internal/
 ├── update/         # consulta, descarga, verificación y reemplazo
 ├── conflicts/      # SequenceMatcher, diff, composición y validación
 ├── progress/       # progreso y cancelación cooperativa
-├── tui/            # menú, C1-C4, D0-D5, U1 y configuración
+├── tui/            # App, Frame, Screen, theme, pantallas y goldens
 ├── plan/           # Plan, Operation y recuento
 ├── catalog/        # AppDefinition y apps/*.toml embebidos
 ├── detect/         # Info.plist y búsqueda de comandos
@@ -136,16 +136,16 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
 
 1. Cargar el catálogo (embebido y directorio del usuario).
 2. Detectar las apps instaladas.
-3. C1 cuenta archivos con el mismo recorrido y exclusiones que el plan, sin hashear. `--apps` omite C1.
-4. C2 resuelve y valida el destino. `--output` omite C2; sin él se propone
-   `clone-<aaaammdd>.tar.gz` con la fecha local.
+3. C1 cuenta archivos en segundo plano con el mismo recorrido y exclusiones que el plan, sin hashear. `--apps` omite C1.
+4. C2 ofrece vault por defecto, carpeta actual e indicar carpeta, con un input de nombre editable;
+   `--output` omite C2. La ruta se valida en vivo y el destino se crea al escribir.
 5. `plan_clone` expande `paths`, aplica `exclude` y construye el plan con tamaño y checksum.
    Las rutas ausentes se registran con su motivo. C3 puede cancelar durante la planificación.
 6. C3 muestra la revisión y `write_clone` escribe un temporal con progreso por archivos. La
    cancelación comprueba el callback antes de cada archivo y antes del renombrado.
 7. Sin `--force` el commit usa `os.link` y falla si el destino existe; con `--force` usa
    `os.replace` y revalida la huella del destino justo antes. Cualquier error o cancelación elimina
-   el temporal. C4 resume apps, archivos, tamaño, ruta y omitidos.
+   el temporal. El estado final de C3 muestra apps, archivos, tamaño, ruta y omitidos; no hay C4.
 
 ### 5.2 Despliegue
 
@@ -166,8 +166,9 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
    archivo entero si es binario, grande o un enlace con enlace.
 5. D2 lista solo conflictos y permite `r` revisar, `c` aplicar el clon, `o` conservar el original,
    `C`/`O` sobre todos. Confirmar queda bloqueado hasta cubrir todos. Sin conflictos se pasa a D4.
-6. D3 muestra un bloque a la vez: contexto una vez, filas original/clon, marcadores `●`/`○`,
-   `c`/`o` por bloque, `C`/`O` por archivo, `Tab`/`Mayús+Tab` entre bloques y validación al volver.
+6. D3 muestra el archivo completo en dos columnas con contexto alineado, números de línea,
+   marcadores `●`/`○`, `c`/`o` por bloque, `C`/`O` por archivo, `Tab`/`Mayús+Tab` entre bloques y
+   validación al volver. Solo renderiza la ventana visible.
 7. D4 revalida los destinos, cuenta protegidos y exige una acción explícita con foco en Retirada.
 8. Aplicar en este orden: cobertura de decisiones, revalidación de híbridos, huellas de destinos,
    holocrón si hay destinos existentes y escrituras atómicas con progreso. La cancelación se
@@ -182,29 +183,31 @@ El orden de seguridad es `verificar -> extraer -> decidir -> holocrón -> aplica
 Pantallas y atajos:
 
 ```text
-Menú -> C1 apps -> C2 destino -> C3 revisión -> C4 resumen
-Menú -> D0 clon -> D1 apps -> D2 conflictos -> D3 bloques -> D4 confirmación -> D5 resumen
+Menú -> C1 apps -> C2 destino -> C3 revisión/resultado
+Menú -> D0 clon -> D1 apps -> D2 conflictos -> D3 archivo -> D4 confirmación -> D5 resumen
 Menú -> U1 actualización
 ```
 
-- **C1:** solo apps instaladas con archivos, filtro `/`, `a`/`n` sobre visibles, casillas
-  deshabilitadas sin archivos, `Espacio` para marcar sin perder el foco, `Enter` para continuar y
-  línea de no detectadas.
-- **C2:** nombre por defecto, validación en vivo, `F2`/`F3`/`F4` para directorios y diálogo de
-  reemplazo navegable por teclado con Volver preseleccionada.
-- **C3:** planificando, revisión y en curso; `d` omitidos con motivo, `f` archivos incluidos, aviso
-  de secretos y dry-run sin acción de clonar.
-- **C4:** resumen, `d` omitidos, `c` copiar ruta y línea de salida solo con código 3.
+- **C1:** tabla `SEL`/`APP`/`ARCHIVOS`, contador de selección, filtro `/`, `a`/`n` sobre visibles,
+  casillas `[x]`/`[ ]`/`[-]`, `Espacio` sin perder el foco, `Enter`, línea de no detectadas y
+  recuento en segundo plano.
+- **C2:** tres opciones de carpeta, input de ruta manual, input de nombre editable, validación en
+  vivo y diálogo Sobrescribir/Cambiar nombre/Volver con Volver preseleccionada. Los antiguos atajos de directorio no existen.
+- **C3:** tabla única con Apps, Archivos, Tamaño, Ruta y Estado; planificando, revisión, escritura,
+  completado, simulación o cancelado. `d` omitidos, `f` archivos incluidos, `c` copiar ruta al
+  terminar y aviso de secretos en mensajes. C4 es el estado final de C3, no una pantalla.
 - **D0:** tabla `Archivo`/`Origen`/`Tamaño` con los clones de `clone.output_dir` y del directorio
   actual, orden por fecha, deduplicación por ruta resuelta, preview con ruta/fecha/tamaño, filtro
   `/`, ruta manual en `Otro archivo...` (`o`) y validación del manifiesto.
-- **D1:** apps instaladas con número de archivos, no instaladas informativas y preparación
-  cancelable.
-- **D2:** tabla de conflictos con conteos y acciones `r`/`c`/`o`/`C`/`O`.
-- **D3:** un bloque a la vez, contexto único, marcadores y acciones por línea/bloque/archivo.
-- **D4:** conteos, protegidos, directorio del holocrón, aviso de apps abiertas y foco en Retirada.
+- **D1:** tabla `SEL`/`APP`/`ARCHIVOS`, no instaladas informativas y preparación cancelable.
+- **D2:** tabla de conflictos `ARCHIVO`/`BLOQUES`/`LÍNEAS`/`ACCIÓN`, cero `·`, conteos, scroll y
+  acciones `r`/`c`/`o`/`C`/`O`.
+- **D3:** archivo completo en dos columnas, números de línea, `●`/`○`, `— sin línea —`, contadores,
+  ventana visible y acciones por línea/bloque/archivo.
+- **D4:** tabla por app, cinco categorías, cero `·`, totales, protegidos, holocrón, aviso de apps
+  abiertas y acciones horizontales con Retirada preseleccionada.
 - **D5:** categorías, holocrón, `c`, orden de deshacer y variante “Despliegue incompleto”.
-- **Ayuda:** `?` en todas las pantallas y `F1` en campos de texto.
+- **Ayuda:** `?` en todas las pantallas y `F1` en campos de texto; pie y ayuda salen de `Keys()`.
 
 ### 5.3 Actualización
 
@@ -247,20 +250,20 @@ certificados empaquetados por Python.
 - **Cambios concurrentes.** La planificación calcula el checksum con el mismo acceso seguro que usa el empaquetado, que reabre cada ruta y compara el contenido con el manifiesto. Si una ruta cambia a un enlace o a otro tipo entre el plan y la escritura, la clonación falla en vez de incluir datos externos. En el despliegue se valida cada destino antes del holocrón y se vuelve a abrir cada padre durante la aplicación; si la jerarquía cambia, se detiene sin escribir fuera del home. Además, la sesión guarda el hash del archivo regular, el destino del enlace o la ausencia del destino al planificar y los re-verifica justo antes del holocrón: si alguno cambió durante la revisión, aborta todo el despliegue sin escribir.
 - **Conflictos e híbridos.** `internal/conflicts` contiene el modelo y las funciones puras. La comparación decodifica UTF-8 y normaliza CRLF solo para comparar; un clon perfecto no se escribe. Un contenido con NUL o que no decodifica es binario; un texto de más de 5 MB o de más de 20 000 líneas se trata como grande para proteger el diff y la TUI. Los bloques se generan con un `SequenceMatcher` compatible y 3 líneas de contexto; dentro de cada bloque, las líneas iguales son contexto y cada par original/clon o línea de un solo lado es una fila decidible que empieza en el clon. `build_hunks` y `compose` comparten la misma generación de filas. La composición conserva las líneas iguales del original, adapta las del clon al estilo de final de línea original y, si una línea sin salto final queda en medio, le añade el EOL dominante; solo la última puede conservar la ausencia de salto final. El núcleo compone el archivo; la TUI nunca inyecta bytes arbitrarios y D3 renderiza un solo bloque con un `Static`, no miles de widgets.
 - **Validación de híbridos.** Se valida por extensión: TOML (`BurntSushi/toml`), JSON con detección de claves duplicadas, INI/CFG/Git config estricto y plist XML/binario (`internal/plist`, con detección de claves duplicadas en XML). Solo se bloquea si ambos originales parsean y el híbrido no; si alguno ya era inválido se avisa y se permite aplicar. YAML y shell no se validan. `apply` repite la validación como defensa del núcleo.
-- **TUI única.** `internal/tui.Model` arranca en modo `menu` o `direct`; una pila de pantallas conserva el estado inferior y guarda frase, última misión, último código y modo. Los flujos comparten ayuda, error común y la guardia de tamaño. `Ctrl+C` se reparte por pantalla y respeta los puntos de no retorno. La app se abre solo con entrada y salida TTY y sin `KAMINO_PLAIN`; `deploy --yes` y `--dry-run` usan texto. La TUI muestra avisos de secretos en C3, D2 y D3 y no persiste su contenido.
+- **TUI.** `internal/tui.App` es la raíz de Bubble Tea; una pila de `Screen` conserva el estado inferior y la app guarda frase, última misión, último código y modo. `Frame` posee cabecera, separadores, body, zona de mensajes y pie, y entrega a cada pantalla el ancho y alto del body. `theme` centraliza tokens, símbolos y estilos ANSI; `layout` mide, trunca y garantiza exactamente `h` líneas. El pie y la ayuda salen de `Keys()`; no hay leyendas duplicadas. `Ctrl+C` se reparte por pantalla y respeta los puntos de no retorno. Las operaciones largas (recuento, planificación, escritura, despliegue y actualización) se ejecutan en `tea.Cmd` con progreso y cancelación. La app se abre solo con entrada y salida TTY y sin `KAMINO_PLAIN`; `deploy --yes` y `--dry-run` usan texto. La TUI muestra avisos de secretos en C2, C3, D2 y D3 y no persiste su contenido.
 - **Progreso y cancelación.** `internal/progress` define `Event`, `Callback` y `Cancel`. El núcleo emite fases y consulta la cancelación en bucles largos; la cancelación devuelve `OperationCancelled`.
-- **Empaquetado de la TUI.** La TUI usa terminal crudo y ANSI propio; el catálogo viaja embebido con `go:embed` y no hay recursos externos.
+- **Empaquetado de la TUI.** La TUI usa Bubble Tea, Lip Gloss y `bubbles` (`key`, `help`); el catálogo viaja embebido con `go:embed` y no hay recursos externos. Los golden files y el test de contrato viven en `internal/tui`.
 - **Referencias de Ghostty.** El descubrimiento es específico de `ghostty` y se limita a `config-file` y a la selección de temas. Resuelve cada candidato con el acceso seguro, aplica las exclusiones antes de leer, mantiene límites de tamaño, profundidad y cantidad, y deduplica por `(app_id, ruta relativa)`.
 - **Exclusiones y aviso.** Los clones nuevos excluyen credenciales independientes conocidas, historiales, sesiones, cachés y registros. El aviso de que el archivo no está cifrado se muestra siempre antes de clonar y no modifica los bytes de los ajustes. Las exclusiones no se aplican al despliegue de clones antiguos ni a la instantánea previa.
 - **Actualización del binario.** `internal/update` es un caso de uso independiente de la CLI. Solo actúa sobre binarios marcados como autocontenidos por `-ldflags`, resuelve el ejecutable real y consulta la API de GitHub. La versión se compara como `X.Y.Z`; no se degrada ni se descarga si la instalada es igual o superior. La integridad se basa en el tamaño y el digest SHA-256 del asset. El reemplazo usa un temporal en el mismo directorio y `os.Rename`, sin `sudo` y sin ejecutar el binario descargado. No hay comprobación automática ni rollback.
-- **Tema ANSI de la TUI.** La TUI usa `ansi-dark` por defecto para que fondo, texto, bordes, wordmark, cápsulas y estados salgan de la paleta ANSI del terminal. `TEXTUAL_THEME` admite `ansi-light`; otros valores caen a `ansi-dark`. `NO_COLOR` se lee antes de crear la app y todos los estados conservan icono y palabra. `◉`, `●`, `○` y `↪` tienen equivalentes ASCII cuando la codificación no es UTF-8 o se define `KAMINO_NO_LOGO`.
+- **Tema ANSI de la TUI.** `internal/tui/theme` usa `ansi-dark` por defecto para que fondo, texto, separadores, wordmark, cápsulas y estados salgan de la paleta ANSI del terminal. `TEXTUAL_THEME` admite `ansi-light`; otros valores caen a `ansi-dark`. `NO_COLOR` se inyecta antes de crear la app y todos los estados conservan icono y palabra. `◉`, `●`, `○`, `◀`, `▶`, `▌`, `▸`, `▾`, `─`, `·`, `⚠`, `ℹ` y `✕` tienen equivalentes ASCII cuando la codificación no es UTF-8 o se define `KAMINO_NO_LOGO`; esa variable además oculta el wordmark.
 
 ## 7. Pruebas
 
 - **Unitarias:** carga del catálogo (definiciones válidas e inválidas), expansión de rutas y exclusiones, normalización de rutas y manifiesto.
 - **Conflictos:** `tests/test_conflicts.py` cubre detección de texto, binario, grande y enlace; archivos nuevos, idénticos, solo modo, CRLF y cambios de tipo; generación de filas con contexto, emparejamiento e inserciones/eliminaciones; composición con híbridos dentro de un bloque, todo clon, todo original, CRLF, salvaguarda de salto final y longitud de decisiones; y validación de TOML, JSON, INI, plist, original inválido y formatos sin validar.
 - **Integración:** ciclo completo clonación y despliegue entre dos HOME falsos distintos, con apps "instaladas" simuladas mediante un `Info.plist` falso, comprobando que solo se despliegan las instaladas. Las pruebas de conflicto cubren híbridos, holocrón, undo, `--yes` y `--dry-run` con diffs.
-- **TUI:** `tests/test_tui.py` usa `App.run_test()` (sin TTY) para menú, degradación por altura, guardia de terminal pequeña, navegación por pila, C1-C4, D0-D5, U1, ayuda, error de cuatro partes, copia, cancelación y despliegue parcial. Comprueba 80×24, 79×23 y el redimensionado de vuelta, y que D3 maneja 20 000 líneas sin montar miles de widgets.
+- **TUI:** `internal/tui` prueba el `Frame` a 80/100/140 columnas y 24/26/30 filas, la pila, la zona de mensajes, C1–C3, D0–D5, U1, ayuda, error de cuatro partes, copia, cancelación y despliegue parcial. Los goldens cubren 80×24, 100×26, 140×40 y 200×50, más `NO_COLOR` y ASCII; el test de contrato exige exactamente `h` líneas, ninguna línea más ancha que `w` y solo SGR ANSI. D3 usa un modelo de filas completo con benchmark de 20 000 líneas y solo renderiza la ventana visible. `View` no toca disco, reloj ni entorno.
 - **Actualización:** `tests/test_update.py` cubre el parseo y la comparación de versiones, la consulta de la release, el asset ausente, el digest ausente o incorrecto, la descarga y el reemplazo atómico, los symlinks, la plataforma no soportada, una instalación no frozen y la paridad de `REPOSITORY`/`ASSET_NAME` con `scripts/install.sh`. Ninguna prueba accede a la red ni al HOME real.
 - **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado. `tests/test_paths.py` cubre el rechazo de enlaces intermedios y la conservación de enlaces finales; `tests/test_deploy.py` cubre el rechazo antes de la instantánea, la sustitución de un directorio durante la aplicación y un destino cambiado entre plan y apply.
 - **Aislamiento:** una fixture que reemplaza `HOME` y hace fallar la prueba si alguna ruta resuelve fuera de `tmp_path`, para no tocar nunca el home real.

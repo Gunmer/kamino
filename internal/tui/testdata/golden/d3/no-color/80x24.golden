@@ -1,0 +1,24 @@
+kamino · Desplegar · Conflictos                            Paso 3 de 4   ● ● ● ○
+────────────────────────────────────────────────────────────────────────────────
+    [1m~/.config/herdr/config.toml[0m
+  
+    Original                              Clon
+    0 líneas elegidas                     8 líneas elegidas
+    bloque 1 de 2
+     1   # herdr                             1   # herdr
+  [2m▌  2 ○ alpha = 1[0m                           2 ● alpha = 10
+  [2m   3 ○ beta = 2[0m                            3 ● beta = 20
+  [2m   4 ○ gamma = 3[0m                           4 ● gamma = 30
+  [2m   5 ○ delta = 4[0m                           5 ● delta = 40
+     6   one                                 6   one
+     7   two                                 7   two
+     8   three                               8   three
+     9   four                                9   four
+    10   five                               10   five
+    v 13 abajo
+  
+  
+  
+⚠ AVISO  Los diffs pueden contener secretos.
+────────────────────────────────────────────────────────────────────────────────
+↑↓ línea   ←→/Espacio elegir   c/o bloque   C/O archivo   Tab bloque  …  ? ayuda

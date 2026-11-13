@@ -1,0 +1,26 @@
+kamino · Desplegar · Apps                                                      Paso 2 de 4   ● ● ○ ○
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+    [1mElige las apps que quieres desplegar[0m
+  
+    SEL  APP                                          ARCHIVOS
+    ────────────────────────────────────────────────────────
+  [1m▌ [ ]  herdr                                              12[0m
+    [ ]  ghostty                                             8
+    [ ]  git                                                 4
+    [ ]  zsh                                                 3
+    [ ]  vscode                                              0
+    [ ]  atuin                                               6
+    [ ]  starship                                            2
+  
+    Sin base en este Mac: iterm2, yazi
+  
+  
+  
+  
+  
+  
+  
+⚠ AVISO  Cierra las apps antes de continuar: pueden sobrescribir los cambios al cerrarse.
+────────────────────────────────────────────────────────────────────────────────────────────────────
+↑↓ mover   Espacio marcar   a/n todas/ninguna   Enter continuar   Esc volver                 ? ayuda

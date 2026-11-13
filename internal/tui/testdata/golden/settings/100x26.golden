@@ -1,0 +1,26 @@
+kamino · Configuración
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+
+    [1mConfiguración[0m
+    [2mEstos valores solo afectan a la TUI; la CLI usa los valores integrados.[0m
+  
+    ▌ Catálogo
+      ~/.config/kamino/apps_
+      [2mDefiniciones TOML de apps del usuario. Por defecto: ~/.config/kamino/apps.[0m
+      Clones
+      ~/.config/kamino/vault_
+      [2mCarpeta de clone-AAAAMMDD.tar.gz. Por defecto: ~/.config/kamino/vault.[0m
+      Holocrones
+      ~/.config/kamino/vault/snapshot_
+      [2mCopia del estado anterior antes de desplegar. Por defecto: ~/.config/kamino/vault/snapshot.[0m
+  
+  
+  
+  
+  
+  
+  
+  
+  
+[2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
+Tab/Mayús+Tab [2mmover[0m[2m   [0mCtrl+S [2mguardar[0m[2m   [0mEsc [2mvolver[0m                                            ? [2mayuda[0m
