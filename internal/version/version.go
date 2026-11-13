@@ -2,4 +2,4 @@
 package version
 
 // Version is overridden in release builds with -X.
-var Version = "0.9.0"
+var Version = "0.10.0"

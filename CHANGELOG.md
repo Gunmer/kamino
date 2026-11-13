@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.10.0 (2026-11-13)
+
+### Documentación
+
+- archive migrate-to-go ([`5c2fffd`](https://github.com/Gunmer/kamino/commit/5c2fffdad700a4f24491a375fc86826bd3772cc4))
+
+### Funcionalidades
+
+- migrate interface to Bubble Tea ([`c846ae6`](https://github.com/Gunmer/kamino/commit/c846ae68e4dc9e0e4766c6279aa584df0de14fab))
+
+
 ## v0.9.0 (2026-11-12)
 
 ### Correcciones
