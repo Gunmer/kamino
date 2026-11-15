@@ -112,6 +112,11 @@ Ancho del body:
   140+          -> 120
 ```
 
+Desde 100 columnas el body deja de crecer con la terminal. El bloque que
+devuelve la pantalla se centra dentro del ancho del body; las líneas que ya
+ocupan el ancho completo conservan su posición. Por debajo de 100 columnas el
+contenido mantiene la alineación izquierda aprobada.
+
 ```text
 Alto:
   termH < 24 o termW < 80 -> aviso de terminal pequeña

@@ -55,6 +55,34 @@ func TestFrameHeightAndAirRow(t *testing.T) {
 	}
 }
 
+func TestBodyContentCenteredOnLargeScreens(t *testing.T) {
+	app := testApp(false, true)
+	screen := &messageScreen{screenBase: screenBase{app: app}, body: "body"}
+
+	compact := strings.Split(renderCase(app, screen, 80, 26), "\n")
+	if compact[3] != "  body" {
+		t.Fatalf("compact body = %q, want left aligned with gutter", compact[3])
+	}
+
+	wide := strings.Split(renderCase(app, screen, 100, 26), "\n")
+	expected := strings.Repeat(" ", 48) + "body"
+	if wide[3] != expected {
+		t.Fatalf("wide body = %q, want %q", wide[3], expected)
+	}
+}
+
+func TestBodyContentKeepsFullWidthBlocks(t *testing.T) {
+	app := testApp(false, true)
+	width := BodyWidth(100)
+	screen := &messageScreen{screenBase: screenBase{app: app}, body: strings.Repeat("x", width)}
+
+	lines := strings.Split(renderCase(app, screen, 100, 26), "\n")
+	expected := "  " + strings.Repeat("x", width)
+	if lines[3] != expected {
+		t.Fatalf("full-width body = %q, want %q", lines[3], expected)
+	}
+}
+
 func TestDetectUnicode(t *testing.T) {
 	t.Setenv("LANG", "es_ES.UTF-8")
 	t.Setenv("LC_ALL", "")

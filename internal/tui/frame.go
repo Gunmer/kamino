@@ -78,8 +78,12 @@ func (f *Frame) Render(screen Screen, width, height int, operation string) strin
 		lines = append(lines, "")
 	}
 	body := Fit(strings.Split(screen.View(bodyWidth, bodyHeight), "\n"), bodyWidth, bodyHeight, f.theme.Symbols.Ellipsis)
+	bodyLines := strings.Split(body, "\n")
+	if width >= 100 {
+		bodyLines = centerBlock(bodyLines, bodyWidth)
+	}
 	gutter := strings.Repeat(" ", (width-bodyWidth)/2)
-	for _, line := range strings.Split(body, "\n") {
+	for _, line := range bodyLines {
 		lines = append(lines, gutter+line)
 	}
 	for _, message := range messages {

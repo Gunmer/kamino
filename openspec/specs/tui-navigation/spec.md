@@ -321,25 +321,26 @@ La TUI DEBE (`MUST`) usar un único marco que posea la cabecera, el cuerpo, la z
 
 ### Requirement: Ancho y alto del body
 
-El body DEBE (`MUST`) medir `termW - 4` por debajo de 100 columnas, 96 columnas entre 100 y 139, y 120 columnas desde 140. DEBE centrarse horizontalmente y alinearse arriba. Con 24 o 25 filas NO DEBE (`MUST NOT`) haber fila de aire entre la cabecera y el body; desde 26 filas SÍ DEBE haberla. La zona de mensajes y el pie NO DEBEN desbordar el alto. Por debajo de 80 columnas o 24 filas DEBE mostrarse el aviso de terminal pequeña.
+El body DEBE (`MUST`) medir `termW - 4` por debajo de 100 columnas, 96 columnas entre 100 y 139, y 120 columnas desde 140. DEBE centrarse horizontalmente y alinearse arriba. Desde 100 columnas, el bloque de contenido de la pantalla DEBE (`MUST`) centrarse dentro del ancho del body; las líneas que ocupen el ancho completo NO DEBEN (`MUST NOT`) desplazarse y, por debajo de 100 columnas, el contenido DEBE (`MUST`) permanecer alineado a la izquierda. Con 24 o 25 filas NO DEBE (`MUST NOT`) haber fila de aire entre la cabecera y el body; desde 26 filas SÍ DEBE haberla. La zona de mensajes y el pie NO DEBEN desbordar el alto. Por debajo de 80 columnas o 24 filas DEBE mostrarse el aviso de terminal pequeña.
 
 #### Scenario: Ancho compacto
 
 - **GIVEN** una terminal de 80 columnas
 - **WHEN** se muestra una pantalla
 - **THEN** el body mide 76 columnas y se centra con 2 columnas de gutter a cada lado
+- **AND** el contenido mantiene la alineación izquierda
 
 #### Scenario: Ancho medio
 
 - **GIVEN** una terminal de 100 columnas
-- **WHEN** se muestra una pantalla
-- **THEN** el body mide 96 columnas
+- **WHEN** se muestra una pantalla con un bloque más estrecho que el body
+- **THEN** el body mide 96 columnas y el bloque se centra dentro de él
 
 #### Scenario: Ancho amplio
 
 - **GIVEN** una terminal de 140 columnas
 - **WHEN** se muestra una pantalla
-- **THEN** el body mide 120 columnas
+- **THEN** el body mide 120 columnas y el bloque se centra dentro de él
 
 #### Scenario: Alto compacto
 

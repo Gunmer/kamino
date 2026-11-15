@@ -104,3 +104,19 @@ exige una entrada aquí cuando cambian esos archivos.
 - **Consecuencia:** los fixtures dorados de la TUI pasan a
   `internal/tui/testdata/golden/` y se regeneran con `-update`; el resto de
   fixtures y el formato del clon no cambian.
+
+## D009 — Centrado del contenido del body en terminales grandes
+
+- **Fecha:** 2026-11-15
+- **Contexto:** desde 100 columnas el body queda limitado a 96 o 120 columnas.
+  Las pantallas con bloques más estrechos, como el menú, las tablas fijas, la
+  ayuda o el error, quedaban pegadas al borde izquierdo del body aunque el body
+  ya estuviera centrado en la terminal.
+- **Decisión:** `Frame.Render` centra el bloque devuelto por `Screen.View`
+  dentro del ancho del body desde 100 columnas. Las líneas que ocupan todo el
+  ancho no se desplazan y, por debajo de 100 columnas, se conserva la alineación
+  izquierda. Se actualizan los goldens de 100×26, 140×40 y 200×50 y se añaden
+  pruebas del frame para ambos comportamientos.
+- **Consecuencia:** cambia la disposición horizontal de las pantallas estrechas
+  en terminales grandes; no cambia el ancho del body, la altura, los textos ni
+  el formato del clon.
