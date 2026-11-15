@@ -205,11 +205,14 @@ func fixtureUpdateResult() *update.Result {
 	}
 }
 
+// testVersion is injected so goldens never depend on the released version.
+const testVersion = "0.10.0"
+
 func testApp(noColor, unicode bool) *App {
 	value := unicode
 	app := NewApp(AppOptions{
 		Home: "/Users/test", Cwd: "/Users/test/Projects/kamino",
-		Now: fixedNow, Phrase: "La Fuerza estará contigo.",
+		Now: fixedNow, Phrase: "La Fuerza estará contigo.", Version: testVersion,
 		Unicode: &value, NoColor: noColor, ThemeName: "ansi-dark",
 		Catalog: fixtureCatalog(), PathValue: "/opt/homebrew/bin",
 	})

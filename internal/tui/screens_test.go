@@ -303,7 +303,7 @@ func TestMenuShowsVersionUnderWordmark(t *testing.T) {
 	screen := newMenuScreen(app)
 	view := renderCase(app, screen, 80, 24)
 	lines := strings.Split(view, "\n")
-	want := "v" + version.Version
+	want := "v" + testVersion
 	lastWordmark := -1
 	for index, line := range lines {
 		if strings.Contains(line, texts.Wordmark[len(texts.Wordmark)-1]) {
@@ -322,6 +322,22 @@ func TestMenuShowsVersionUnderWordmark(t *testing.T) {
 	}
 	if strings.Contains(view, texts.MenuSubtitle) {
 		t.Fatalf("80x24 must not show the subtitle, the version is not part of it:\n%s", view)
+	}
+}
+
+func TestMenuUsesBuildVersionByDefault(t *testing.T) {
+	value := true
+	app := NewApp(AppOptions{
+		Home: "/Users/test", Cwd: "/Users/test/Projects/kamino",
+		Now: fixedNow, Unicode: &value, NoColor: true, ThemeName: "ansi-dark",
+		Catalog: fixtureCatalog(), PathValue: "/opt/homebrew/bin",
+	})
+	if app.version != version.Version {
+		t.Fatalf("default version must be the build version, got %q", app.version)
+	}
+	view := renderCase(app, newMenuScreen(app), 80, 24)
+	if !strings.Contains(view, "v"+version.Version) {
+		t.Fatalf("menu must show the build version:\n%s", view)
 	}
 }
 
