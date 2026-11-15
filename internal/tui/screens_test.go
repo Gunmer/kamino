@@ -326,7 +326,13 @@ func TestMenuShowsVersionUnderWordmark(t *testing.T) {
 }
 
 func TestMenuShowsVersionWithoutWordmark(t *testing.T) {
+	// testApp(noColor, unicode): unicode=false is ASCII mode, where the wordmark
+	// is hidden, so the version alone must carry the identity. The mode is
+	// asserted, never assumed, so a helper change cannot silently test the logo.
 	app := testApp(false, false)
+	if app.theme.Unicode {
+		t.Fatal("the test needs ASCII mode, otherwise the wordmark renders")
+	}
 	view := renderCase(app, newMenuScreen(app), 80, 24)
 	if strings.Contains(view, texts.Wordmark[len(texts.Wordmark)-1]) {
 		t.Fatalf("ASCII mode must hide the wordmark:\n%s", view)
