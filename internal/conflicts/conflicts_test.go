@@ -129,7 +129,7 @@ func TestComposeInsideBlockCRLFAndFinalNewline(t *testing.T) {
 	}
 }
 
-func TestSplitLinesPythonSemantics(t *testing.T) {
+func TestSplitLinesSemantics(t *testing.T) {
 	lines := splitLinesKeepEnds("a\nb\r\nc\vd")
 	expected := []string{"a\n", "b\r\n", "c\v", "d"}
 	if len(lines) != len(expected) {

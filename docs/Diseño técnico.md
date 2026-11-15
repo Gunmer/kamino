@@ -2,9 +2,7 @@
 
 Oct 28, 2026 · @Cristiam
 
-Este documento concreta cómo se construye la herramienta descrita en el diseño funcional, con las decisiones ya tomadas: Go estático, `tar.gz` con `manifest.json`, catálogo en TOML y distribución como asset `kamino-arm64`. La implementación Python permanece en `legacy/python/` como oráculo de compatibilidad. Propone la estructura de módulos, los formatos de datos, los flujos, las pruebas y el empaquetado.
-
-> **Migración a Go (2026-11-12):** el binario de release es Go para macOS Apple Silicon. Los apartados de stack, estructura, pruebas y empaquetado reflejan el proyecto `internal/`; las referencias a Python en el resto del documento describen el oráculo legado y el formato compartido.
+Este documento concreta cómo se construye la herramienta descrita en el diseño funcional, con las decisiones ya tomadas: Go estático, `tar.gz` con `manifest.json`, catálogo en TOML y distribución como asset `kamino-arm64`. Propone la estructura de módulos, los formatos de datos, los flujos, las pruebas y el empaquetado.
 
 ## 1. Principios de diseño
 
@@ -23,7 +21,7 @@ Este documento concreta cómo se construye la herramienta descrita en el diseño
 | Interfaz interactiva | Bubble Tea, Lip Gloss y `bubbles` (`key`, `help`) | marco, pila de pantallas, comandos asíncronos y goldens |
 | Salida formateada | `internal/ui` | texto plano con tablas y diffs |
 | Lectura del catálogo | `BurntSushi/toml` + `go:embed` | TOML estricto y catálogo dentro del binario |
-| Validación del catálogo | `internal/catalog` | mismas reglas que el modelo Python |
+| Validación del catálogo | `internal/catalog` | reglas estrictas sobre el TOML |
 | Archivo del clon | `archive/tar`, `compress/gzip`, `crypto/sha256` | sin dependencias externas |
 | Datos de las apps | `internal/plist` | XML y binario, sin ejecutar binarios |
 | Pruebas | `go test ./... -race` | HOME temporales e inyección de dependencias |
@@ -41,7 +39,9 @@ Estructura propuesta del paquete:
 
 ```
 cmd/kamino/
+cmd/release/
 internal/
+├── release/        # versionado, changelog, build, smoke y publicación
 ├── cli/            # argumentos, gating de TUI, salida y códigos
 ├── app/            # flujos de texto compartidos
 ├── texts/          # textos visibles y glosario
@@ -227,15 +227,15 @@ Menú -> U1 actualización
    es 0 si actualiza o ya está al día; 1 ante error o cancelación.
 
 No se ejecuta el binario descargado antes de reemplazarlo. La actualización no usa `sudo` ni
-modifica datos del usuario. La consulta usa las CAs del sistema y el binario de release no depende de
-certificados empaquetados por Python.
+modifica datos del usuario. La consulta usa las CAs del sistema y el binario de release no incluye
+certificados propios.
 
 ## 6. Decisiones técnicas relevantes
 
 - **Detección de apps.** Hay dos mecanismos. Para las apps con `.app` se lee el `Info.plist` en `/Applications`, `~/Applications` y `/System/Applications`, buscando por `CFBundleIdentifier`; es más rápido que `mdfind` y no lanza subprocesos, que queda como respaldo. Para las herramientas de terminal se busca el ejecutable en el PATH sin ejecutarlo y, si no aparece, en las rutas de `search_paths` de la definición.
 - **El PATH no es fiable en un Mac nuevo.** Antes de configurar el shell, rutas como `/opt/homebrew/bin` pueden no estar en el PATH, y la herramienta aparecería como no instalada sin estarlo. Por eso cada definición puede declarar rutas adicionales donde buscar el binario.
 - **Estado frente a configuración.** Algunas carpetas mezclan ambos: la de herdr guarda también logs y estado de sesión. Las definiciones deben clonar solo los archivos de configuración y excluir el resto (`**/*.log`, `session.json`).
-- **Exclusiones.** Los patrones como `**/CachedData` se resuelven con un `fnmatch` compatible con Python (`*` también coincide con `/`) y se prueban con casos límite.
+- **Exclusiones.** Los patrones como `**/CachedData` se resuelven con un `fnmatch` propio (`*` también coincide con `/`) y se prueban con casos límite.
 - **Seguridad al extraer.** `internal/archive` rechaza rutas absolutas o con `..`, tipos especiales y enlaces que salen del destino; verifica todos los miembros antes de extraer en un directorio temporal.
 - **Enlaces simbólicos.** Se guardan como enlaces y no se siguen, para no salir del home por accidente.
 - **Permisos y atributos.** Se conserva el modo de cada archivo, no el propietario. `archive/tar` no conserva atributos extendidos de macOS, algo que en configuraciones rara vez importa.
@@ -256,50 +256,51 @@ certificados empaquetados por Python.
 - **Referencias de Ghostty.** El descubrimiento es específico de `ghostty` y se limita a `config-file` y a la selección de temas. Resuelve cada candidato con el acceso seguro, aplica las exclusiones antes de leer, mantiene límites de tamaño, profundidad y cantidad, y deduplica por `(app_id, ruta relativa)`.
 - **Exclusiones y aviso.** Los clones nuevos excluyen credenciales independientes conocidas, historiales, sesiones, cachés y registros. El aviso de que el archivo no está cifrado se muestra siempre antes de clonar y no modifica los bytes de los ajustes. Las exclusiones no se aplican al despliegue de clones antiguos ni a la instantánea previa.
 - **Actualización del binario.** `internal/update` es un caso de uso independiente de la CLI. Solo actúa sobre binarios marcados como autocontenidos por `-ldflags`, resuelve el ejecutable real y consulta la API de GitHub. La versión se compara como `X.Y.Z`; no se degrada ni se descarga si la instalada es igual o superior. La integridad se basa en el tamaño y el digest SHA-256 del asset. El reemplazo usa un temporal en el mismo directorio y `os.Rename`, sin `sudo` y sin ejecutar el binario descargado. No hay comprobación automática ni rollback.
-- **Tema ANSI de la TUI.** `internal/tui/theme` usa `ansi-dark` por defecto para que fondo, texto, separadores, wordmark, cápsulas y estados salgan de la paleta ANSI del terminal. `TEXTUAL_THEME` admite `ansi-light`; otros valores caen a `ansi-dark`. `NO_COLOR` se inyecta antes de crear la app y todos los estados conservan icono y palabra. `◉`, `●`, `○`, `◀`, `▶`, `▌`, `▸`, `▾`, `─`, `·`, `⚠`, `ℹ` y `✕` tienen equivalentes ASCII cuando la codificación no es UTF-8 o se define `KAMINO_NO_LOGO`; esa variable además oculta el wordmark.
+- **Tema ANSI de la TUI.** `internal/tui/theme` usa `ansi-dark` por defecto para que fondo, texto, separadores, wordmark, cápsulas y estados salgan de la paleta ANSI del terminal. `KAMINO_THEME` admite `ansi-light`; otros valores caen a `ansi-dark`. `NO_COLOR` se inyecta antes de crear la app y todos los estados conservan icono y palabra. `◉`, `●`, `○`, `◀`, `▶`, `▌`, `▸`, `▾`, `─`, `·`, `⚠`, `ℹ` y `✕` tienen equivalentes ASCII cuando la codificación no es UTF-8 o se define `KAMINO_NO_LOGO`; esa variable además oculta el wordmark.
 
 ## 7. Pruebas
 
-- **Unitarias:** carga del catálogo (definiciones válidas e inválidas), expansión de rutas y exclusiones, normalización de rutas y manifiesto.
-- **Conflictos:** `tests/test_conflicts.py` cubre detección de texto, binario, grande y enlace; archivos nuevos, idénticos, solo modo, CRLF y cambios de tipo; generación de filas con contexto, emparejamiento e inserciones/eliminaciones; composición con híbridos dentro de un bloque, todo clon, todo original, CRLF, salvaguarda de salto final y longitud de decisiones; y validación de TOML, JSON, INI, plist, original inválido y formatos sin validar.
-- **Integración:** ciclo completo clonación y despliegue entre dos HOME falsos distintos, con apps "instaladas" simuladas mediante un `Info.plist` falso, comprobando que solo se despliegan las instaladas. Las pruebas de conflicto cubren híbridos, holocrón, undo, `--yes` y `--dry-run` con diffs.
+- **Unitarias:** `internal/catalog` valida definiciones válidas e inválidas; `internal/paths` cubre expansión, normalización y rechazo de rutas fuera del HOME; `internal/archive` cubre el manifiesto y los checksums.
+- **Conflictos:** `internal/conflicts` cubre detección de texto, binario, grande y enlace; archivos nuevos, idénticos, solo modo, CRLF y cambios de tipo; generación de filas con contexto, emparejamiento e inserciones/eliminaciones; composición con híbridos dentro de un bloque, todo clon, todo original, CRLF, salvaguarda de salto final y longitud de decisiones; y validación de TOML, JSON, INI, plist, original inválido y formatos sin validar.
+- **Integración:** `internal/clone`, `internal/deploy` y `internal/snapshot` cubren el ciclo completo entre dos HOME falsos distintos, con apps instaladas simuladas mediante un `Info.plist` falso, comprobando que solo se despliegan las instaladas. Las pruebas de conflicto cubren híbridos, holocrón, undo, `--yes` y `--dry-run` con diffs.
 - **TUI:** `internal/tui` prueba el `Frame` a 80/100/140 columnas y 24/26/30 filas, la pila, la zona de mensajes, C1–C3, D0–D5, U1, ayuda, error de cuatro partes, copia, cancelación y despliegue parcial. Los goldens cubren 80×24, 100×26, 140×40 y 200×50, más `NO_COLOR` y ASCII; el test de contrato exige exactamente `h` líneas, ninguna línea más ancha que `w` y solo SGR ANSI. D3 usa un modelo de filas completo con benchmark de 20 000 líneas y solo renderiza la ventana visible. `View` no toca disco, reloj ni entorno.
-- **Actualización:** `tests/test_update.py` cubre el parseo y la comparación de versiones, la consulta de la release, el asset ausente, el digest ausente o incorrecto, la descarga y el reemplazo atómico, los symlinks, la plataforma no soportada, una instalación no frozen y la paridad de `REPOSITORY`/`ASSET_NAME` con `scripts/install.sh`. Ninguna prueba accede a la red ni al HOME real.
-- **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado. `tests/test_paths.py` cubre el rechazo de enlaces intermedios y la conservación de enlaces finales; `tests/test_deploy.py` cubre el rechazo antes de la instantánea, la sustitución de un directorio durante la aplicación y un destino cambiado entre plan y apply.
-- **Aislamiento:** una fixture que reemplaza `HOME` y hace fallar la prueba si alguna ruta resuelve fuera de `tmp_path`, para no tocar nunca el home real.
-- **CI:** GitHub Actions con Go en macOS y Ubuntu (`go vet`, `golangci-lint`, `go test ./... -race`) y un job de compatibilidad con Python/uv.
+- **Actualización:** `internal/update` cubre el parseo y la comparación de versiones, la consulta de la release, el asset ausente, el digest ausente o incorrecto, la descarga y el reemplazo atómico, los symlinks y la plataforma no soportada. Ninguna prueba accede a la red ni al HOME real.
+- **Releases:** `internal/release` cubre la política de versiones, el parseo de Conventional Commits, el renderizado e inserción del changelog, las notas únicas, la validación de tags y el build con smoke test en macOS ARM64.
+- **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado. `internal/paths` cubre el rechazo de enlaces intermedios y la conservación de enlaces finales; `internal/deploy` cubre el rechazo antes de la instantánea, la sustitución de un directorio durante la aplicación y un destino cambiado entre plan y apply.
+- **Aislamiento:** las pruebas usan directorios HOME temporales e inyectan las dependencias para no tocar nunca el home real.
+- **CI:** GitHub Actions con Go en macOS y Ubuntu (`go vet`, `gofmt`, `golangci-lint`, `go test ./... -race`).
 
 ## 8. Empaquetado y distribución
 
 | Vía | Cómo | Cuándo |
 | --- | --- | --- |
-| Binario autocontenido | GoReleaser con `CGO_ENABLED=0`, `-trimpath` y `-s -w`; asset `kamino-arm64` en GitHub Releases | en cada merge a `main` |
+| Binario autocontenido | `cmd/release` con `CGO_ENABLED=0`, `-trimpath` y `-s -w`; asset `kamino-arm64` en GitHub Releases | en cada merge a `main` |
 | Instalador | `scripts/install.sh` descarga `kamino-arm64` en `~/.local/bin/kamino` sin `sudo` | v1 |
 | Homebrew tap | Fórmula que instala el asset `kamino-arm64` | tras la primera versión etiquetada |
 
 El binario sin firmar recibe la cuarentena de macOS: hay que documentar cómo quitarla (`xattr -d com.apple.quarantine`) o firmarlo y notarizarlo con una cuenta de desarrollador.
 
-El binario Go usa las CAs del sistema para que `kamino update` verifique TLS. `scripts/build_release.py` construye y comprueba la versión, el catálogo y la ausencia de escrituras en un HOME temporal.
+El binario Go usa las CAs del sistema para que `kamino update` verifique TLS. `internal/release` construye y comprueba la versión, el catálogo y la ausencia de escrituras en un HOME temporal.
 
-El versionado y la publicación se automatizan con `python-semantic-release`: los títulos de los PRs siguen Conventional Commits (el CI los valida) y, al hacer merge a `main`, se calcula el bump semver, se actualiza `CHANGELOG.md`, se crea el tag `vX.Y.Z` y se publica la GitHub Release con los binarios adjuntos (workflow `.github/workflows/release.yml`). El tap depende de tener versiones etiquetadas, por eso `uv` va primero.
+El versionado y la publicación se automatizan con `cmd/release`: los commits integrados en `main` siguen Conventional Commits y, tras el CI, se calcula el bump semver, se actualiza `CHANGELOG.md`, se crea el tag `vX.Y.Z`, se construye el binario y se publica la GitHub Release (workflow `.github/workflows/release.yml`). La recuperación de un tag existente reutiliza el mismo comando con `--tag`.
 
-La distribución se identifica como `kamino-cli`, pero el ejecutable y el módulo se llaman `kamino`. `uv` y `pip` dejan de ser vías de instalación; desde código se compila con `go build ./...`.
+El ejecutable y el módulo se llaman `kamino`; desde código se compila con `go build ./...`.
 
 ## 9. Plan de implementación (v1)
 
 1. Esqueleto Go: `go.mod`, `cmd/kamino`, `internal/`, `Makefile`, `golangci-lint`, `go test` y CI.
 2. Modelos y carga del catálogo, con una app de ejemplo.
 3. Detección de apps (`Info.plist` y `command`).
-4. `archive.py`: escritura y lectura del `tar.gz`, manifiesto y checksums.
-5. `plan.py` y `clone.py`, con `--dry-run`.
-6. `deploy.py`: staging, verificación, holocrón y aplicación.
-7. `cli.py` y `ui.py`: selección interactiva y resumen.
+4. `internal/archive`: escritura y lectura del `tar.gz`, manifiesto y checksums.
+5. `internal/plan` e `internal/clone`, con `--dry-run`.
+6. `internal/deploy`: staging, verificación, holocrón y aplicación.
+7. `internal/cli` e `internal/ui`: selección interactiva y resumen.
 8. Resto del catálogo inicial (Git, Ghostty, herdr y yazi) y pruebas de integración.
-9. Empaquetado con GoReleaser; después tap y binario.
+9. `cmd/release` y empaquetado del binario; después tap y binario.
 
 ## 10. Decisiones tomadas
 
-- **Nombre:** `kamino` para el comando y el repositorio; el paquete de PyPI se llama `kamino-cli`.
+- **Nombre:** `kamino` para el comando, el módulo y el repositorio.
 - **Comandos del CLI:** parser propio con el contrato de opciones y alias.
 - **Versión mínima de Go:** 1.25.
 - **Catálogo inicial:** Git, Ghostty, herdr y yazi.

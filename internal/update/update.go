@@ -105,8 +105,8 @@ func InstalledBinaryPath() (string, error) {
 	if !buildinfo.IsSelfContained() {
 		return "", updateError(kerrors.UpdateNotSelfContained,
 			"kamino update solo está disponible en el binario autocontenido. "+
-				"En desarrollo usa `go build`; para una instalación con uv, "+
-				"usa `uv tool upgrade kamino-cli`; con pip, actualiza el paquete por la vía habitual.")
+				"En desarrollo usa `go build`; para una instalación, usa "+
+				"`scripts/install.sh` o descarga el binario de la última release.")
 	}
 	executable, err := os.Executable()
 	if err != nil {

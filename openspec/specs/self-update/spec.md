@@ -8,11 +8,11 @@ Mantener actualizado el binario autocontenido de kamino desde las releases ofici
 
 ### Requirement: Actualización exclusiva del binario instalado
 
-`kamino update` DEBE (`MUST`) actualizar únicamente un binario autocontenido en ejecución. Un binario Go de release DEBE (`MUST`) considerarse autocontenido. Una instalación desde código, `go run` o un binario Go sin la marca de autocontenido DEBE (`MUST`) fallar con un mensaje que indique la vía de actualización correspondiente, sin descargar ni escribir nada. Las instalaciones con `uv` o `pip` dejan de estar soportadas.
+`kamino update` DEBE (`MUST`) actualizar únicamente un binario autocontenido en ejecución. Un binario Go de release DEBE (`MUST`) considerarse autocontenido. Una instalación desde código, `go run` o un binario Go sin la marca de autocontenido DEBE (`MUST`) fallar con un mensaje que indique la vía de actualización correspondiente, sin descargar ni escribir nada.
 
 #### Scenario: Binario autocontenido
 
-- **WHEN** se ejecuta `kamino update` desde el binario autocontenido, Go o Python legado
+- **WHEN** se ejecuta `kamino update` desde el binario autocontenido de una release
 - **THEN** el comando actualiza el archivo ejecutable en ejecución
 
 #### Scenario: Instalación desde código

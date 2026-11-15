@@ -46,29 +46,21 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Preparar Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Preparar uv
-        uses: astral-sh/setup-uv@v5
-
       - name: Preparar Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Instalar dependencias bloqueadas
-        run: uv sync --locked --all-extras --directory legacy/python
+      - name: Verificar módulos
+        run: go mod download
 
       - name: Versionar, comprobar y publicar
         if: github.event_name == 'workflow_run'
         run: |
-          python scripts/release.py --sha "$RELEASE_SHA"
+          go run ./cmd/release --sha "$RELEASE_SHA"
 
       - name: Completar publicación de un tag existente
         if: github.event_name == 'workflow_dispatch'
         run: |
-          python scripts/release.py --tag "$RELEASE_TAG"
+          go run ./cmd/release --tag "$RELEASE_TAG"

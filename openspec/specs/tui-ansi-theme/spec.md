@@ -28,22 +28,22 @@ La TUI DEBE (`MUST`) usar un tema ANSI para que el fondo, el texto y los colores
 
 ### Requirement: Tema sobrescribible
 
-El tema `ansi-dark` DEBE (`MUST`) ser el valor por defecto. `TEXTUAL_THEME` DEBE (`MUST`) aceptar `ansi-dark` y `ansi-light`. Cualquier otro valor DEBE (`MUST`) caer a `ansi-dark` y la interfaz DEBE seguir siendo legible con icono y palabra en cada estado. `ansi-light` DEBE evitar `Faint` y usar ANSI 8 para el terciario.
+El tema `ansi-dark` DEBE (`MUST`) ser el valor por defecto. `KAMINO_THEME` DEBE (`MUST`) aceptar `ansi-dark` y `ansi-light`. Cualquier otro valor DEBE (`MUST`) caer a `ansi-dark` y la interfaz DEBE seguir siendo legible con icono y palabra en cada estado. `ansi-light` DEBE evitar `Faint` y usar ANSI 8 para el terciario.
 
 #### Scenario: Selección explícita de otro tema
 
-- **WHEN** se define `TEXTUAL_THEME=ansi-light` antes de abrir la TUI
+- **WHEN** se define `KAMINO_THEME=ansi-light` antes de abrir la TUI
 - **THEN** la TUI usa el tema `ansi-light` en lugar de `ansi-dark`
 
 #### Scenario: Tema no ANSI explícito
 
-- **GIVEN** `TEXTUAL_THEME` con un valor distinto de `ansi-dark` o `ansi-light`
+- **GIVEN** `KAMINO_THEME` con un valor distinto de `ansi-dark` o `ansi-light`
 - **WHEN** se abre la TUI
 - **THEN** la TUI usa `ansi-dark` y la interfaz sigue siendo legible con icono y palabra en cada estado
 
 #### Scenario: Tema claro sin Faint
 
-- **GIVEN** `TEXTUAL_THEME=ansi-light`
+- **GIVEN** `KAMINO_THEME=ansi-light`
 - **WHEN** se muestra un texto terciario
 - **THEN** se usa ANSI 8 en lugar de `Faint`
 

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Arch returns the machine architecture with the platform naming used by Python.
+// Arch returns the machine architecture using uname naming.
 func Arch() string { return runtime.GOARCH }
 
 // Hostname returns the machine hostname.

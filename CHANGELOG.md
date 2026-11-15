@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## Sin publicar
+
+### Mantenimiento
+
+- retirar la implementación Python y su tooling; automatizar las releases con `cmd/release`
+
+  **Cambio incompatible.** se elimina `legacy/python/`, los scripts y workflows basados en Python, los fixtures de `testdata/golden/` y la matriz de compatibilidad cruzada. `TEXTUAL_THEME` pasa a llamarse `KAMINO_THEME`. El historial de Git conserva la implementación retirada.
+
 ## v0.10.0 (2026-11-13)
 
 ### Documentación

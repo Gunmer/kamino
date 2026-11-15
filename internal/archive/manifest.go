@@ -41,7 +41,7 @@ type AppEntry struct {
 	Files    []FileEntry `json:"files"`
 }
 
-// Manifest is the clone metadata shared with the Python implementation.
+// Manifest is the clone metadata stored in every archive.
 type Manifest struct {
 	FormatVersion int        `json:"format_version"`
 	ToolVersion   string     `json:"tool_version"`
@@ -130,7 +130,7 @@ func (m *Manifest) Validate() error {
 	return nil
 }
 
-// MarshalJSONBytes serializes the manifest with the Python field order.
+// MarshalJSONBytes serializes the manifest with the canonical field order.
 func (m *Manifest) MarshalJSONBytes() ([]byte, error) {
 	m.normalize()
 	var buf bytes.Buffer

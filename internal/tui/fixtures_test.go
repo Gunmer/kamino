@@ -19,7 +19,7 @@ import (
 func TestMain(m *testing.M) {
 	_ = os.Unsetenv("NO_COLOR")
 	_ = os.Unsetenv("KAMINO_NO_LOGO")
-	_ = os.Unsetenv("TEXTUAL_THEME")
+	_ = os.Unsetenv("KAMINO_THEME")
 	os.Exit(m.Run())
 }
 

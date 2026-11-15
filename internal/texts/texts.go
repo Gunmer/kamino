@@ -293,7 +293,7 @@ const (
 
 // UpdateErrorAdvice maps an update failure kind to a visible action.
 var UpdateErrorAdvice = map[errors.UpdateErrorKind]string{
-	errors.UpdateNotSelfContained: "Esta instalación no es autocontenida. Actualiza con `uv tool upgrade kamino-cli`, con pip o desde el código; no se descargó nada.",
+	errors.UpdateNotSelfContained: "Esta instalación no es autocontenida. Instala el binario autocontenido con `scripts/install.sh` o desde una release; no se descargó nada.",
 	errors.UpdatePlatform:         "kamino update solo admite macOS en Apple Silicon (arm64). No se descargó nada.",
 	errors.UpdateNetwork:          "No se pudo contactar con la release. Revisa la red y vuelve a intentarlo; el binario actual sigue intacto.",
 	errors.UpdateIntegrity:        "La descarga no coincide con el tamaño o el SHA-256 publicado. El binario actual sigue intacto; vuelve a intentarlo.",

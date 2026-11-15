@@ -2,26 +2,24 @@
 
 ## Configuración y verificación
 
-- El proyecto activo es Go (Go 1.25 o superior). La implementación Python vive en
-  `legacy/python/` como referencia histórica y no se usa para construir el binario.
+- El proyecto es Go (Go 1.25 o superior).
 - Compila con `go build ./...` y ejecuta la CLI con `go run ./cmd/kamino --help`.
 - Antes de terminar, ejecuta las mismas comprobaciones que CI, en este orden:
   `gofmt -l .` (vacío), `go vet ./...`, `golangci-lint run ./...` (si está instalado) y
   `go test ./... -race`.
 - Ejecuta una prueba concreta con `go test ./internal/deploy -run TestName`.
-- Para la matriz de compatibilidad con el oráculo Python: `go test ./internal/integration -run Cross`.
 
 ## Arquitectura
 
-- El módulo es `github.com/Gunmer/kamino`; el binario es `cmd/kamino` y los paquetes internos
-  viven en `internal/`. La distribución se llama `kamino-cli`, pero el ejecutable es `kamino`.
+- El módulo es `github.com/Gunmer/kamino`; el binario es `cmd/kamino`, el comando de release es
+  `cmd/release` y los paquetes internos viven en `internal/`.
 - `internal/cli` solo traduce argumentos, salida y códigos. `internal/app` contiene los flujos
   compartidos; `internal/clone`, `internal/deploy` y `internal/update` son casos de uso;
   `internal/texts`, `internal/ui` y `internal/tui` presentan.
 - Las definiciones integradas están en `internal/catalog/apps/*.toml` y se cargan con `go:embed`.
   Se combinan con los TOML del usuario en `~/.config/kamino/apps/`; las definiciones del usuario
-  reemplazan las integradas con el mismo id. `scripts/check_catalog_sync.sh` exige que la copia
-  embebida coincida byte a byte con `src/kamino/catalog/apps/` de la referencia Python.
+  reemplazan las integradas con el mismo id. `internal/catalog/apps/` es la única copia del
+  catálogo.
 - `internal/archive` es responsable del manifiesto versionado y del formato del archivo;
   `internal/plan` planifica la clonación y `internal/deploy` clasifica y aplica el despliegue.
 - `internal/paths.SafeHome` usa `openat`/`O_NOFOLLOW`; no se debe degradar a comprobaciones léxicas.
@@ -49,11 +47,13 @@
 - Escribe en español todo el contenido Markdown (`.md`) del repositorio y todo el texto visible
   para el usuario en la CLI. Escribe en inglés todo el código, incluidos nombres, identificadores y
   comentarios.
-- Si cambias la versión manualmente, mantén sincronizados `internal/version/version.go` y el tag de
-  release; la construcción de release inyecta `Version` y `SelfContained` con `-ldflags`.
+- La versión vive en `internal/version/version.go`; no la edites a mano fuera de `cmd/release`. La
+  construcción de release inyecta `Version` y `SelfContained` con `-ldflags`.
 
-## Migración
+## Releases
 
-- El cambio OpenSpec `migrate-to-go` conserva los tags `migration/phase-*`.
-- `scripts/guard.sh` falla si cambian `testdata/golden/` o los `*_test.go` de la Fase 2 sin una
-  entrada nueva en `MIGRATION/DECISIONS.md`.
+- Los commits integrados en `main` siguen Conventional Commits. `cmd/release` calcula la
+  siguiente versión, actualiza `CHANGELOG.md` e `internal/version/version.go`, construye y
+  comprueba `dist/kamino-arm64`, crea el commit y el tag de release, y publica con `gh`.
+- No edites a mano el changelog de una versión ya publicada ni publiques releases fuera de
+  `cmd/release`; la recuperación de un tag existente se hace con `--tag`.
