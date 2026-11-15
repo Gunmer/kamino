@@ -325,6 +325,49 @@ func TestMenuShowsVersionUnderWordmark(t *testing.T) {
 	}
 }
 
+func TestMenuShowsVersionWithoutWordmark(t *testing.T) {
+	app := testApp(false, false)
+	view := renderCase(app, newMenuScreen(app), 80, 24)
+	if strings.Contains(view, texts.Wordmark[len(texts.Wordmark)-1]) {
+		t.Fatalf("ASCII mode must hide the wordmark:\n%s", view)
+	}
+	if !strings.Contains(view, "v"+testVersion) {
+		t.Fatalf("the version must stay visible without the wordmark:\n%s", view)
+	}
+}
+
+func TestMenuShowsVersionAboveSubtitle(t *testing.T) {
+	app := testApp(false, true)
+	view := renderCase(app, newMenuScreen(app), 80, 40)
+	lines := strings.Split(view, "\n")
+	lastWordmark := -1
+	for index, line := range lines {
+		if strings.Contains(line, texts.Wordmark[len(texts.Wordmark)-1]) {
+			lastWordmark = index
+		}
+	}
+	if lastWordmark < 0 || lastWordmark+1 >= len(lines) {
+		t.Fatalf("missing wordmark or version line:\n%s", view)
+	}
+	if !strings.Contains(lines[lastWordmark+1], "v"+testVersion) {
+		t.Fatalf("the version must follow the wordmark at 80x40, got %q:\n%s", lines[lastWordmark+1], view)
+	}
+	if !strings.Contains(view, texts.MenuSubtitle) {
+		t.Fatalf("80x40 must show the subtitle:\n%s", view)
+	}
+}
+
+func TestSmallTerminalHidesMenuVersion(t *testing.T) {
+	app := testApp(false, true)
+	view := renderCase(app, newMenuScreen(app), 80, 20)
+	if !strings.Contains(view, texts.SmallTitle) {
+		t.Fatalf("below 24 rows must show the small terminal notice:\n%s", view)
+	}
+	if strings.Contains(view, "v"+testVersion) {
+		t.Fatalf("the small terminal notice must not show the version:\n%s", view)
+	}
+}
+
 func TestMenuUsesBuildVersionByDefault(t *testing.T) {
 	value := true
 	app := NewApp(AppOptions{

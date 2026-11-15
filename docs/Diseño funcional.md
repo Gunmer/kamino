@@ -22,8 +22,9 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   o más muestra wordmark, subtítulo, frase, opciones y última misión; con 26 a 29, wordmark y
   opciones; con 24 o 25, wordmark y opciones sin fila de aire; por debajo de 24 aparece el aviso de
   terminal pequeña, que conserva el estado. Las ocho cápsulas permanecen en la cabecera. La versión
-  bajo el wordmark no depende de la altura: se muestra en todos los tamaños, también cuando
-  `KAMINO_NO_LOGO` oculta el wordmark.
+  bajo el wordmark acompaña al cuerpo del menú: se muestra desde 24 filas, también cuando
+  `KAMINO_NO_LOGO` oculta el wordmark; por debajo de 24 filas el aviso de terminal pequeña
+  reemplaza el cuerpo y la versión no aparece.
 - Configuración muestra y edita las rutas de catálogo, clones y holocrones como tres inputs. `Tab` y
   `Mayús+Tab` mueven el foco, `Ctrl+S` valida y guarda, y `Esc` vuelve sin escribir. El archivo
   `~/.config/kamino/config.toml` solo lo lee y escribe la TUI; la vía no interactiva de la CLI usa
