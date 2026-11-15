@@ -7,6 +7,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Gunmer/kamino/internal/texts"
+	"github.com/Gunmer/kamino/internal/version"
 )
 
 type menuScreen struct {
@@ -57,6 +58,9 @@ func (s *menuScreen) View(width, height int) string {
 		for _, line := range texts.Wordmark {
 			lines = append(lines, pad+s.app.theme.Styles.Wordmark.Render(line))
 		}
+	}
+	if version.Version != "" {
+		lines = append(lines, pad+s.app.theme.Styles.Tertiary.Render(strings.ReplaceAll(texts.MenuVersion, "{version}", version.Version)))
 	}
 	if showFull {
 		lines = append(lines, "", pad+s.app.theme.Styles.Secondary.Render(texts.MenuSubtitle))

@@ -13,14 +13,17 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 - Una sola app de terminal construida con Bubble Tea, Lip Gloss y `bubbles` reúne menú, clonación,
   despliegue, actualización y pantallas transversales. Se abre solo si la entrada y la salida son
   terminales y no se definió `KAMINO_PLAIN`.
-- El menú muestra el wordmark KAMINO en el cuerpo, un separador de ocho cápsulas en el lado derecho
+- El menú muestra el wordmark KAMINO en el cuerpo con la versión de la compilación justo debajo,
+  un separador de ocho cápsulas en el lado derecho
   de la cabecera con la última marcada como el original, una frase fija por sesión y las opciones
   Clonar, Desplegar, Actualizar, Configuración y Abandonar Kamino. Todas se recorren con flechas y
   `Enter`; no hay atajos de una tecla y Escape nunca cierra.
 - La cabecera del marco está presente desde 24 filas. El cuerpo del menú degrada por altura: con 30
   o más muestra wordmark, subtítulo, frase, opciones y última misión; con 26 a 29, wordmark y
   opciones; con 24 o 25, wordmark y opciones sin fila de aire; por debajo de 24 aparece el aviso de
-  terminal pequeña, que conserva el estado. Las ocho cápsulas permanecen en la cabecera.
+  terminal pequeña, que conserva el estado. Las ocho cápsulas permanecen en la cabecera. La versión
+  bajo el wordmark no depende de la altura: se muestra en todos los tamaños, también cuando
+  `KAMINO_NO_LOGO` oculta el wordmark.
 - Configuración muestra y edita las rutas de catálogo, clones y holocrones como tres inputs. `Tab` y
   `Mayús+Tab` mueven el foco, `Ctrl+S` valida y guarda, y `Esc` vuelve sin escribir. El archivo
   `~/.config/kamino/config.toml` solo lo lee y escribe la TUI; la vía no interactiva de la CLI usa

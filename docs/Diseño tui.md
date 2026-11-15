@@ -276,6 +276,7 @@ kamino · Menú                                    o o o o o o o *
 --------------------------------------------------------------------------------
 
    [wordmark KAMINO]
+   v0.10.0
 
    Clona y despliega configuraciones de macOS en un solo archivo.
    La Fuerza estará contigo.
@@ -297,6 +298,9 @@ Notas:
 
 - Las ocho cápsulas viven en el lado derecho del header; la última es la original
   (`*`). El wordmark sigue en el body.
+- La versión de la compilación se muestra en dim justo debajo del wordmark, alineada
+  con su borde izquierdo. No depende de la altura y sigue visible cuando
+  `KAMINO_NO_LOGO` oculta el wordmark.
 - No hay atajos de una tecla para las opciones. Escape no cierra.
 - La frase se elige al arrancar y no cambia durante la sesión.
 - `KAMINO_NO_LOGO` oculta el wordmark y fuerza los símbolos ASCII.

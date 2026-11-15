@@ -61,6 +61,7 @@ const (
 	SmallRunning = "Operación en curso: {operation}."
 
 	MenuSubtitle    = Subtitle
+	MenuVersion     = "v{version}"
 	MenuLastMission = "Última misión: {summary}"
 	MenuPrivacy     = "aviso: el clon no está cifrado y puede contener secretos."
 

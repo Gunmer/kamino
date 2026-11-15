@@ -11,6 +11,7 @@ import (
 	"github.com/Gunmer/kamino/internal/conflicts"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/texts"
+	"github.com/Gunmer/kamino/internal/version"
 )
 
 func TestDeployCandidatesOrderAndSources(t *testing.T) {
@@ -294,6 +295,33 @@ func TestExitCodeInMenuMode(t *testing.T) {
 	}
 	if message.(quitMsg).code != 3 {
 		t.Fatalf("menu exit must preserve code 3, got %d", message.(quitMsg).code)
+	}
+}
+
+func TestMenuShowsVersionUnderWordmark(t *testing.T) {
+	app := testApp(false, true)
+	screen := newMenuScreen(app)
+	view := renderCase(app, screen, 80, 24)
+	lines := strings.Split(view, "\n")
+	want := "v" + version.Version
+	lastWordmark := -1
+	for index, line := range lines {
+		if strings.Contains(line, texts.Wordmark[len(texts.Wordmark)-1]) {
+			lastWordmark = index
+		}
+	}
+	if lastWordmark < 0 {
+		t.Fatalf("missing wordmark:\n%s", view)
+	}
+	if lastWordmark+1 >= len(lines) {
+		t.Fatalf("missing version line after the wordmark:\n%s", view)
+	}
+	versionLine := lines[lastWordmark+1]
+	if !strings.Contains(versionLine, want) {
+		t.Fatalf("expected %q right under the wordmark, got %q:\n%s", want, versionLine, view)
+	}
+	if strings.Contains(view, texts.MenuSubtitle) {
+		t.Fatalf("80x24 must not show the subtitle, the version is not part of it:\n%s", view)
 	}
 }
 
