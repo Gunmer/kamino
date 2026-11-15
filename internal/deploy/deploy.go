@@ -137,6 +137,8 @@ type Options struct {
 	ApplicationDirs []string
 	Path            string
 	SnapshotsDir    string
+	// SnapshotsLimit is how many snapshots survive the next deploy; zero keeps all.
+	SnapshotsLimit int
 }
 
 // DeploySession is a prepared deploy with plan, preview and apply steps.
@@ -147,6 +149,7 @@ type DeploySession struct {
 	DeployableApps   []archive.AppEntry
 	NotInstalledApps []archive.AppEntry
 	SnapshotsDir     string
+	SnapshotsLimit   int
 	Notices          []string
 	Warnings         []string
 	staging          string
@@ -201,6 +204,7 @@ func PrepareDeploy(cloneFile string, options Options) (*DeploySession, error) {
 		DeployableApps:   deployable,
 		NotInstalledApps: missing,
 		SnapshotsDir:     options.SnapshotsDir,
+		SnapshotsLimit:   options.SnapshotsLimit,
 		fingerprints:     map[string]fingerprint{},
 	}
 	session.Notices = ghosttyPortabilityNotices(manifest, cloneFile, root)
@@ -430,7 +434,7 @@ func (s *DeploySession) Apply(decisions conflicts.ConflictDecisions, progressCal
 	if err := progress.EnsureNotCancelled(cancelled); err != nil {
 		return DeployResult{}, err
 	}
-	snapshotPath, err := snapshot.CreateSnapshot(destinations, s.Home, s.SnapshotsDir, "")
+	snapshotPath, err := snapshot.CreateSnapshot(destinations, s.Home, s.SnapshotsDir, "", s.SnapshotsLimit)
 	if err != nil {
 		return DeployResult{}, err
 	}

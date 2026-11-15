@@ -25,7 +25,7 @@ func TestCreateSnapshot(t *testing.T) {
 	writeFile(t, home, ".config/app/dir/a", "a")
 	directory := t.TempDir()
 	target := filepath.Join(home, ".config/app/config")
-	path, err := CreateSnapshot([]string{target, filepath.Join(home, ".config/app")}, home, directory, "2026-01-01T00:00:00Z")
+	path, err := CreateSnapshot([]string{target, filepath.Join(home, ".config/app")}, home, directory, "2026-01-01T00:00:00Z", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,21 +52,108 @@ func TestSnapshotSuffixAndTimestampValidation(t *testing.T) {
 	writeFile(t, home, ".config/app/config", "value")
 	directory := t.TempDir()
 	target := filepath.Join(home, ".config/app/config")
-	first, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z")
+	first, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z")
+	second, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == second || filepath.Base(second) != "2026-01-01T00:00:00Z-1.tar.gz" {
 		t.Fatalf("unexpected suffix: %s %s", first, second)
 	}
-	if _, err := CreateSnapshot([]string{target}, home, directory, "../evil"); err == nil {
+	if _, err := CreateSnapshot([]string{target}, home, directory, "../evil", 0); err == nil {
 		t.Fatal("expected timestamp rejection")
 	}
-	if path, err := CreateSnapshot(nil, home, directory, ""); err != nil || path != "" {
+	if path, err := CreateSnapshot(nil, home, directory, "", 0); err != nil || path != "" {
 		t.Fatalf("empty snapshot: %q %v", path, err)
+	}
+}
+
+func TestCreateSnapshotPrunesOldest(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, home, ".config/app/config", "value")
+	directory := t.TempDir()
+	target := filepath.Join(home, ".config/app/config")
+	stamps := []string{"2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "2026-01-03T00:00:00Z"}
+	for _, stamp := range stamps {
+		if _, err := CreateSnapshot([]string{target}, home, directory, stamp, 2); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	if len(names) != 2 {
+		t.Fatalf("expected two kept snapshots, got %v", names)
+	}
+	for _, kept := range []string{"2026-01-02T00:00:00Z.tar.gz", "2026-01-03T00:00:00Z.tar.gz"} {
+		if _, err := os.Lstat(filepath.Join(directory, kept)); err != nil {
+			t.Fatalf("expected %s to survive: %v", kept, err)
+		}
+	}
+	if _, err := os.Lstat(filepath.Join(directory, "2026-01-01T00:00:00Z.tar.gz")); !os.IsNotExist(err) {
+		t.Fatalf("expected the oldest snapshot to be pruned: %v", err)
+	}
+}
+
+func TestCreateSnapshotWithoutLimitKeepsEverySnapshot(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, home, ".config/app/config", "value")
+	directory := t.TempDir()
+	target := filepath.Join(home, ".config/app/config")
+	for _, stamp := range []string{"2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "2026-01-03T00:00:00Z"} {
+		if _, err := CreateSnapshot([]string{target}, home, directory, stamp, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("zero must keep every snapshot, got %d", len(entries))
+	}
+}
+
+func TestPruneSnapshotsOrderAndForeignFiles(t *testing.T) {
+	directory := t.TempDir()
+	same := "2026-01-03T00:00:00Z"
+	names := []string{same + "-1.tar.gz", same + ".tar.gz", "2026-01-02T00:00:00Z.tar.gz", "notes.txt", "2026-01-01T00:00:00Z.tar.gz.bak", ".hidden"}
+	for _, name := range names {
+		if err := os.WriteFile(filepath.Join(directory, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	link := filepath.Join(directory, "2026-01-04T00:00:00Z.tar.gz")
+	if err := os.Symlink(filepath.Join(directory, "nowhere"), link); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := PruneSnapshots(directory, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || filepath.Base(removed[0]) != "2026-01-02T00:00:00Z.tar.gz" {
+		t.Fatalf("unexpected pruning: %v", removed)
+	}
+	for _, name := range []string{names[0], names[1], names[3], names[4], names[5]} {
+		if _, err := os.Lstat(filepath.Join(directory, name)); err != nil {
+			t.Fatalf("expected %s to survive: %v", name, err)
+		}
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Fatalf("expected the symbolic link to survive: %v", err)
+	}
+	if removed, err := PruneSnapshots(directory, 0); err != nil || len(removed) != 0 {
+		t.Fatalf("zero limit must not prune: %v %v", removed, err)
+	}
+	if removed, err := PruneSnapshots(filepath.Join(directory, "missing"), 1); err != nil || len(removed) != 0 {
+		t.Fatalf("missing directory must not fail: %v %v", removed, err)
 	}
 }

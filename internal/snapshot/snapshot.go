@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/Gunmer/kamino/internal/archive"
@@ -22,8 +25,20 @@ const (
 	maxSuffix     = 1000
 )
 
-// CreateSnapshot stores the current state of paths in a snapshot archive.
-func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string) (string, error) {
+// snapshotName matches the files this package writes and may prune.
+var snapshotName = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)(?:-(\d+))?\.tar\.gz$`)
+
+// snapshotFile is one prunable snapshot ordered by timestamp and suffix.
+type snapshotFile struct {
+	name   string
+	stamp  string
+	suffix int
+}
+
+// CreateSnapshot stores the current state of paths in a snapshot archive and
+// prunes the oldest snapshots so that at most limit remain. A limit of zero
+// keeps every snapshot.
+func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limit int) (string, error) {
 	if len(targets) == 0 {
 		return "", nil
 	}
@@ -83,7 +98,66 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string) (str
 	if err := archive.WriteArchive(output, manifest, archive.WriteOptions{SourceRoot: root}); err != nil {
 		return "", err
 	}
+	if _, err := PruneSnapshots(directory, limit); err != nil {
+		return "", err
+	}
 	return output, nil
+}
+
+// PruneSnapshots deletes the oldest snapshots of directory until at most limit
+// remain and returns the deleted paths. A limit of zero keeps every snapshot.
+// Only regular files named like a snapshot are eligible.
+func PruneSnapshots(directory string, limit int) ([]string, error) {
+	if limit <= 0 || directory == "" {
+		return nil, nil
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
+			Msg: fmt.Sprintf("no se pudo leer el directorio de holocrones %s: %v", directory, err),
+		}}
+	}
+	files := make([]snapshotFile, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.Type().IsRegular() {
+			continue
+		}
+		matches := snapshotName.FindStringSubmatch(entry.Name())
+		if matches == nil {
+			continue
+		}
+		suffix := 0
+		if matches[2] != "" {
+			suffix, err = strconv.Atoi(matches[2])
+			if err != nil {
+				continue
+			}
+		}
+		files = append(files, snapshotFile{name: entry.Name(), stamp: matches[1], suffix: suffix})
+	}
+	if len(files) <= limit {
+		return nil, nil
+	}
+	sort.Slice(files, func(i, j int) bool {
+		if files[i].stamp != files[j].stamp {
+			return files[i].stamp < files[j].stamp
+		}
+		return files[i].suffix < files[j].suffix
+	})
+	removed := make([]string, 0, len(files)-limit)
+	for _, file := range files[:len(files)-limit] {
+		path := filepath.Join(directory, file.name)
+		if err := os.Remove(path); err != nil {
+			return removed, &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
+				Msg: fmt.Sprintf("no se pudo borrar el holocrón antiguo %s: %v", path, err),
+			}}
+		}
+		removed = append(removed, path)
+	}
+	return removed, nil
 }
 
 // SnapshotFiles counts the files a snapshot would protect without writing.

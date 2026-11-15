@@ -217,3 +217,82 @@ func TestDeployConcurrentChange(t *testing.T) {
 		t.Fatalf("expected concurrent change, got %v", err)
 	}
 }
+
+func TestDeployPrunesSnapshotsByLimit(t *testing.T) {
+	_, bin, cloneFile, definitions := deployFixture(t)
+	snapshots := t.TempDir()
+	var last string
+	for index := 0; index < 3; index++ {
+		destination := t.TempDir()
+		if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(destination, ".config/test/config"), []byte("value=1\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan, err := session.Plan(nil, false, nil, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		result, err := session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if result.Snapshot == "" {
+			t.Fatalf("iteration %d expected a snapshot: %#v", index, result)
+		}
+		last = result.Snapshot
+		session.Close()
+	}
+	entries, err := os.ReadDir(snapshots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("expected the limit to keep two snapshots, got %d", len(entries))
+	}
+	if _, err := os.Lstat(last); err != nil {
+		t.Fatalf("the newest snapshot must survive: %v", err)
+	}
+}
+
+func TestDeployDryRunDoesNotPrune(t *testing.T) {
+	_, bin, cloneFile, definitions := deployFixture(t)
+	destination := t.TempDir()
+	snapshots := t.TempDir()
+	for _, name := range []string{"2026-01-01T00:00:00Z.tar.gz", "2026-01-02T00:00:00Z.tar.gz", "2026-01-03T00:00:00Z.tar.gz"} {
+		if err := os.WriteFile(filepath.Join(snapshots, name), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(destination, ".config/test/config"), []byte("value=1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	plan, err := session.Plan(nil, true, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result := session.DryRunResult(plan)
+	if !result.DryRun || len(result.Deployed) != 0 {
+		t.Fatalf("unexpected dry run: %#v", result)
+	}
+	entries, err := os.ReadDir(snapshots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 3 {
+		t.Fatalf("dry run must not prune snapshots, got %d", len(entries))
+	}
+}
