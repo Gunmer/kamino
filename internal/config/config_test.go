@@ -62,7 +62,7 @@ func TestResolveAndSave(t *testing.T) {
 		t.Fatal("expected relative rejection")
 	}
 	if _, err := ResolvePath("~/../escape", home, "catalog.dir"); err != nil {
-		// Python accepts this path lexically; it only rejects a doubled slash.
+		// The lexical validator accepts this path; it only rejects a doubled slash.
 		t.Fatalf("unexpected rejection: %v", err)
 	}
 	configDir := filepath.Join(home, "catalog")

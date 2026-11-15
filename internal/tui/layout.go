@@ -102,6 +102,34 @@ func PadLeft(value string, width int) string {
 	return strings.Repeat(" ", gap) + value
 }
 
+// centerBlock centers a rendered block inside width when it leaves room.
+// Lines with no visible width stay empty and already full lines keep their
+// position.
+func centerBlock(lines []string, width int) []string {
+	contentWidth := 0
+	for _, line := range lines {
+		if lineWidth := Width(line); lineWidth > contentWidth {
+			contentWidth = lineWidth
+		}
+	}
+	if contentWidth >= width {
+		return lines
+	}
+	padding := strings.Repeat(" ", (width-contentWidth)/2)
+	if padding == "" {
+		return lines
+	}
+	result := make([]string, len(lines))
+	for index, line := range lines {
+		if Width(line) == 0 {
+			result[index] = line
+			continue
+		}
+		result[index] = padding + line
+	}
+	return result
+}
+
 // Fit returns exactly height lines, each no wider than width.
 func Fit(lines []string, width, height int, ellipsis string) string {
 	result := make([]string, 0, height)

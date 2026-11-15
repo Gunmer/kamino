@@ -35,7 +35,7 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   operaciones largas se ejecutan en segundo plano y el pie nunca muestra botones.
 - Al terminar un flujo iniciado desde el menú se vuelve a él y se actualiza la última misión. Un
   comando directo no vuelve al menú y sale con el código de la CLI.
-- Sin terminal, o con `KAMINO_PLAIN`, se usa la salida de texto. `NO_COLOR` y `TEXTUAL_THEME`
+- Sin terminal, o con `KAMINO_PLAIN`, se usa la salida de texto. `NO_COLOR` y `KAMINO_THEME`
   respetan la decisión de la persona usuaria; el valor por defecto es el tema `ansi-dark`.
 
 ### 2.1 Clonación (`clone`)
@@ -275,7 +275,7 @@ binario de forma atómica → pide reiniciar.
 - **Lenguaje:** Go 1.25 o superior, con binario estático para macOS Apple Silicon.
 - **Formato del archivo del clon:** `tar.gz` estándar con un `manifest.json` dentro. Conserva permisos y enlaces simbólicos, y se puede inspeccionar con herramientas comunes.
 - **Formato de las definiciones de apps:** TOML, con comentarios y sin dependencias externas.
-- **Distribución:** asset `kamino-arm64` publicado por GoReleaser, instalador `scripts/install.sh` y, más adelante, Homebrew tap. `uv` y `pip` dejan de ser vías de instalación.
+- **Distribución:** asset `kamino-arm64`, instalador `scripts/install.sh` y, más adelante, Homebrew tap. El binario autocontenido es la única vía de instalación.
 - **Interfaz:** una sola app ANSI con modos `menu` y `direct`; la salida de texto se conserva
   para scripts y terminales no interactivas.
 - **Vocabulario visible:** original, holocrón de seguridad, híbrido, clon perfecto y “sin base en

@@ -1,18 +1,18 @@
 kamino · Clonar · Destino                                                        Paso 2 de 3   [36m●[0m [36m●[0m [2m○[0m
 [2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 
-    [1mElige el destino del clon[0m
+                           [1mElige el destino del clon[0m
   
-    Carpeta de destino
-    ○ Vault por defecto     [2m~/.config/kamino/vault/[0m
-    ○ Carpeta actual        [2m~/Projects/kamino[0m
-  [1m  ● Indicar carpeta       [0m
-    ▌ /Users/test/Descargas_
+                           Carpeta de destino
+                           ○ Vault por defecto     [2m~/.config/kamino/vault/[0m
+                           ○ Carpeta actual        [2m~/Projects/kamino[0m
+                         [1m  ● Indicar carpeta       [0m
+                           ▌ /Users/test/Descargas_
   
-    Nombre del archivo
-      clone-20261113.tar.gz_
+                           Nombre del archivo
+                             clone-20261113.tar.gz_
   
-    Ruta: ~/Descargas/clone-20261113.tar.gz
+                           Ruta: ~/Descargas/clone-20261113.tar.gz
   
   
   

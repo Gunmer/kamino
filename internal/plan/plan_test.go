@@ -8,7 +8,7 @@ import (
 	"github.com/Gunmer/kamino/internal/catalog"
 )
 
-func TestFnmatchPythonSemantics(t *testing.T) {
+func TestFnmatchCatalogSemantics(t *testing.T) {
 	cases := []struct {
 		name, pattern string
 		want          bool

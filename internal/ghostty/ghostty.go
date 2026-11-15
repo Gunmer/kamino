@@ -133,6 +133,6 @@ func Unquote(value string) string {
 }
 
 func splitLines(text string) []string {
-	// Ghostty config is line-oriented; Python splitlines is sufficient here.
+	// Ghostty config is line-oriented; a plain split is sufficient here.
 	return strings.Split(strings.ReplaceAll(text, "\r\n", "\n"), "\n")
 }

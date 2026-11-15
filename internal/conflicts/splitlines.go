@@ -10,7 +10,7 @@ func isLineBreak(r rune) bool {
 	return false
 }
 
-// splitLinesKeepEnds mirrors Python str.splitlines(keepends=True).
+// splitLinesKeepEnds splits text preserving line endings.
 func splitLinesKeepEnds(text string) []string {
 	if text == "" {
 		return nil
@@ -36,7 +36,7 @@ func splitLinesKeepEnds(text string) []string {
 	return lines
 }
 
-// splitLines mirrors Python str.splitlines() without endings.
+// splitLines splits text without line endings.
 func splitLines(text string) []string {
 	if text == "" {
 		return nil
@@ -137,5 +137,5 @@ func itoa(value int) string {
 	return string(buf)
 }
 
-// SplitLines exposes Python-compatible splitlines for presentation.
+// SplitLines exposes the line splitter for presentation.
 func SplitLines(text string) []string { return splitLines(text) }

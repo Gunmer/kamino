@@ -8,14 +8,13 @@ corresponda a las apps que estén instaladas.
 
 Distribución Go estática implementada: `clone` y `deploy` funcionales con catálogo declarativo,
 detección de apps, archivado `tar.gz` con manifiesto y checksums, CLI interactiva y revisión de
-conflictos por líneas dentro de cada bloque en una TUI ANSI propia. El binario no requiere Python.
+conflictos por líneas dentro de cada bloque en una TUI ANSI propia. El binario es autocontenido.
 
 ## Requisitos
 
-- **Instalación con el binario:** macOS con Apple Silicon (`arm64`) y `curl`. El binario es
-  autocontenido y no requiere instalar Python.
-- **Compilación desde el código fuente o desarrollo:** Go 1.25 o superior. Las pruebas de
-  compatibilidad con el oráculo Python requieren `uv` y Python 3.11.4 o superior.
+- **Instalación con el binario:** macOS con Apple Silicon (`arm64`) y `curl`. El binario no
+  necesita intérpretes ni gestores de paquetes externos.
+- **Compilación desde el código fuente o desarrollo:** Go 1.25 o superior.
 
 ## Instalación con script
 
@@ -91,14 +90,12 @@ go build ./...
 go run ./cmd/kamino --help
 ```
 
-La distribución se publica como el asset `kamino-arm64`; `uv` y `pip` ya no son vías de
-instalación. La referencia Python permanece en `legacy/python/` para ejecutar la matriz de
-compatibilidad.
+La distribución se publica como el asset `kamino-arm64`; el binario autocontenido es la única
+vía de instalación.
 
 ## Versionado y releases
 
-El versionado sigue [SemVer](https://semver.org/) y se automatiza con
-[python-semantic-release](https://python-semantic-release.readthedocs.io/):
+El versionado sigue [SemVer](https://semver.org/) y se automatiza con `cmd/release`:
 
 1. Los commits integrados en `main` deben seguir Conventional Commits. Con merge tradicional o
    rebase se analizan los commits de la rama; con squash, conserva un mensaje Conventional Commit
@@ -107,10 +104,10 @@ El versionado sigue [SemVer](https://semver.org/) y se automatiza con
    `feat:` aumenta minor, `fix:` aumenta patch y `!` o un footer `BREAKING CHANGE:` identifica
    cambios incompatibles. Si solo hay `docs:`, `ci:`, `chore:`, `perf:` u otros cambios sin ruptura
    de compatibilidad, no se genera versión ni release.
-3. Durante las versiones `0.x`, los cambios incompatibles aumentan minor (`major_on_zero = false`).
-   Desde `1.0.0`, aumentan major. Se toma el mayor incremento entre los commits pendientes.
+3. Durante las versiones `0.x`, los cambios incompatibles aumentan minor. Desde `1.0.0`,
+   aumentan major. Se toma el mayor incremento entre los commits pendientes.
 4. Se actualizan `CHANGELOG.md`, `internal/version/version.go` y el tag `vX.Y.Z`. El binario Go se
-   construye con `scripts/build_release.py` y se comprueba antes de empujar el commit de release.
+   construye y se comprueba antes de empujar el commit de release.
 5. Se crea una GitHub Release con las notas y el binario autocontenido `kamino-arm64`
    (Go estático, Apple Silicon), incluido el catálogo de aplicaciones. No se distribuye actualmente
    un binario Intel. La release permanece en borrador hasta subir el binario.
@@ -252,7 +249,7 @@ vive sobre el pie y no reserva filas cuando está vacía.
 desplegar, antes de crear el holocrón; en actualizar, antes de `os.replace`. Después de ese punto
 se ignora con aviso. La barra de progreso avanza por archivos y `Ctrl+C` elimina el temporal.
 
-La TUI usa la paleta ANSI del terminal: el tema por defecto es `ansi-dark` y `TEXTUAL_THEME`
+La TUI usa la paleta ANSI del terminal: el tema por defecto es `ansi-dark` y `KAMINO_THEME`
 admite `ansi-light`; cualquier otro valor cae a `ansi-dark`. Con `NO_COLOR` se muestra en
 monocromo y cada estado conserva icono y palabra. El wordmark se oculta sin UTF-8 o con
 `KAMINO_NO_LOGO`. `KAMINO_PLAIN` fuerza la salida de texto para scripting.
@@ -410,14 +407,15 @@ go vet ./...                 # vet
 gofmt -l .                   # formato (debe estar vacío)
 golangci-lint run ./...      # lint (si está instalado)
 make release-snapshot        # binario local dist/kamino-arm64
-go test ./internal/integration -run Cross  # compatibilidad con Python
 ```
 
 ## Estructura
 
 ```
 cmd/kamino/            # punto de entrada del binario
+cmd/release/           # versionado, build y publicación de releases
 internal/
+├── release/           # Conventional Commits, changelog, build, smoke y gh
 ├── cli/               # argumentos, gating de TUI, salida y códigos
 ├── app/               # flujos de texto compartidos con la CLI
 ├── texts/             # única fuente de textos visibles y glosario
@@ -439,8 +437,5 @@ internal/
 ├── snapshot/          # holocrón de seguridad previo a desplegar
 └── errors/            # errores propios
 ```
-
-`legacy/python/` conserva el oráculo Python y `testdata/golden/` los fixtures de compatibilidad.
-
 
 Los diseños de referencia están en `docs/` (`Diseño funcional.md` y `Diseño técnico.md`).

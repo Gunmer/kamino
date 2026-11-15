@@ -2,7 +2,7 @@ package plan
 
 import "strings"
 
-// fnmatch implements the subset of Python fnmatch used by the catalog.
+// fnmatch implements the glob semantics used by the catalog.
 // Unlike path.Match, '*' also matches '/'.
 func fnmatch(name, pattern string) bool {
 	if pattern == "" {

@@ -112,6 +112,11 @@ Ancho del body:
   140+          -> 120
 ```
 
+Desde 100 columnas el body deja de crecer con la terminal. El bloque que
+devuelve la pantalla se centra dentro del ancho del body; las líneas que ya
+ocupan el ancho completo conservan su posición. Por debajo de 100 columnas el
+contenido mantiene la alineación izquierda aprobada.
+
 ```text
 Alto:
   termH < 24 o termW < 80 -> aviso de terminal pequeña
@@ -163,7 +168,7 @@ en una pantalla.
   `lipgloss.NewStyle()`.
 - `NO_COLOR` desactiva los colores; conserva negrita y faint porque son atributos,
   no color. La información siempre lleva glifo o palabra.
-- `TEXTUAL_THEME` se conserva por compatibilidad: `ansi-dark` por defecto,
+- `KAMINO_THEME` selecciona el tema: `ansi-dark` por defecto,
   `ansi-light` aceptado. `ansi-light` evita `Faint` y usa ANSI 8 para el terciario.
 - Sin UTF-8, o con `KAMINO_NO_LOGO`, se usan los símbolos ASCII. `KAMINO_NO_LOGO`
   además oculta el wordmark.
@@ -1033,7 +1038,7 @@ ERROR  No se pudo copiar la ruta.
   `▌` y los estados siguen usando icono y palabra.
 - Sin UTF-8 o con `KAMINO_NO_LOGO`: se usan los símbolos ASCII de la tabla de
   notación; `KAMINO_NO_LOGO` además oculta el wordmark.
-- `TEXTUAL_THEME=ansi-dark` es el valor por defecto. `ansi-light` evita `Faint` y
+- `KAMINO_THEME=ansi-dark` es el valor por defecto. `ansi-light` evita `Faint` y
   usa ANSI 8 para el terciario. Cualquier otro valor cae a `ansi-dark`.
 
 ## 7. Impacto en specs y documentación

@@ -130,7 +130,7 @@ func NewApp(options AppOptions) *App {
 	}
 	themeName := options.ThemeName
 	if themeName == "" {
-		themeName = os.Getenv("TEXTUAL_THEME")
+		themeName = os.Getenv("KAMINO_THEME")
 	}
 	noColor := options.NoColor || os.Getenv("NO_COLOR") != ""
 	unicode := detectUnicode()

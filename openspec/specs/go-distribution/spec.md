@@ -2,19 +2,19 @@
 
 ## Purpose
 
-Definir la distribución de Kamino como un binario Go estático para macOS Apple Silicon, con presupuestos de arranque, un asset de release compatible con el instalador y el actualizador existentes, y una transición segura desde el binario Python legado.
+Definir la distribución de Kamino como un binario Go estático para macOS Apple Silicon, con presupuestos de arranque, un asset de release compatible con el instalador y el actualizador, y un formato de clones y holocrones estable.
 
 ## Requirements
 
 ### Requirement: Binario Go estático y versión
 
-La distribución de release DEBE (`MUST`) ser un ejecutable Go estático para macOS Apple Silicon (`darwin/arm64`) que no requiera Python, `uv`, `pip` ni una instalación previa. El ejecutable DEBE (`MUST`) exponer `--version` con el formato `kamino <versión>` y `--help` sin cargar el catálogo ni la configuración de la TUI.
+La distribución de release DEBE (`MUST`) ser un ejecutable Go estático para macOS Apple Silicon (`darwin/arm64`) que no requiera intérpretes, gestores de paquetes externos ni una instalación previa. El ejecutable DEBE (`MUST`) exponer `--version` con el formato `kamino <versión>` y `--help` sin cargar el catálogo ni la configuración de la TUI.
 
-#### Scenario: Ejecución sin Python
+#### Scenario: Ejecución sin dependencias
 
-- **GIVEN** un macOS Apple Silicon sin Python instalado
+- **GIVEN** un macOS Apple Silicon sin intérpretes ni gestores de paquetes instalados
 - **WHEN** se ejecuta el binario de release
-- **THEN** `kamino --version` y `kamino --help` funcionan y no inician un intérprete Python
+- **THEN** `kamino --version` y `kamino --help` funcionan y no inician ningún proceso externo
 
 #### Scenario: Versión inyectada en la construcción
 
@@ -40,7 +40,7 @@ El binario de release DEBE (`MUST`) arrancar `--version` y `--help` en menos de 
 
 ### Requirement: Asset de release, digest e instalación
 
-La release DEBE (`MUST`) publicar el asset `kamino-arm64` con la versión inyectada y un SHA-256 verificable. `scripts/install.sh` y `kamino update` DEBEN (`MUST`) seguir usando el mismo nombre de asset, y la instalación NO DEBE (`MUST NOT`) requerir `sudo`. `uv` y `pip` dejan de ser vías de instalación.
+La release DEBE (`MUST`) publicar el asset `kamino-arm64` con la versión inyectada y un SHA-256 verificable. `scripts/install.sh` y `kamino update` DEBEN (`MUST`) seguir usando el mismo nombre de asset, y la instalación NO DEBE (`MUST NOT`) requerir `sudo`. El binario autocontenido es la única vía de instalación.
 
 #### Scenario: Instalación con el script
 
@@ -50,7 +50,7 @@ La release DEBE (`MUST`) publicar el asset `kamino-arm64` con la versión inyect
 
 #### Scenario: Asset y digest publicados
 
-- **GIVEN** una release de GoReleaser
+- **GIVEN** una release creada por `cmd/release`
 - **WHEN** se consulta el asset `kamino-arm64` en GitHub
 - **THEN** el asset existe, tiene el SHA-256 publicado y la versión del binario coincide con el tag
 
@@ -60,17 +60,11 @@ La release DEBE (`MUST`) publicar el asset `kamino-arm64` con la versión inyect
 - **WHEN** se intenta instalar o actualizar
 - **THEN** la operación falla sin descargar ni escribir el binario
 
-### Requirement: Actualización compatible con el binario Python legado
+### Requirement: Actualización del binario autocontenido
 
-Un binario Python legado DEBE (`MUST`) poder ejecutar `kamino update` y reemplazarse por el asset Go, siempre que la versión publicada sea superior y el tamaño y el SHA-256 coincidan. Un binario Go de release DEBE (`MUST`) poder actualizarse a sí mismo; una construcción de desarrollo (`go run` o binario no marcado como autocontenido) NO DEBE (`MUST NOT`) descargar ni reemplazar nada.
+Un binario Go de release DEBE (`MUST`) poder actualizarse a sí mismo, siempre que la versión publicada sea superior y el tamaño y el SHA-256 coincidan. Una construcción de desarrollo (`go run` o binario no marcado como autocontenido) NO DEBE (`MUST NOT`) descargar ni reemplazar nada.
 
-#### Scenario: Python legado actualiza a Go
-
-- **GIVEN** un binario Python autocontenido con una versión anterior a la release Go
-- **WHEN** se ejecuta `kamino update`
-- **THEN** descarga `kamino-arm64`, verifica el digest y reemplaza el binario por el ejecutable Go
-
-#### Scenario: Go se actualiza a sí mismo
+#### Scenario: El binario se actualiza a sí mismo
 
 - **GIVEN** un binario Go de release con una versión anterior a la publicada
 - **WHEN** se ejecuta `kamino update`
@@ -82,40 +76,18 @@ Un binario Python legado DEBE (`MUST`) poder ejecutar `kamino update` y reemplaz
 - **WHEN** se ejecuta `kamino update`
 - **THEN** el comando falla con la vía de actualización correspondiente y no escribe nada
 
-### Requirement: Compatibilidad de clones y holocrones durante la transición
+### Requirement: Compatibilidad del formato de clones y holocrones
 
-El binario Go DEBE (`MUST`) leer y escribir clones y holocrones con `format_version = 1` compatibles con el binario Python legado. Un clon generado por Python DEBE (`MUST`) poder desplegarse con Go, y un clon generado por Go DEBE (`MUST`) poder desplegarse con Python, usando HOMEs temporales y sin tocar el HOME real.
+El binario DEBE (`MUST`) leer y escribir clones y holocrones con `format_version = 1`, usando rutas POSIX relativas al HOME y validando el manifiesto y la integridad antes de escribir.
 
-#### Scenario: Clon de Python desplegado por Go
+#### Scenario: Clon desplegado en otro HOME
 
-- **GIVEN** un clon generado por Python en un HOME temporal
-- **WHEN** el binario Go lo despliega en otro HOME temporal
-- **THEN** los archivos, enlaces, modos y categorías del resultado coinciden con el comportamiento de Python
+- **GIVEN** un clon generado en un HOME temporal
+- **WHEN** el binario lo despliega en otro HOME temporal
+- **THEN** los archivos, enlaces, modos y categorías del resultado se aplican correctamente
 
-#### Scenario: Clon de Go desplegado por Python
+#### Scenario: Holocrón restaurado
 
-- **GIVEN** un clon generado por Go en un HOME temporal
-- **WHEN** el binario Python lo despliega en otro HOME temporal
-- **THEN** el manifiesto se valida, la integridad se verifica y los archivos se aplican correctamente
-
-#### Scenario: Holocrón cruzado
-
-- **GIVEN** un holocrón generado por Python o por Go
-- **WHEN** el otro binario lo despliega en un HOME temporal
+- **GIVEN** un holocrón generado por el binario
+- **WHEN** se despliega en un HOME temporal
 - **THEN** el holocrón se reconoce como la app sintética `snapshot` y restaura el estado anterior
-
-### Requirement: Coexistencia y corte reversible
-
-Durante la migración, Python DEBE (`MUST`) permanecer en `src/`, `tests/` y `scripts/` como referencia ejecutable, y el catálogo embebido de Go DEBE (`MUST`) mantenerse sincronizado con `src/kamino/catalog/apps/`. El corte final DEBE (`MUST`) mover Python a `legacy/python/` con `git mv`, sin borrarlo, y dejar la raíz como proyecto Go.
-
-#### Scenario: Catálogo sincronizado
-
-- **GIVEN** una definición de app en `src/kamino/catalog/apps/`
-- **WHEN** se ejecuta la comprobación de sincronización
-- **THEN** la copia en `internal/catalog/apps/` coincide byte a byte y la comprobación falla si divergen
-
-#### Scenario: Corte sin pérdida
-
-- **GIVEN** todas las pruebas Go y la compatibilidad cruzada en verde
-- **WHEN** se ejecuta el corte de la Fase 4
-- **THEN** Python se mueve a `legacy/python/` y no se elimina ningún archivo del historial

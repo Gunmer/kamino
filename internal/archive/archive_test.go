@@ -253,7 +253,7 @@ func TestExtractRejectsUnsafeMembers(t *testing.T) {
 	}
 }
 
-func TestManifestJSONMatchesPythonShape(t *testing.T) {
+func TestManifestJSONCanonicalShape(t *testing.T) {
 	value := "a" + string(bytes.Repeat([]byte("0"), 63))
 	manifest := &Manifest{
 		FormatVersion: 1, ToolVersion: "0.8.0", CreatedAt: "2026-01-01T00:00:00Z",
