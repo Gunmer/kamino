@@ -332,6 +332,17 @@ func goldenSettingsFocusTwo() goldenCase {
 	}
 }
 
+func goldenSettingsFocusThree() goldenCase {
+	return goldenCase{
+		name: "settings-focus3", sizes: [][2]int{{100, 26}},
+		build: func(app *App) Screen {
+			screen := newSettingsScreen(app, "")
+			screen.focus = 3
+			return screen
+		},
+	}
+}
+
 func goldenSettingsError() goldenCase {
 	return goldenCase{
 		name: "settings-error", sizes: [][2]int{{100, 26}},
@@ -474,6 +485,7 @@ func TestGoldenSettings(t *testing.T) {
 	runGolden(t, goldenSettings())
 	runGolden(t, goldenSettingsFocusOne())
 	runGolden(t, goldenSettingsFocusTwo())
+	runGolden(t, goldenSettingsFocusThree())
 	runGolden(t, goldenSettingsError())
 }
 func TestGoldenU1(t *testing.T) {
@@ -490,7 +502,7 @@ func TestContract(t *testing.T) {
 	cases := []goldenCase{
 		goldenMenu(), goldenC1(), goldenC2(), goldenC2Manual(), goldenC2Dialog(),
 		goldenC3Review(), goldenC3Writing(), goldenC3Done(), goldenD3(), goldenD4(),
-		goldenD5(), goldenSettings(), goldenSettingsFocusOne(), goldenSettingsFocusTwo(),
+		goldenD5(), goldenSettings(), goldenSettingsFocusOne(), goldenSettingsFocusTwo(), goldenSettingsFocusThree(),
 		goldenD0(), goldenD1(), goldenD2(),
 		goldenSettingsError(), goldenU1Query(), goldenU1Download(), goldenU1Result(),
 		goldenHelp(), goldenError(), goldenMessages(),

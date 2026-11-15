@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strconv"
+
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -8,9 +10,14 @@ import (
 	"github.com/Gunmer/kamino/internal/texts"
 )
 
+const (
+	fieldCount = 4
+	limitField = 3
+)
+
 type settingsScreen struct {
 	screenBase
-	fields     [3]string
+	fields     [fieldCount]string
 	focus      int
 	errorIndex int
 	messages   []Message
@@ -23,10 +30,11 @@ func newSettingsScreen(app *App, initialError string) *settingsScreen {
 	screen := &settingsScreen{
 		screenBase: screenBase{app: app},
 		errorIndex: -1,
-		fields: [3]string{
+		fields: [fieldCount]string{
 			app.displayPath(loaded.Config.CatalogDir),
 			app.displayPath(loaded.Config.CloneOutputDir),
 			app.displayPath(loaded.Config.SnapshotsDir),
+			strconv.Itoa(loaded.Config.SnapshotsLimit),
 		},
 	}
 	if loaded.Exists {
@@ -38,6 +46,9 @@ func newSettingsScreen(app *App, initialError string) *settingsScreen {
 		}
 		if value, ok := loaded.Raw[config.SnapshotsKey]; ok {
 			screen.fields[2] = value
+		}
+		if value, ok := loaded.Raw[config.SnapshotsLimitKey]; ok {
+			screen.fields[limitField] = value
 		}
 	}
 	if initialError != "" {
@@ -61,9 +72,9 @@ func (s *settingsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	}
 	switch keyMessage.String() {
 	case "tab", "down":
-		s.focus = (s.focus + 1) % 3
+		s.focus = (s.focus + 1) % fieldCount
 	case "shift+tab", "up":
-		s.focus = (s.focus + 2) % 3
+		s.focus = (s.focus + fieldCount - 1) % fieldCount
 	case "esc":
 		return s, popScreen()
 	case "ctrl+s":
@@ -74,17 +85,20 @@ func (s *settingsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 			s.fields[s.focus] = string(runes[:len(runes)-1])
 		}
 	default:
-		if len(keyMessage.Runes) > 0 {
-			s.fields[s.focus] += string(keyMessage.Runes)
+		for _, input := range keyMessage.Runes {
+			if s.focus == limitField && (input < '0' || input > '9') {
+				continue
+			}
+			s.fields[s.focus] += string(input)
 		}
 	}
 	return s, nil
 }
 
 func (s *settingsScreen) save() {
-	values := make([]string, 3)
+	values := make([]string, limitField)
 	keys := []string{config.CatalogKey, config.CloneKey, config.SnapshotsKey}
-	for index, field := range s.fields {
+	for index, field := range s.fields[:limitField] {
 		resolved, err := config.ResolvePath(field, s.app.home, keys[index])
 		if err != nil {
 			s.errorIndex = index
@@ -93,12 +107,19 @@ func (s *settingsScreen) save() {
 		}
 		values[index] = resolved
 	}
-	value := config.AppConfig{CatalogDir: values[0], CloneOutputDir: values[1], SnapshotsDir: values[2]}
+	limit, err := config.ParseSnapshotsLimit(s.fields[limitField])
+	if err != nil {
+		s.errorIndex = limitField
+		s.messages = []Message{{Kind: MessageError, Text: err.Error()}}
+		return
+	}
+	value := config.AppConfig{CatalogDir: values[0], CloneOutputDir: values[1], SnapshotsDir: values[2], SnapshotsLimit: limit}
 	if _, err := config.SaveConfig(value, s.app.home, ""); err != nil {
 		s.messages = []Message{{Kind: MessageError, Text: err.Error()}}
 		return
 	}
 	s.errorIndex = -1
+	s.fields[limitField] = strconv.Itoa(limit)
 	s.app.settings = value
 	s.app.lastMission = texts.SettingsSavedInfo
 	s.messages = []Message{{Kind: MessageInfo, Text: texts.SettingsSavedInfo}}
@@ -110,15 +131,18 @@ func (s *settingsScreen) View(width, height int) string {
 		"  " + s.app.theme.Styles.Tertiary.Render(texts.SettingsSubtitleTUI),
 		"",
 	}
-	labels := []string{texts.SettingsCatalog, texts.SettingsClones, texts.SettingsSnapshots}
-	hints := []string{texts.SettingsCatalogHint, texts.SettingsCloneHint, texts.SettingsSnapshotsHint}
+	labels := []string{texts.SettingsCatalog, texts.SettingsClones, texts.SettingsSnapshots, texts.SettingsSnapshotsLimit}
+	hints := []string{texts.SettingsCatalogHint, texts.SettingsCloneHint, texts.SettingsSnapshotsHint, texts.SettingsSnapshotsLimitHint}
 	for index, label := range labels {
 		cursor := "  "
 		if index == s.focus {
 			cursor = s.app.theme.Symbols.Cursor + " "
 		}
 		lines = append(lines, "  "+cursor+s.app.theme.Styles.Secondary.Render(label))
-		value := TruncatePath(s.fields[index], s.app.home, max(8, width-8), s.app.theme.Symbols.Ellipsis)
+		value := s.fields[index]
+		if index != limitField {
+			value = TruncatePath(value, s.app.home, max(8, width-8), s.app.theme.Symbols.Ellipsis)
+		}
 		style := s.app.theme.Styles.Secondary
 		if index == s.errorIndex {
 			style = s.app.theme.Styles.Error
