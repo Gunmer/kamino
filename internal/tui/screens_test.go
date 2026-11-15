@@ -352,19 +352,36 @@ func TestMenuShowsVersionAboveSubtitle(t *testing.T) {
 	if !strings.Contains(lines[lastWordmark+1], "v"+testVersion) {
 		t.Fatalf("the version must follow the wordmark at 80x40, got %q:\n%s", lines[lastWordmark+1], view)
 	}
-	if !strings.Contains(view, texts.MenuSubtitle) {
+	subtitle := -1
+	for index, line := range lines {
+		if strings.Contains(line, texts.MenuSubtitle) {
+			subtitle = index
+			break
+		}
+	}
+	if subtitle < 0 {
 		t.Fatalf("80x40 must show the subtitle:\n%s", view)
+	}
+	if subtitle <= lastWordmark+1 {
+		t.Fatalf("the subtitle must come after the version line, got subtitle %d and version %d:\n%s", subtitle, lastWordmark+1, view)
 	}
 }
 
-func TestSmallTerminalHidesMenuVersion(t *testing.T) {
+func TestMenuVersionRespectsTheHeightCutoff(t *testing.T) {
 	app := testApp(false, true)
-	view := renderCase(app, newMenuScreen(app), 80, 20)
-	if !strings.Contains(view, texts.SmallTitle) {
-		t.Fatalf("below 24 rows must show the small terminal notice:\n%s", view)
+	below := renderCase(app, newMenuScreen(app), 80, 23)
+	if !strings.Contains(below, texts.SmallTitle) {
+		t.Fatalf("23 rows must show the small terminal notice:\n%s", below)
 	}
-	if strings.Contains(view, "v"+testVersion) {
-		t.Fatalf("the small terminal notice must not show the version:\n%s", view)
+	if strings.Contains(below, "v"+testVersion) {
+		t.Fatalf("the small terminal notice must not show the version:\n%s", below)
+	}
+	at := renderCase(app, newMenuScreen(app), 80, 24)
+	if strings.Contains(at, texts.SmallTitle) {
+		t.Fatalf("24 rows must render the menu body:\n%s", at)
+	}
+	if !strings.Contains(at, "v"+testVersion) {
+		t.Fatalf("24 rows must show the version:\n%s", at)
 	}
 }
 
