@@ -18,19 +18,26 @@ const (
 	CatalogKey   = "catalog.dir"
 	CloneKey     = "clone.output_dir"
 	SnapshotsKey = "deploy.snapshots_dir"
+	// SnapshotsLimitKey is how many snapshots are kept.
+	SnapshotsLimitKey = "deploy.snapshots_limit"
 )
+
+// DefaultSnapshotsLimit is how many snapshots are kept when nothing is configured.
+const DefaultSnapshotsLimit = 5
 
 var sectionKeys = map[string]map[string]string{
 	"catalog": {"dir": CatalogKey},
 	"clone":   {"output_dir": CloneKey},
-	"deploy":  {"snapshots_dir": SnapshotsKey},
+	"deploy":  {"snapshots_dir": SnapshotsKey, "snapshots_limit": SnapshotsLimitKey},
 }
 
-// AppConfig holds the three effective TUI paths.
+// AppConfig holds the three effective TUI paths and the snapshot limit.
 type AppConfig struct {
 	CatalogDir     string
 	CloneOutputDir string
 	SnapshotsDir   string
+	// SnapshotsLimit is how many snapshots survive the next deploy; zero keeps all.
+	SnapshotsLimit int
 }
 
 // LoadResult is the result of loading the configuration.
@@ -53,6 +60,7 @@ func DefaultConfig(home string) AppConfig {
 		CatalogDir:     defaults.CatalogDir(root),
 		CloneOutputDir: defaults.VaultDir(root),
 		SnapshotsDir:   defaults.SnapshotsDir(root),
+		SnapshotsLimit: DefaultSnapshotsLimit,
 	}
 }
 
@@ -78,6 +86,7 @@ func LoadConfig(home, path string) LoadResult {
 
 	values := map[string]string{}
 	raw := map[string]string{}
+	limit := defaultsValue.SnapshotsLimit
 	errorsList := make([]string, 0)
 	for section, value := range parsed {
 		allowed, ok := sectionKeys[section]
@@ -94,6 +103,20 @@ func LoadConfig(home, path string) LoadResult {
 			fullKey := section + "." + key
 			if _, ok := allowed[key]; !ok {
 				errorsList = append(errorsList, "clave desconocida: "+fullKey)
+				continue
+			}
+			if fullKey == SnapshotsLimitKey {
+				number, ok := rawValue.(int64)
+				if !ok {
+					errorsList = append(errorsList, fullKey+" debe ser un entero")
+					continue
+				}
+				if number < 0 {
+					errorsList = append(errorsList, fullKey+" no puede ser negativo")
+					continue
+				}
+				limit = int(number)
+				raw[fullKey] = strconv.FormatInt(number, 10)
 				continue
 			}
 			text, ok := rawValue.(string)
@@ -115,6 +138,7 @@ func LoadConfig(home, path string) LoadResult {
 		CatalogDir:     fallback(values[CatalogKey], defaultsValue.CatalogDir),
 		CloneOutputDir: fallback(values[CloneKey], defaultsValue.CloneOutputDir),
 		SnapshotsDir:   fallback(values[SnapshotsKey], defaultsValue.SnapshotsDir),
+		SnapshotsLimit: limit,
 	}
 	result := LoadResult{Config: config, Exists: true, Raw: raw}
 	if len(errorsList) > 0 {
@@ -161,7 +185,7 @@ func ResolvePath(value, home, key string) (string, error) {
 	return resolved, nil
 }
 
-// SaveConfig writes the three paths atomically and returns the file path.
+// SaveConfig writes the configuration atomically and returns the file path.
 func SaveConfig(config AppConfig, home, path string) (string, error) {
 	root := homeOrUser(home)
 	target := path
@@ -205,6 +229,9 @@ func SaveConfig(config AppConfig, home, path string) (string, error) {
 }
 
 func validateConfigPaths(config AppConfig) error {
+	if config.SnapshotsLimit < 0 {
+		return configError(SnapshotsLimitKey + ": usa un entero mayor o igual que 0")
+	}
 	values := [][2]string{
 		{CatalogKey, config.CatalogDir},
 		{CloneKey, config.CloneOutputDir},
@@ -227,7 +254,17 @@ func serialize(config AppConfig) string {
 		"[clone]\n" +
 		"output_dir = " + tomlString(config.CloneOutputDir) + "\n\n" +
 		"[deploy]\n" +
-		"snapshots_dir = " + tomlString(config.SnapshotsDir) + "\n"
+		"snapshots_dir = " + tomlString(config.SnapshotsDir) + "\n" +
+		"snapshots_limit = " + strconv.Itoa(config.SnapshotsLimit) + "\n"
+}
+
+// ParseSnapshotsLimit validates the numeric limit edited in the settings screen.
+func ParseSnapshotsLimit(value string) (int, error) {
+	number, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil || number < 0 {
+		return 0, configError(SnapshotsLimitKey + ": usa un entero mayor o igual que 0")
+	}
+	return number, nil
 }
 
 func tomlString(value string) string {

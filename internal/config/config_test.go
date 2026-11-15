@@ -79,6 +79,101 @@ func TestResolveAndSave(t *testing.T) {
 	}
 }
 
+func TestSnapshotsLimitDefaultAndLoad(t *testing.T) {
+	home := t.TempDir()
+	if got := LoadConfig(home, "").Config.SnapshotsLimit; got != DefaultSnapshotsLimit {
+		t.Fatalf("missing file must use the default limit, got %d", got)
+	}
+	if DefaultSnapshotsLimit != 5 {
+		t.Fatalf("default limit must be 5, got %d", DefaultSnapshotsLimit)
+	}
+	writeConfig := func(content string) {
+		t.Helper()
+		if err := os.MkdirAll(filepath.Dir(ConfigPath(home)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(ConfigPath(home), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeConfig("[deploy]\nsnapshots_limit = 3\n")
+	loaded := LoadConfig(home, "")
+	if loaded.Error != nil {
+		t.Fatalf("unexpected error: %v", loaded.Error)
+	}
+	if loaded.Config.SnapshotsLimit != 3 {
+		t.Fatalf("expected the configured limit, got %d", loaded.Config.SnapshotsLimit)
+	}
+	if loaded.Raw[SnapshotsLimitKey] != "3" {
+		t.Fatalf("expected the raw limit for the settings screen, got %q", loaded.Raw[SnapshotsLimitKey])
+	}
+	writeConfig("[deploy]\nsnapshots_limit = 0\n")
+	loaded = LoadConfig(home, "")
+	if loaded.Error != nil || loaded.Config.SnapshotsLimit != 0 {
+		t.Fatalf("zero must disable the limit: %#v", loaded)
+	}
+}
+
+func TestSnapshotsLimitRejectsInvalidValues(t *testing.T) {
+	cases := map[string]string{
+		"negative":     "[deploy]\nsnapshots_limit = -1\n",
+		"string":       "[deploy]\nsnapshots_limit = \"5\"\n",
+		"float":        "[deploy]\nsnapshots_limit = 2.5\n",
+		"pathAsNumber": "[catalog]\ndir = 5\n",
+	}
+	for name, content := range cases {
+		t.Run(name, func(t *testing.T) {
+			home := t.TempDir()
+			if err := os.MkdirAll(filepath.Dir(ConfigPath(home)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(ConfigPath(home), []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			loaded := LoadConfig(home, "")
+			if loaded.Error == nil {
+				t.Fatalf("expected a configuration error for %s", name)
+			}
+			if loaded.Config != DefaultConfig(home) {
+				t.Fatalf("invalid configuration must fall back to defaults: %#v", loaded.Config)
+			}
+		})
+	}
+}
+
+func TestSaveAndLoadSnapshotsLimit(t *testing.T) {
+	home := t.TempDir()
+	value := DefaultConfig(home)
+	value.SnapshotsLimit = 2
+	path, err := SaveConfig(value, home, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := LoadConfig(home, path)
+	if loaded.Error != nil || loaded.Config != value {
+		t.Fatalf("limit roundtrip failed: %#v", loaded)
+	}
+	value.SnapshotsLimit = -1
+	if _, err := SaveConfig(value, home, ""); err == nil {
+		t.Fatal("expected negative limit rejection")
+	}
+}
+
+func TestParseSnapshotsLimit(t *testing.T) {
+	valid := map[string]int{"5": 5, " 7 ": 7, "0": 0, "12": 12}
+	for input, expected := range valid {
+		value, err := ParseSnapshotsLimit(input)
+		if err != nil || value != expected {
+			t.Fatalf("unexpected parse of %q: %d %v", input, value, err)
+		}
+	}
+	for _, input := range []string{"", "-1", "abc", "2.5", "5x"} {
+		if _, err := ParseSnapshotsLimit(input); err == nil {
+			t.Fatalf("expected rejection of %q", input)
+		}
+	}
+}
+
 func TestSaveRejectsNonDirectory(t *testing.T) {
 	home := t.TempDir()
 	file := filepath.Join(home, "file")
