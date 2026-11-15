@@ -25,10 +25,12 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   bajo el wordmark acompaña al cuerpo del menú: se muestra desde 24 filas, también cuando
   `KAMINO_NO_LOGO` oculta el wordmark; por debajo de 24 filas el aviso de terminal pequeña
   reemplaza el cuerpo y la versión no aparece.
-- Configuración muestra y edita las rutas de catálogo, clones y holocrones como tres inputs. `Tab` y
-  `Mayús+Tab` mueven el foco, `Ctrl+S` valida y guarda, y `Esc` vuelve sin escribir. El archivo
+- Configuración muestra y edita las rutas de catálogo, clones y holocrones y el límite de
+  holocrones como cuatro inputs; el del límite solo admite dígitos. `Tab` y `Mayús+Tab` mueven el
+  foco, `Ctrl+S` valida y guarda, y `Esc` vuelve sin escribir. El archivo
   `~/.config/kamino/config.toml` solo lo lee y escribe la TUI; la vía no interactiva de la CLI usa
-  los valores integrados. El archivo se crea solo al guardar.
+  los valores integrados para las rutas y lee únicamente `deploy.snapshots_limit`. El archivo se
+  crea solo al guardar.
 - Entre el cuerpo y el pie hay una zona de mensajes `INFO`, `AVISO` y `ERROR`, con icono, palabra y
   color ANSI; no se reserva cuando está vacía y no sustituye a la pantalla de error común.
 - La ayuda contextual se abre con `?` y, en campos de texto, también con `F1`; se genera de los
@@ -119,8 +121,10 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   zona de mensajes. Volver o cancelar no escribe ni crea holocrón.
 - El holocrón se guarda por defecto en `~/.config/kamino/vault/snapshot/`, o en el
   `deploy.snapshots_dir` configurado para la TUI, y se crea solo si hay al menos un destino existente
-  que proteger. Antes de escribir se revalidan los destinos; si alguno cambió, se aborta sin
-  escribir. Un fallo después del holocrón se informa como “Despliegue incompleto” con los aplicados,
+  que proteger. Después de escribirlo se borran los más antiguos hasta dejar
+  `deploy.snapshots_limit` (5 por defecto; `0` conserva todos): solo archivos `<fecha>.tar.gz` del
+  directorio, nunca otros archivos, directorios o enlaces. Antes de escribir se revalidan los
+  destinos; si alguno cambió, se aborta sin escribir. Un fallo después del holocrón se informa como “Despliegue incompleto” con los aplicados,
   el fallido y el holocrón, y termina con código 1; no hay rollback automático.
 - Los holocrones antiguos en `~/Library/Application Support/kamino/snapshots/` no se mueven ni se
   copian; siguen pudiendo desplegarse indicando su ruta.

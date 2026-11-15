@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Permitir que la TUI de Kamino lea y guarde las rutas de catálogo, clones y holocrones en `~/.config/kamino/config.toml`, con una pantalla de configuración, validación estricta y valores por defecto bajo `vault/`, sin que la CLI dependa de ese archivo.
+Permitir que la TUI de Kamino lea y guarde las rutas de catálogo, clones y holocrones y el límite de holocrones en `~/.config/kamino/config.toml`, con una pantalla de configuración, validación estricta y valores por defecto bajo `vault/`, sin que la CLI dependa de ese archivo salvo para ese límite.
 
 ## Requirements
 
@@ -28,21 +28,27 @@ La TUI DEBE (`MUST`) leer, si existe, `~/.config/kamino/config.toml` al arrancar
 - **WHEN** se abre la TUI o se entra en la pantalla de configuración
 - **THEN** el archivo no se crea
 
-### Requirement: La vía no interactiva no usa la configuración
+### Requirement: La vía no interactiva solo lee el límite de holocrones
 
-La vía no interactiva de la CLI NO DEBE (`MUST NOT`) leer, crear, modificar ni guardar `config.toml`, ni aplicar sus valores. `clone`, `deploy` y `update` con salida de texto DEBEN (`MUST`) usar los valores integrados. Un archivo inválido NO DEBE (`MUST NOT`) alterar esa vía.
+La vía no interactiva de la CLI NO DEBE (`MUST NOT`) crear, modificar ni guardar `config.toml`. `clone`, `deploy` y `update` con salida de texto DEBEN (`MUST`) usar los valores integrados para `catalog.dir`, `clone.output_dir` y `deploy.snapshots_dir`. La única clave que DEBEN (`MUST`) leer es `deploy.snapshots_limit`, para aplicar el mismo límite de holocrones que la TUI. Un archivo inválido NO DEBE (`MUST NOT`) bloquear el comando: DEBE (`MUST`) usar el límite por defecto y los valores integrados sin informar del archivo.
 
 #### Scenario: CLI con configuración distinta
 
 - **GIVEN** un `config.toml` válido con `clone.output_dir`, `deploy.snapshots_dir` y `catalog.dir` distintos de los integrados
 - **WHEN** se ejecuta `kamino clone`, `kamino deploy` o `kamino update` sin terminal interactiva
-- **THEN** el comando usa los valores integrados y no los del archivo
+- **THEN** el comando usa los valores integrados para las rutas y no los del archivo
+
+#### Scenario: CLI con límite de holocrones configurado
+
+- **GIVEN** un `config.toml` válido con `deploy.snapshots_limit = 2` y tres holocrones en el directorio integrado
+- **WHEN** se ejecuta `kamino deploy` sin terminal interactiva y crea un holocrón
+- **THEN** el comando borra los más antiguos hasta dejar dos
 
 #### Scenario: CLI con configuración inválida
 
 - **GIVEN** un `config.toml` con TOML inválido o claves desconocidas
 - **WHEN** se ejecuta un comando de la CLI con salida de texto
-- **THEN** el comando funciona con los valores integrados y no informa del archivo
+- **THEN** el comando funciona con los valores integrados y el límite por defecto, y no informa del archivo
 
 #### Scenario: CLI no crea el archivo
 
@@ -58,19 +64,19 @@ La vía no interactiva de la CLI NO DEBE (`MUST NOT`) leer, crear, modificar ni 
 
 ### Requirement: Creación del archivo solo al guardar
 
-La TUI NO DEBE (`MUST NOT`) crear `config.toml` al arrancar ni al abrir la pantalla de configuración. DEBE (`MUST`) crearlo con el primer guardado desde esa pantalla. Al guardar, DEBE (`MUST`) escribir siempre las tres claves admitidas.
+La TUI NO DEBE (`MUST NOT`) crear `config.toml` al arrancar ni al abrir la pantalla de configuración. DEBE (`MUST`) crearlo con el primer guardado desde esa pantalla. Al guardar, DEBE (`MUST`) escribir siempre las cuatro claves admitidas.
 
 #### Scenario: Primer guardado sin archivo
 
 - **GIVEN** un HOME sin `~/.config/kamino/config.toml` y la pantalla de configuración abierta
 - **WHEN** se guardan los valores
-- **THEN** se crea el archivo con `catalog.dir`, `clone.output_dir` y `deploy.snapshots_dir`
+- **THEN** se crea el archivo con `catalog.dir`, `clone.output_dir`, `deploy.snapshots_dir` y `deploy.snapshots_limit`
 
 #### Scenario: Guardado con archivo existente
 
 - **GIVEN** un `config.toml` existente
 - **WHEN** se guardan los valores desde la pantalla
-- **THEN** las tres claves quedan escritas con los valores mostrados
+- **THEN** las cuatro claves quedan escritas con los valores mostrados
 
 #### Scenario: Cancelar sin guardar
 
@@ -80,7 +86,7 @@ La TUI NO DEBE (`MUST NOT`) crear `config.toml` al arrancar ni al abrir la panta
 
 ### Requirement: Esquema estricto de configuración
 
-El archivo DEBE (`MUST`) ser TOML y admitir solo `catalog.dir`, `clone.output_dir` y `deploy.snapshots_dir`. DEBE (`MUST`) rechazar TOML inválido, secciones o claves desconocidas, tipos incorrectos, valores vacíos, rutas relativas, rutas con `~usuario` y rutas existentes que no son directorios, con un mensaje que nombre la sección o la clave.
+El archivo DEBE (`MUST`) ser TOML y admitir solo `catalog.dir`, `clone.output_dir`, `deploy.snapshots_dir` y `deploy.snapshots_limit`. Las tres rutas DEBEN (`MUST`) ser cadenas y `deploy.snapshots_limit` DEBE (`MUST`) ser un entero mayor o igual que 0. DEBE (`MUST`) rechazar TOML inválido, secciones o claves desconocidas, tipos incorrectos, valores vacíos, rutas relativas, rutas con `~usuario` y rutas existentes que no son directorios, con un mensaje que nombre la sección o la clave.
 
 #### Scenario: TOML inválido
 
@@ -99,6 +105,18 @@ El archivo DEBE (`MUST`) ser TOML y admitir solo `catalog.dir`, `clone.output_di
 - **GIVEN** un archivo con `clone.force`, `deploy.yes` o una clave no documentada
 - **WHEN** la TUI intenta cargarlo
 - **THEN** rechaza la clave y muestra su nombre
+
+#### Scenario: Límite no entero
+
+- **GIVEN** un archivo con `deploy.snapshots_limit = "5"` o `deploy.snapshots_limit = 2.5`
+- **WHEN** la TUI intenta cargarlo
+- **THEN** rechaza el valor, muestra que debe ser un entero y abre la pantalla con el error
+
+#### Scenario: Límite negativo
+
+- **GIVEN** un archivo con `deploy.snapshots_limit = -1`
+- **WHEN** la TUI intenta cargarlo
+- **THEN** rechaza el valor y usa los valores por defecto
 
 #### Scenario: Tipo incorrecto
 
@@ -120,7 +138,7 @@ El archivo DEBE (`MUST`) ser TOML y admitir solo `catalog.dir`, `clone.output_di
 
 ### Requirement: Valores por defecto
 
-Los valores por defecto DEBEN (`MUST`) ser `~/.config/kamino/apps` para `catalog.dir`, `~/.config/kamino/vault/` para `clone.output_dir` y `~/.config/kamino/vault/snapshot/` para `deploy.snapshots_dir`. Una clave ausente DEBE (`MUST`) usar su valor por defecto.
+Los valores por defecto DEBEN (`MUST`) ser `~/.config/kamino/apps` para `catalog.dir`, `~/.config/kamino/vault/` para `clone.output_dir`, `~/.config/kamino/vault/snapshot/` para `deploy.snapshots_dir` y `5` para `deploy.snapshots_limit`. Una clave ausente DEBE (`MUST`) usar su valor por defecto.
 
 #### Scenario: Valores por defecto del catálogo
 
@@ -193,13 +211,13 @@ En la TUI, una ruta escrita manualmente en C2 DEBE (`MUST`) prevalecer sobre `cl
 
 ### Requirement: Pantalla de configuración
 
-La TUI DEBE (`MUST`) ofrecer una pantalla de Configuración accesible desde el menú principal después de Actualizar, sin atajo de teclado. La pantalla DEBE (`MUST`) mostrar y permitir editar `catalog.dir`, `clone.output_dir` y `deploy.snapshots_dir` con sus valores efectivos. `Ctrl+S` DEBE guardar y `Esc` DEBE volver sin guardar.
+La TUI DEBE (`MUST`) ofrecer una pantalla de Configuración accesible desde el menú principal después de Actualizar, sin atajo de teclado. La pantalla DEBE (`MUST`) mostrar y permitir editar `catalog.dir`, `clone.output_dir`, `deploy.snapshots_dir` y `deploy.snapshots_limit` con sus valores efectivos. El campo del límite DEBE (`MUST`) admitir solo dígitos. `Ctrl+S` DEBE guardar y `Esc` DEBE volver sin guardar.
 
 #### Scenario: Acceso desde el menú
 
 - **GIVEN** el menú principal abierto
 - **WHEN** se selecciona Configuración y se pulsa `Enter`
-- **THEN** se abre la pantalla con las tres rutas
+- **THEN** se abre la pantalla con las cuatro opciones
 
 #### Scenario: Guardar con Ctrl+S
 
@@ -227,7 +245,7 @@ La TUI DEBE (`MUST`) ofrecer una pantalla de Configuración accesible desde el m
 
 ### Requirement: Guardado atómico y aplicación inmediata
 
-Al guardar, la TUI DEBE (`MUST`) escribir las tres claves de forma atómica, crear `~/.config/kamino` y el archivo si faltan, y aplicar los nuevos valores de inmediato a los flujos de la sesión actual. Si la escritura falla, el archivo anterior DEBE (`MUST`) quedar intacto.
+Al guardar, la TUI DEBE (`MUST`) escribir las cuatro claves de forma atómica, crear `~/.config/kamino` y el archivo si faltan, y aplicar los nuevos valores de inmediato a los flujos de la sesión actual. Si la escritura falla, el archivo anterior DEBE (`MUST`) quedar intacto.
 
 #### Scenario: Guardado correcto
 
@@ -328,6 +346,40 @@ La configuración NO DEBE (`MUST NOT`) alterar el confinamiento al HOME, la veri
 - **GIVEN** un clon existente, un holocrón existente y configuraciones de apps existentes
 - **WHEN** se guarda la configuración de la TUI
 - **THEN** solo cambia `config.toml`
+
+### Requirement: Retención de holocrones
+
+Cada vez que un despliegue crea un holocrón DEBE (`MUST`) borrar los más antiguos hasta que queden como máximo `deploy.snapshots_limit`, cuyo valor por defecto DEBE (`MUST`) ser 5; un `0` DEBE (`MUST`) conservar todos. Solo DEBEN (`MUST`) ser elegibles los archivos regulares del directorio de holocrones con nombre `<fecha ISO>.tar.gz` o `<fecha ISO>-N.tar.gz`; cualquier otro archivo, directorio o enlace del directorio NO DEBE (`MUST NOT`) tocarse. La poda DEBE (`MUST`) ocurrir después de escribir el holocrón nuevo, así que una escritura fallida NO DEBE (`MUST NOT`) borrar ninguno. Si el excedente no se puede borrar, el despliegue DEBE (`MUST`) abortarse antes de escribir en los destinos. `--dry-run` NO DEBE (`MUST NOT`) borrar holocrones.
+
+#### Scenario: Despliegue por encima del límite
+
+- **GIVEN** cinco holocrones en el directorio y `deploy.snapshots_limit = 5`
+- **WHEN** un despliegue crea el sexto
+- **THEN** se borra el más antiguo y quedan cinco
+
+#### Scenario: Límite desactivado
+
+- **GIVEN** `deploy.snapshots_limit = 0` y diez holocrones
+- **WHEN** un despliegue crea otro
+- **THEN** no se borra ninguno
+
+#### Scenario: Archivos ajenos en el directorio
+
+- **GIVEN** un directorio de holocrones con `notes.txt`, un `.tar.gz.bak` y un enlace simbólico
+- **WHEN** la poda se ejecuta
+- **THEN** esos archivos permanecen intactos
+
+#### Scenario: Holocrón nuevo no escrito
+
+- **GIVEN** un despliegue cuyo holocrón nuevo no se puede escribir
+- **WHEN** falla la escritura
+- **THEN** no se borra ningún holocrón anterior
+
+#### Scenario: Simulación sin borrados
+
+- **GIVEN** más holocrones que el límite configurado
+- **WHEN** se ejecuta el despliegue con `--dry-run`
+- **THEN** no se borra ningún holocrón
 
 ### Requirement: Holocrones anteriores sin migración
 

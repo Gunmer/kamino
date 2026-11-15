@@ -824,7 +824,7 @@ kamino · Configuración
 --------------------------------------------------------------------------------
 
   Configuración
-  Estos valores solo afectan a la TUI; la CLI usa los valores integrados.
+  Estos valores solo afectan a la TUI; la CLI solo lee el límite de holocrones.
 
   Catálogo
   > ~/.config/kamino/apps_
@@ -838,19 +838,26 @@ kamino · Configuración
     ~/.config/kamino/vault/snapshot_
   Copia del estado anterior antes de desplegar.
 
+  Holocrones a conservar
+    5_
+  Cuántos holocrones conservar; el resto se borra al crear uno nuevo. 0 = ilimitado.
+
 --------------------------------------------------------------------------------
 Tab/Mayús+Tab mover  Ctrl+S guardar  Esc volver  ? ayuda
 ```
 
 Notas:
 
-- Las tres rutas son inputs editables, no una lista de solo lectura. El foco se
-  marca con `>` y el cursor de edición con `_`.
-- `Tab`/`Shift+Tab` mueve el foco entre los tres inputs; las etiquetas y ayudas
+- Las tres rutas y el límite son inputs editables, no una lista de solo lectura.
+  El foco se marca con `>` y el cursor de edición con `_`.
+- `Tab`/`Shift+Tab` mueve el foco entre los cuatro inputs; las etiquetas y ayudas
   no son focusables. El foco empieza en Catálogo.
+- El campo del límite solo admite dígitos; un valor vacío, negativo o fuera de
+  rango se rechaza con `ERROR` al guardar.
 - `Ctrl+S` valida y guarda de forma atómica; `Esc` vuelve sin escribir.
 - Los paths largos se desplazan dentro del input para mantener el cursor visible;
-  sin foco, se abrevian con `~` y conservan el final.
+  sin foco, se abrevian con `~` y conservan el final. El límite se muestra como un
+  número, sin abreviar.
 - Si el archivo es inválido, la pantalla se abre con los valores legibles y los
   defaults, muestra un `ERROR` en la zona de mensajes y marca el input afectado.
 - El aviso «Configuración guardada» va en la zona de mensajes como `INFO`.
