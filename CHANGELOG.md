@@ -2,13 +2,14 @@
 
 <!-- version list -->
 
-## Sin publicar
+## v0.11.0 (2026-11-15)
 
-### Mantenimiento
+### Funcionalidades
 
-- retirar la implementación Python y su tooling; automatizar las releases con `cmd/release`
+- remove Python legacy and automate releases in Go ([`62862aa`](https://github.com/Gunmer/kamino/commit/62862aacf4ac39c862aa1ddf10db242341e87583))
 
-  **Cambio incompatible.** se elimina `legacy/python/`, los scripts y workflows basados en Python, los fixtures de `testdata/golden/` y la matriz de compatibilidad cruzada. `TEXTUAL_THEME` pasa a llamarse `KAMINO_THEME`. El historial de Git conserva la implementación retirada.
+  **Cambio incompatible.** the Python implementation and its scripts are gone; releases are managed by `cmd/release`; `TEXTUAL_THEME` becomes `KAMINO_THEME`; `testdata/golden` fixtures and the cross-compatibility matrix are removed. Git history retains the retired implementation.
+- center body content on large terminals ([`0914412`](https://github.com/Gunmer/kamino/commit/091441202b28caf7ca046db41de68a1e55b74158))
 
 ## v0.10.0 (2026-11-13)
 
@@ -158,3 +159,4 @@
 ## v0.1.0 (2026-10-31)
 
 - Versión inicial
+
