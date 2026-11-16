@@ -25,6 +25,9 @@ const (
 	maxSuffix     = 1000
 )
 
+// removeFile deletes one snapshot; tests replace it to simulate failures.
+var removeFile = os.Remove
+
 // snapshotName matches the files this package writes and may prune.
 var snapshotName = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)(?:-(\d+))?\.tar\.gz$`)
 
@@ -160,7 +163,13 @@ func PruneSnapshots(directory string, limit int, keep string) ([]string, error) 
 			continue
 		}
 		path := filepath.Join(directory, file.name)
-		if err := os.Remove(path); err != nil {
+		if err := removeFile(path); err != nil {
+			// A concurrent deploy already pruned this snapshot; the
+			// retention invariant holds, so keep going.
+			if os.IsNotExist(err) {
+				remaining--
+				continue
+			}
 			return removed, &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
 				Msg: fmt.Sprintf("no se pudo borrar el holocrón antiguo %s: %v", path, err),
 			}}

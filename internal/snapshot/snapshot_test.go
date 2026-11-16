@@ -198,3 +198,33 @@ func TestPruneSnapshotsNeverDeletesTheKeptSnapshot(t *testing.T) {
 		t.Fatalf("the kept snapshot must survive: %v", err)
 	}
 }
+
+func TestPruneSnapshotsTreatsAVanishedSnapshotAsPruned(t *testing.T) {
+	directory := t.TempDir()
+	oldest := filepath.Join(directory, "2026-01-01T00:00:00Z.tar.gz")
+	newest := filepath.Join(directory, "2026-01-02T00:00:00Z.tar.gz")
+	for _, path := range []string{oldest, newest} {
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	original := removeFile
+	removeFile = func(path string) error {
+		if path == oldest {
+			// Another deployment pruned this snapshot first.
+			return &os.PathError{Op: "remove", Path: path, Err: os.ErrNotExist}
+		}
+		return original(path)
+	}
+	t.Cleanup(func() { removeFile = original })
+	removed, err := PruneSnapshots(directory, 1, "")
+	if err != nil {
+		t.Fatalf("a vanished snapshot must not fail the prune: %v", err)
+	}
+	if len(removed) != 0 {
+		t.Fatalf("a vanished snapshot was not removed by us: %v", removed)
+	}
+	if _, err := os.Lstat(newest); err != nil {
+		t.Fatalf("the newer snapshot must survive: %v", err)
+	}
+}
