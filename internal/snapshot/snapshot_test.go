@@ -228,3 +228,63 @@ func TestPruneSnapshotsTreatsAVanishedSnapshotAsPruned(t *testing.T) {
 		t.Fatalf("the newer snapshot must survive: %v", err)
 	}
 }
+
+func TestPruneSnapshotsRejectsNegativeLimit(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "2026-01-01T00:00:00Z.tar.gz")
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := PruneSnapshots(directory, -1, ""); err == nil {
+		t.Fatal("a negative limit must fail instead of disabling retention")
+	}
+	if _, err := os.Lstat(path); err != nil {
+		t.Fatalf("a rejected prune must not delete anything: %v", err)
+	}
+}
+
+func TestCreateSnapshotRejectsNegativeLimit(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, home, ".config/app/config", "value")
+	directory := t.TempDir()
+	target := filepath.Join(home, ".config/app/config")
+	if _, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z", -1); err == nil {
+		t.Fatal("a negative limit must fail")
+	}
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("a rejected limit must not write a snapshot: %v", entries)
+	}
+}
+
+func TestPruneSnapshotsAbortsOnRemovalFailure(t *testing.T) {
+	directory := t.TempDir()
+	oldest := filepath.Join(directory, "2026-01-01T00:00:00Z.tar.gz")
+	newest := filepath.Join(directory, "2026-01-02T00:00:00Z.tar.gz")
+	for _, path := range []string{oldest, newest} {
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	original := removeFile
+	removeFile = func(path string) error {
+		if path == oldest {
+			return &os.PathError{Op: "remove", Path: path, Err: os.ErrPermission}
+		}
+		return original(path)
+	}
+	t.Cleanup(func() { removeFile = original })
+	removed, err := PruneSnapshots(directory, 1, "")
+	if err == nil {
+		t.Fatal("a removal failure must be reported")
+	}
+	if len(removed) != 0 {
+		t.Fatalf("a failed removal must not be reported as pruned: %v", removed)
+	}
+	if _, err := os.Lstat(oldest); err != nil {
+		t.Fatalf("the snapshot must survive a failed removal: %v", err)
+	}
+}

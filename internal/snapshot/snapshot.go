@@ -43,6 +43,9 @@ type snapshotFile struct {
 // prunes the oldest snapshots so that at most limit remain. A limit of zero
 // keeps every snapshot.
 func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limit int) (string, error) {
+	if limit < 0 {
+		return "", negativeLimitError(limit)
+	}
 	if len(targets) == 0 {
 		return "", nil
 	}
@@ -113,7 +116,10 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 // Only regular files named like a snapshot are eligible, and keep is never
 // deleted even when it sorts oldest.
 func PruneSnapshots(directory string, limit int, keep string) ([]string, error) {
-	if limit <= 0 || directory == "" {
+	if limit < 0 {
+		return nil, negativeLimitError(limit)
+	}
+	if limit == 0 || directory == "" {
 		return nil, nil
 	}
 	entries, err := os.ReadDir(directory)
@@ -198,6 +204,12 @@ func SnapshotFiles(targets []string, home string) int {
 		return 0
 	}
 	return len(built.Operations)
+}
+
+func negativeLimitError(limit int) error {
+	return &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
+		Msg: fmt.Sprintf("límite de holocrones negativo: %d", limit),
+	}}
 }
 
 func snapshotDefinition(targets []string, root string) (*catalog.AppDefinition, error) {

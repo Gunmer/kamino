@@ -296,3 +296,35 @@ func TestDeployDryRunDoesNotPrune(t *testing.T) {
 		t.Fatalf("dry run must not prune snapshots, got %d", len(entries))
 	}
 }
+
+func TestDeploySnapshotFailureAbortsBeforeWriting(t *testing.T) {
+	_, bin, cloneFile, definitions := deployFixture(t)
+	destination := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(destination, ".config/test/config")
+	if err := os.WriteFile(target, []byte("value=1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	snapshots := t.TempDir()
+	if err := os.Chmod(snapshots, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(snapshots, 0o755) })
+	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	plan, err := session.Plan(nil, false, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil); err == nil {
+		t.Fatal("a failing snapshot must abort the deploy")
+	}
+	if data, err := os.ReadFile(target); err != nil || string(data) != "value=1\n" {
+		t.Fatalf("destinations must not be written when the snapshot fails: %q %v", data, err)
+	}
+}
