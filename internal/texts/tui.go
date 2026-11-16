@@ -241,7 +241,7 @@ const (
 	SettingsSnapshots      = "Holocrones"
 	SettingsSnapshotsLimit = "Holocrones a conservar"
 	SettingsSavedInfo      = "Configuración guardada"
-	SettingsSubtitleTUI    = "Estos valores solo afectan a la TUI; la CLI solo lee el límite de holocrones."
+	SettingsSubtitleTUI    = "Las rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI."
 	SettingsNone           = "Sin configuración"
 
 	HelpBodyTitle       = "Ayuda · {screen}"

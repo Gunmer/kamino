@@ -2,7 +2,7 @@ kamino · Configuración
 [2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 
     [1mConfiguración[0m
-    [2mEstos valores solo afectan a la TUI; la CLI solo lee el límite de holocrones.[0m
+    [2mLas rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.[0m
   
     ▌ Catálogo
       ~/.config/kamino/apps_

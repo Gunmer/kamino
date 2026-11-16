@@ -192,7 +192,7 @@ func SaveConfig(config AppConfig, home, path string) (string, error) {
 	if target == "" {
 		target = ConfigPath(root)
 	}
-	if err := validateConfigPaths(config); err != nil {
+	if err := validateConfig(config); err != nil {
 		return "", err
 	}
 	content := serialize(config)
@@ -228,7 +228,7 @@ func SaveConfig(config AppConfig, home, path string) (string, error) {
 	return target, nil
 }
 
-func validateConfigPaths(config AppConfig) error {
+func validateConfig(config AppConfig) error {
 	if config.SnapshotsLimit < 0 {
 		return configError(SnapshotsLimitKey + ": usa un entero mayor o igual que 0")
 	}

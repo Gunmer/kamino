@@ -824,7 +824,7 @@ kamino · Configuración
 --------------------------------------------------------------------------------
 
   Configuración
-  Estos valores solo afectan a la TUI; la CLI solo lee el límite de holocrones.
+  Las rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.
 
   Catálogo
   > ~/.config/kamino/apps_

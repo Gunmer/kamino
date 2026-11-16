@@ -11,8 +11,11 @@ import (
 )
 
 const (
-	fieldCount = 4
-	limitField = 3
+	// pathFieldCount is how many leading fields hold editable paths.
+	pathFieldCount = 3
+	// limitField is the index of the snapshot limit, after the paths.
+	limitField = pathFieldCount
+	fieldCount = pathFieldCount + 1
 )
 
 type settingsScreen struct {
@@ -96,9 +99,9 @@ func (s *settingsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 }
 
 func (s *settingsScreen) save() {
-	values := make([]string, limitField)
+	values := make([]string, pathFieldCount)
 	keys := []string{config.CatalogKey, config.CloneKey, config.SnapshotsKey}
-	for index, field := range s.fields[:limitField] {
+	for index, field := range s.fields[:pathFieldCount] {
 		resolved, err := config.ResolvePath(field, s.app.home, keys[index])
 		if err != nil {
 			s.errorIndex = index
