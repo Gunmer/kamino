@@ -1061,8 +1061,8 @@ ERROR  No se pudo copiar la ruta.
 | `tui-ansi-theme` | Solo ANSI, jerarquía, `theme.Styles`, `NO_COLOR`, ASCII, `ansi-light` |
 | `clone-tui` | C1 como tabla; C2 con tres opciones de carpeta, input de nombre y diálogo Sobrescribir/Cambiar nombre/Volver; C3 absorbe C4: revisión, progreso y resultado en la misma tabla; el flujo sigue en tres pasos |
 | `deploy-conflicts` | D2 como tabla, D3 con archivo completo, D4 por app y protegidos |
-| `docs/Diseño técnico.md` | Sustituir «ANSI propio, sin framework» por Bubble Tea/Lip Gloss y el contrato de pantalla |
-| `docs/Diseño funcional.md` | Actualizar C1, C3/C4, D3 y D4 |
+| `docs/diseno-tecnico.md` | Sustituir «ANSI propio, sin framework» por Bubble Tea/Lip Gloss y el contrato de pantalla |
+| `docs/diseno-funcional.md` | Actualizar C1, C3/C4, D3 y D4 |
 | `AGENTS.md` | Retirar el invariante «sin framework» y describir el nuevo runtime |
 
 ## 8. Plan de implementación
@@ -1075,7 +1075,7 @@ ERROR  No se pudo copiar la ruta.
    aviso de terminal pequeña.
 4. Comandos asíncronos para recuento, planificación, escritura, despliegue y
    actualización; pruebas de cancelación y códigos de salida.
-5. Actualizar specs, `Diseño técnico.md`, `Diseño funcional.md` y `AGENTS.md`.
+5. Actualizar specs, `diseno-tecnico.md`, `diseno-funcional.md` y `AGENTS.md`.
 
 Cada paso debe compilar y pasar los golden files. Los commits siguen
 Conventional Commits (`feat(tui):`, `refactor(tui):`, `test(tui):`).

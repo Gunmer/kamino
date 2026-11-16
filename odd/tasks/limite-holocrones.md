@@ -18,7 +18,7 @@ Feature: retención configurable de holocrones. Rama `feature/inprove_config`.
 - T2 — snapshot: poda de holocrones y su test (S3, S4, S7) — commit e11ebd1 `feat(snapshot)`.
 - T3 — wiring: `deploy.Options`/`DeploySession`, `app.ExecuteDeploy`, pantalla de despliegue de la TUI (S5, S6) — commit e11ebd1.
 - T4 — TUI: cuarto campo numérico en Configuración, textos y goldens (S2) — commit 7af9e8d `feat(tui)`.
-- T5 — docs y specs: README, `docs/Diseño funcional.md`, `docs/Diseño técnico.md`, `docs/Diseño tui.md`, `openspec/specs/user-configuration/spec.md` (S1-S7) — commit `docs`.
+- T5 — docs y specs: README, `docs/diseno-funcional.md`, `docs/diseno-tecnico.md`, `docs/diseno-tui.md`, `openspec/specs/user-configuration/spec.md` (S1-S7) — commit `docs`.
 
 ## Log
 

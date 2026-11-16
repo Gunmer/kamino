@@ -449,4 +449,4 @@ internal/
 └── errors/            # errores propios
 ```
 
-Los diseños de referencia están en `docs/` (`Diseño funcional.md` y `Diseño técnico.md`).
+Los diseños de referencia están en `docs/` (`diseno-funcional.md` y `diseno-tecnico.md`).

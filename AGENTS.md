@@ -26,7 +26,7 @@
 - La TUI usa Bubble Tea, Lip Gloss y `bubbles` (`key`, `help`). `internal/tui/theme` centraliza
   tokens, símbolos y estilos ANSI; `internal/tui/frame.go` posee cabecera, body, mensajes, pie y
   guardia de tamaño; `internal/tui/screen.go` define el contrato `Screen` y `internal/tui/app.go`
-  la pila y el estado compartido. `docs/Diseño tui.md` es la referencia visual.
+  la pila y el estado compartido. `docs/diseno-tui.md` es la referencia visual.
 - Los goldens viven en `internal/tui/testdata/golden/` y se regeneran con
   `go test ./internal/tui -run Golden -update`; el test de contrato comprueba altura, ancho y SGR
   ANSI. `View` no lee entorno, reloj ni disco.
