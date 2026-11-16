@@ -147,7 +147,11 @@ func ExecuteUpdate(currentVersion string, target string) (update.Result, error) 
 // A missing or invalid configuration keeps the default, so the CLI never fails
 // because of an unrelated configuration error.
 func snapshotsLimit(home string) int {
-	return config.LoadConfig(home, "").Config.SnapshotsLimit
+	loaded := config.LoadConfig(home, "")
+	if loaded.Error != nil {
+		return config.DefaultSnapshotsLimit
+	}
+	return loaded.Config.SnapshotsLimit
 }
 
 // DeployableIDs returns the ids the manifest allows deploying here.
