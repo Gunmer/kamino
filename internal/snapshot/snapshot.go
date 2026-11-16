@@ -30,9 +30,10 @@ var snapshotName = regexp.MustCompile(`^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)(?
 
 // snapshotFile is one prunable snapshot ordered by timestamp and suffix.
 type snapshotFile struct {
-	name   string
-	stamp  string
-	suffix int
+	name      string
+	stamp     string
+	suffix    int
+	protected bool
 }
 
 // CreateSnapshot stores the current state of paths in a snapshot archive and
@@ -98,7 +99,7 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 	if err := archive.WriteArchive(output, manifest, archive.WriteOptions{SourceRoot: root}); err != nil {
 		return "", err
 	}
-	if _, err := PruneSnapshots(directory, limit); err != nil {
+	if _, err := PruneSnapshots(directory, limit, output); err != nil {
 		return "", err
 	}
 	return output, nil
@@ -106,8 +107,9 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 
 // PruneSnapshots deletes the oldest snapshots of directory until at most limit
 // remain and returns the deleted paths. A limit of zero keeps every snapshot.
-// Only regular files named like a snapshot are eligible.
-func PruneSnapshots(directory string, limit int) ([]string, error) {
+// Only regular files named like a snapshot are eligible, and keep is never
+// deleted even when it sorts oldest.
+func PruneSnapshots(directory string, limit int, keep string) ([]string, error) {
 	if limit <= 0 || directory == "" {
 		return nil, nil
 	}
@@ -129,6 +131,7 @@ func PruneSnapshots(directory string, limit int) ([]string, error) {
 		if matches == nil {
 			continue
 		}
+		protected := keep != "" && filepath.Clean(filepath.Join(directory, entry.Name())) == filepath.Clean(keep)
 		suffix := 0
 		if matches[2] != "" {
 			suffix, err = strconv.Atoi(matches[2])
@@ -136,7 +139,7 @@ func PruneSnapshots(directory string, limit int) ([]string, error) {
 				continue
 			}
 		}
-		files = append(files, snapshotFile{name: entry.Name(), stamp: matches[1], suffix: suffix})
+		files = append(files, snapshotFile{name: entry.Name(), stamp: matches[1], suffix: suffix, protected: protected})
 	}
 	if len(files) <= limit {
 		return nil, nil
@@ -148,7 +151,14 @@ func PruneSnapshots(directory string, limit int) ([]string, error) {
 		return files[i].suffix < files[j].suffix
 	})
 	removed := make([]string, 0, len(files)-limit)
-	for _, file := range files[:len(files)-limit] {
+	remaining := len(files)
+	for _, file := range files {
+		if remaining <= limit {
+			break
+		}
+		if file.protected {
+			continue
+		}
 		path := filepath.Join(directory, file.name)
 		if err := os.Remove(path); err != nil {
 			return removed, &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
@@ -156,6 +166,7 @@ func PruneSnapshots(directory string, limit int) ([]string, error) {
 			}}
 		}
 		removed = append(removed, path)
+		remaining--
 	}
 	return removed, nil
 }

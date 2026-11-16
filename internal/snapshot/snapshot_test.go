@@ -135,7 +135,7 @@ func TestPruneSnapshotsOrderAndForeignFiles(t *testing.T) {
 	if err := os.Symlink(filepath.Join(directory, "nowhere"), link); err != nil {
 		t.Fatal(err)
 	}
-	removed, err := PruneSnapshots(directory, 2)
+	removed, err := PruneSnapshots(directory, 2, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,10 +150,51 @@ func TestPruneSnapshotsOrderAndForeignFiles(t *testing.T) {
 	if _, err := os.Lstat(link); err != nil {
 		t.Fatalf("expected the symbolic link to survive: %v", err)
 	}
-	if removed, err := PruneSnapshots(directory, 0); err != nil || len(removed) != 0 {
+	if removed, err := PruneSnapshots(directory, 0, ""); err != nil || len(removed) != 0 {
 		t.Fatalf("zero limit must not prune: %v %v", removed, err)
 	}
-	if removed, err := PruneSnapshots(filepath.Join(directory, "missing"), 1); err != nil || len(removed) != 0 {
+	if removed, err := PruneSnapshots(filepath.Join(directory, "missing"), 1, ""); err != nil || len(removed) != 0 {
 		t.Fatalf("missing directory must not fail: %v %v", removed, err)
+	}
+}
+
+func TestCreateSnapshotKeepsTheNewSnapshotWhenClockMovedBack(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, home, ".config/app/config", "value")
+	directory := t.TempDir()
+	target := filepath.Join(home, ".config/app/config")
+	future := filepath.Join(directory, "2026-12-31T23:59:59Z.tar.gz")
+	if err := os.WriteFile(future, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Lstat(path); err != nil {
+		t.Fatalf("the snapshot just written must survive the prune: %v", err)
+	}
+	if _, err := os.Lstat(future); !os.IsNotExist(err) {
+		t.Fatalf("the limit must still prune one snapshot: %v", err)
+	}
+}
+
+func TestPruneSnapshotsNeverDeletesTheKeptSnapshot(t *testing.T) {
+	directory := t.TempDir()
+	oldest := filepath.Join(directory, "2026-01-01T00:00:00Z.tar.gz")
+	for _, path := range []string{oldest, filepath.Join(directory, "2026-01-02T00:00:00Z.tar.gz")} {
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	removed, err := PruneSnapshots(directory, 1, oldest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(removed) != 1 || removed[0] != filepath.Join(directory, "2026-01-02T00:00:00Z.tar.gz") {
+		t.Fatalf("the kept snapshot must never be pruned: %v", removed)
+	}
+	if _, err := os.Lstat(oldest); err != nil {
+		t.Fatalf("the kept snapshot must survive: %v", err)
 	}
 }
