@@ -430,11 +430,19 @@ func (s *DeploySession) Apply(decisions conflicts.ConflictDecisions, progressCal
 	for _, item := range writes {
 		destinations = append(destinations, item.destination)
 	}
+	// Hold the snapshots directory for the whole snapshot-and-apply window so a
+	// concurrent deploy cannot prune the recovery snapshot of this one.
+	directory := s.SnapshotDirectory()
+	release, err := snapshot.Lock(directory)
+	if err != nil {
+		return DeployResult{}, err
+	}
+	defer func() { _ = release() }()
 	protected := snapshot.SnapshotFiles(destinations, s.Home)
 	if err := progress.EnsureNotCancelled(cancelled); err != nil {
 		return DeployResult{}, err
 	}
-	snapshotPath, err := snapshot.CreateSnapshot(destinations, s.Home, s.SnapshotsDir, "", s.SnapshotsLimit)
+	snapshotPath, err := snapshot.CreateSnapshot(destinations, s.Home, directory, "", s.SnapshotsLimit)
 	if err != nil {
 		return DeployResult{}, err
 	}
