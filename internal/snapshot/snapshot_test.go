@@ -288,3 +288,27 @@ func TestPruneSnapshotsAbortsOnRemovalFailure(t *testing.T) {
 		t.Fatalf("the snapshot must survive a failed removal: %v", err)
 	}
 }
+
+func TestCreateSnapshotFailsWhenItsSnapshotVanishes(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, home, ".config/app/config", "value")
+	directory := t.TempDir()
+	target := filepath.Join(home, ".config/app/config")
+	older := filepath.Join(directory, "2026-01-01T00:00:00Z.tar.gz")
+	if err := os.WriteFile(older, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	original := removeFile
+	// Simulate a concurrent deploy whose prune deletes the snapshot this
+	// deployment has just written.
+	removeFile = func(path string) error {
+		if path == older {
+			return os.Remove(filepath.Join(directory, "2026-01-02T00:00:00Z.tar.gz"))
+		}
+		return original(path)
+	}
+	t.Cleanup(func() { removeFile = original })
+	if _, err := CreateSnapshot([]string{target}, home, directory, "2026-01-02T00:00:00Z", 1); err == nil {
+		t.Fatal("a snapshot that vanished during the prune must fail the deploy")
+	}
+}

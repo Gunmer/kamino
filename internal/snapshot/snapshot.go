@@ -108,6 +108,14 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 	if _, err := PruneSnapshots(directory, limit, output); err != nil {
 		return "", err
 	}
+	// A concurrent deploy sharing this directory may have pruned the snapshot
+	// we just wrote. Without it the deploy has no recovery point, so fail
+	// before any destination is written.
+	if _, err := os.Lstat(output); err != nil {
+		return "", &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
+			Msg: fmt.Sprintf("el holocrón %s desapareció durante la poda: %v", output, err),
+		}}
+	}
 	return output, nil
 }
 
