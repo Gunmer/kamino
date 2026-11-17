@@ -349,7 +349,7 @@ La configuración NO DEBE (`MUST NOT`) alterar el confinamiento al HOME, la veri
 
 ### Requirement: Retención de holocrones
 
-Cada vez que un despliegue crea un holocrón DEBE (`MUST`) borrar los más antiguos hasta que queden como máximo `deploy.snapshots_limit`, cuyo valor por defecto DEBE (`MUST`) ser 5; un `0` DEBE (`MUST`) conservar todos. Solo DEBEN (`MUST`) ser elegibles los archivos regulares del directorio de holocrones con nombre `<fecha ISO>.tar.gz` o `<fecha ISO>-N.tar.gz`; cualquier otro archivo, directorio o enlace del directorio NO DEBE (`MUST NOT`) tocarse. La poda DEBE (`MUST`) ocurrir después de escribir el holocrón nuevo, así que una escritura fallida NO DEBE (`MUST NOT`) borrar ninguno. Si el excedente no se puede borrar, el despliegue DEBE (`MUST`) abortarse antes de escribir en los destinos. `--dry-run` NO DEBE (`MUST NOT`) borrar holocrones.
+Cada vez que un despliegue crea un holocrón DEBE (`MUST`) borrar los más antiguos hasta que queden como máximo `deploy.snapshots_limit`, cuyo valor por defecto DEBE (`MUST`) ser 5; un `0` DEBE (`MUST`) conservar todos. Solo DEBEN (`MUST`) ser elegibles los archivos regulares del directorio de holocrones con nombre `<fecha ISO>.tar.gz` o `<fecha ISO>-N.tar.gz`; cualquier otro archivo, directorio o enlace del directorio NO DEBE (`MUST NOT`) tocarse. La poda DEBE (`MUST`) ocurrir después de escribir el holocrón nuevo, así que una escritura fallida NO DEBE (`MUST NOT`) borrar ninguno. Si el excedente no se puede borrar, el despliegue DEBE (`MUST`) abortarse antes de escribir en los destinos. `--dry-run` NO DEBE (`MUST NOT`) borrar holocrones. Dos despliegues que comparten el directorio de holocrones DEBEN (`MUST`) serializarse con un bloqueo exclusivo del directorio, tomado antes de crear el holocrón y liberado al terminar de escribir los destinos; la poda de uno NO DEBE (`MUST NOT`) borrar el holocrón de un despliegue en curso.
 
 #### Scenario: Despliegue por encima del límite
 
@@ -374,6 +374,12 @@ Cada vez que un despliegue crea un holocrón DEBE (`MUST`) borrar los más antig
 - **GIVEN** un despliegue cuyo holocrón nuevo no se puede escribir
 - **WHEN** falla la escritura
 - **THEN** no se borra ningún holocrón anterior
+
+#### Scenario: Despliegues concurrentes en el mismo directorio
+
+- **GIVEN** dos despliegues simultáneos que comparten el directorio de holocrones y `deploy.snapshots_limit = 1`
+- **WHEN** el segundo despliegue intenta podar mientras el primero todavía aplica
+- **THEN** el segundo espera el bloqueo del directorio y el holocrón del primero sigue existiendo hasta que el primero termina
 
 #### Scenario: Simulación sin borrados
 

@@ -123,7 +123,9 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   `deploy.snapshots_dir` configurado para la TUI, y se crea solo si hay al menos un destino existente
   que proteger. Después de escribirlo se borran los más antiguos hasta dejar
   `deploy.snapshots_limit` (5 por defecto; `0` conserva todos): solo archivos regulares
-  `<fecha>.tar.gz` y `<fecha>-N.tar.gz` del directorio, nunca otros archivos, directorios o enlaces. Antes de escribir se revalidan los
+  `<fecha>.tar.gz` y `<fecha>-N.tar.gz` del directorio, nunca otros archivos, directorios o enlaces.
+  Dos despliegues simultáneos sobre el mismo directorio se serializan con un bloqueo exclusivo: la
+  poda nunca borra el holocrón de un despliegue que todavía está aplicando. Antes de escribir se revalidan los
   destinos; si alguno cambió, se aborta sin escribir. Un fallo después del holocrón se informa como “Despliegue incompleto” con los aplicados,
   el fallido y el holocrón, y termina con código 1; no hay rollback automático.
 - Los holocrones antiguos en `~/Library/Application Support/kamino/snapshots/` no se mueven ni se

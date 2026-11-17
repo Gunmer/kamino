@@ -185,6 +185,10 @@ directorio o enlace queda intacto. Si el holocrón nuevo no se pudo escribir no 
 si el excedente no se puede borrar el despliegue se detiene antes de escribir en los destinos.
 `--dry-run` no borra holocrones.
 
+Dos despliegues simultáneos que comparten el directorio de holocrones se serializan con un bloqueo
+exclusivo (`<directorio>/.snapshot.lock`), de modo que el que espera no puede borrar el holocrón de
+un despliegue en curso. El archivo de bloqueo nunca se poda.
+
 Con terminal interactiva, `clone` abre la TUI si no se definió `KAMINO_PLAIN`. `--apps` omite C1,
 `--output` omite C2 y ambos juntos pasan directamente a la revisión C3. Un valor inválido abre la
 pantalla correspondiente precargada con el error. `--dry-run` termina en C3 sin acción de clonar.
