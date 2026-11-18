@@ -385,14 +385,14 @@ func (s *deployAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		switch keyMessage.String() {
 		case "esc":
 			if s.planning {
-				s.app.deployCancel.Store(true)
+				s.app.cancelOperation()
 				s.messages = []Message{{Kind: MessageWarning, Text: texts.D1CancelRunning}}
 				return s, nil
 			}
 			return s, popScreen()
 		case "ctrl+c":
 			if s.planning {
-				s.app.deployCancel.Store(true)
+				s.app.cancelOperation()
 				s.messages = []Message{{Kind: MessageWarning, Text: texts.D1CancelRunning}}
 			} else {
 				return s, popScreen()
@@ -447,16 +447,17 @@ func (s *deployAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 }
 
 func startDeployPlan(app *App, session *deploy.DeploySession, selected []string) tea.Cmd {
-	app.deployCancel.Store(false)
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
 		events := make(chan operationEvent, 64)
 		go func() {
-			plan, err := session.Plan(&selected, false, selected, func(event progress.Event) {
+			defer done()
+			plan, err := session.Plan(ctx, &selected, false, selected, func(event progress.Event) {
 				select {
 				case events <- operationEvent{progress: event}:
 				default:
 				}
-			}, func() bool { return app.deployCancel.Load() })
+			})
 			if err == nil {
 				events <- operationEvent{plan: plan}
 			}
@@ -483,7 +484,7 @@ func (s *deployAppsScreen) handlePlanEvent(event operationEvent) (Screen, tea.Cm
 	}
 	s.planning = false
 	if event.err != nil {
-		if s.app.deployCancel.Load() {
+		if cancelled(event.err) {
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.StatusPreparingCancelled}}
 			return s, nil
 		}
@@ -1363,7 +1364,7 @@ func (s *deployConfirmScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 			return s, waitOperation(started.events)
 		}
 		if keyMessage, ok := msg.(tea.KeyMsg); ok && (keyMessage.String() == "ctrl+c" || keyMessage.String() == "esc") {
-			s.app.deployCancel.Store(true)
+			s.app.cancelOperation()
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.StatusCancelling}}
 			return s, nil
 		}
@@ -1410,18 +1411,19 @@ func (s *deployConfirmScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 }
 
 func startDeployApply(app *App) tea.Cmd {
-	app.deployCancel.Store(false)
 	decisions := app.deployDecisions()
 	session := app.deploySession
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
 		events := make(chan operationEvent, 64)
 		go func() {
-			result, err := session.Apply(decisions, func(event progress.Event) {
+			defer done()
+			result, err := session.Apply(ctx, decisions, func(event progress.Event) {
 				select {
 				case events <- operationEvent{progress: event}:
 				default:
 				}
-			}, func() bool { return app.deployCancel.Load() })
+			})
 			if err == nil {
 				events <- operationEvent{deploy: &result}
 			}
@@ -1444,7 +1446,7 @@ func (s *deployConfirmScreen) handleApply(event operationEvent) (Screen, tea.Cmd
 	}
 	s.applying = false
 	if event.err != nil {
-		if s.app.deployCancel.Load() {
+		if cancelled(event.err) {
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.StatusPreparingCancelled}}
 			return s, nil
 		}

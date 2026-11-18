@@ -1,6 +1,7 @@
 package update
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -51,7 +52,7 @@ func TestLatestRelease(t *testing.T) {
 	HTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 		return fakeResponse(200, payload("v0.9.0", "https://example.test/kamino-arm64", digest, 42)), nil
 	})}
-	release, err := LatestRelease()
+	release, err := LatestRelease(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +80,7 @@ func TestLatestReleaseErrors(t *testing.T) {
 		HTTPClient = &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
 			return fakeResponse(testCase.status, testCase.body), nil
 		})}
-		if _, err := LatestRelease(); err == nil {
+		if _, err := LatestRelease(context.Background()); err == nil {
 			t.Fatalf("%s: expected error", testCase.name)
 		}
 	}
@@ -99,15 +100,15 @@ func TestQueryOutcomes(t *testing.T) {
 		t.Fatal(err)
 	}
 	newer := &ReleaseInfo{Version: "0.9.0", AssetSize: 1, AssetDigest: "sha256:" + strings.Repeat("a", 64), AssetURL: "https://example.test/x"}
-	check, err := QueryUpdate("0.8.0", target, newer)
+	check, err := QueryUpdate(context.Background(), "0.8.0", target, newer)
 	if err != nil || !check.ShouldUpdate || check.Outcome != OutcomeUpdated {
 		t.Fatalf("unexpected update: %#v %v", check, err)
 	}
-	check, _ = QueryUpdate("0.9.0", target, newer)
+	check, _ = QueryUpdate(context.Background(), "0.9.0", target, newer)
 	if check.ShouldUpdate || check.Outcome != OutcomeUpToDate {
 		t.Fatalf("unexpected up-to-date: %#v", check)
 	}
-	check, _ = QueryUpdate("1.0.0", target, newer)
+	check, _ = QueryUpdate(context.Background(), "1.0.0", target, newer)
 	if check.ShouldUpdate || check.Outcome != OutcomeNewer {
 		t.Fatalf("unexpected newer: %#v", check)
 	}
@@ -129,7 +130,7 @@ func TestDownloadAndRunUpdate(t *testing.T) {
 	if err := os.WriteFile(target, []byte("old"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	result, err := RunUpdate("0.8.0", target, &release, nil, nil)
+	result, err := RunUpdate(context.Background(), "0.8.0", target, &release, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +158,7 @@ func TestDownloadRejectsBadDigestAndCleansTemp(t *testing.T) {
 		t.Fatal(err)
 	}
 	release := ReleaseInfo{Version: "0.9.0", AssetURL: server.URL, AssetSize: 3, AssetDigest: "sha256:" + strings.Repeat("0", 64)}
-	if _, err := DownloadUpdate(release, target, nil, nil); err == nil {
+	if _, err := DownloadUpdate(context.Background(), release, target, nil); err == nil {
 		t.Fatal("expected digest failure")
 	}
 	entries, _ := os.ReadDir(directory)

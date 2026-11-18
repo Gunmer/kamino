@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -10,27 +11,33 @@ import (
 )
 
 func runMenu() int {
-	app := NewApp(AppOptions{MenuMode: true})
+	app := newRootApp(AppOptions{MenuMode: true})
 	app.startMenu()
 	return runProgram(app)
 }
 
 func runCloneFlow(options CloneFlowOptions) int {
-	app := NewApp(AppOptions{Clone: options})
+	app := newRootApp(AppOptions{Clone: options})
 	app.startClone()
 	return runProgram(app)
 }
 
 func runDeployFlow(options DeployFlowOptions) int {
-	app := NewApp(AppOptions{Deploy: options})
+	app := newRootApp(AppOptions{Deploy: options})
 	app.startDeploy()
 	return runProgram(app)
 }
 
 func runUpdateFlow() int {
-	app := NewApp(AppOptions{})
+	app := newRootApp(AppOptions{})
 	app.startUpdate()
 	return runProgram(app)
+}
+
+// newRootApp builds the model with the context that owns every TUI operation.
+func newRootApp(options AppOptions) *App {
+	options.Context = context.Background()
+	return NewApp(options)
 }
 
 func runProgram(app *App) int {

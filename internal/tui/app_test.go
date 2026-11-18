@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -740,7 +741,7 @@ func TestSettingsSnapshotsLimitField(t *testing.T) {
 func TestUpdateResultAndFinish(t *testing.T) {
 	app := NewApp(AppOptions{
 		MenuMode: true, Home: "/Users/test", Cwd: "/Users/test", Now: fixedNow, ThemeName: "ansi-dark",
-		UpdateQuery: func() (update.Check, error) {
+		UpdateQuery: func(context.Context) (update.Check, error) {
 			check := fixtureUpdateCheck()
 			check.ShouldUpdate = false
 			return check, nil
@@ -761,12 +762,12 @@ func TestUpdateResultAndFinish(t *testing.T) {
 func TestUpdateProgressAndCancellation(t *testing.T) {
 	app := NewApp(AppOptions{
 		MenuMode: true, Home: "/Users/test", Cwd: "/Users/test", Now: fixedNow, ThemeName: "ansi-dark",
-		UpdateQuery: func() (update.Check, error) {
+		UpdateQuery: func(context.Context) (update.Check, error) {
 			return fixtureUpdateCheck(), nil
 		},
-		UpdateRun: func(callback progress.Callback, cancelled progress.Cancel) (update.Result, error) {
+		UpdateRun: func(ctx context.Context, callback progress.Callback) (update.Result, error) {
 			progress.Emit(callback, progress.Downloading, 5, 10, "")
-			if cancelled() {
+			if ctx.Err() != nil {
 				return update.Result{}, errors.New("cancelada")
 			}
 			progress.Emit(callback, progress.Replacing, 0, 1, "")
@@ -800,8 +801,9 @@ func TestCtrlCAfterNoReturnIsIgnored(t *testing.T) {
 	screen.current = 10
 	screen.total = 20
 	app.begin(screen)
+	ctx, _ := app.beginOperation()
 	send(t, app, keyMsg("ctrl+c"))
-	if !app.cloneCancel.Load() {
+	if ctx.Err() == nil {
 		t.Fatal("Ctrl+C must request cancellation while writing")
 	}
 	send(t, app, operationEvent{err: nil, done: true, clone: fixtureCloneResult()})
@@ -829,7 +831,7 @@ func TestDeployAggregationWithSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	selected := []string{"test"}
-	plan, err := session.Plan(&selected, true, selected, nil, nil)
+	plan, err := session.Plan(context.Background(), &selected, true, selected, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -949,7 +951,7 @@ func buildClone(t *testing.T, home, cloneFile string) {
 	if err := os.WriteFile(filepath.Join(home, ".config", "test", "config"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := archive.WriteArchive(cloneFile, manifest, archive.WriteOptions{SourceRoot: home}); err != nil {
+	if err := archive.WriteArchive(context.Background(), cloneFile, manifest, archive.WriteOptions{SourceRoot: home}); err != nil {
 		t.Fatal(err)
 	}
 }

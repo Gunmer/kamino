@@ -2,6 +2,7 @@
 package plan
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -92,18 +93,18 @@ type builder struct {
 	notices    []string
 	countOnly  bool
 	progress   progress.Callback
-	cancelled  progress.Cancel
+	ctx        context.Context
 	opKeys     map[string]bool
 	skipKeys   map[string]bool
 	noticeKeys map[string]bool
 }
 
-func newBuilder(safe *paths.SafeHome, root string, progressCallback progress.Callback, cancelled progress.Cancel) *builder {
+func newBuilder(ctx context.Context, safe *paths.SafeHome, root string, progressCallback progress.Callback) *builder {
 	return &builder{
 		safe:       safe,
 		root:       root,
 		progress:   progressCallback,
-		cancelled:  cancelled,
+		ctx:        ctx,
 		opKeys:     map[string]bool{},
 		skipKeys:   map[string]bool{},
 		noticeKeys: map[string]bool{},
@@ -157,7 +158,7 @@ func (b *builder) regularFile(appID, rel string) *Operation {
 }
 
 // BuildPlan expands every application against the home.
-func BuildPlan(apps []*catalog.AppDefinition, home string, progressCallback progress.Callback, cancelled progress.Cancel) (Plan, error) {
+func BuildPlan(ctx context.Context, apps []*catalog.AppDefinition, home string, progressCallback progress.Callback) (Plan, error) {
 	root := home
 	if root == "" {
 		var err error
@@ -171,21 +172,21 @@ func BuildPlan(apps []*catalog.AppDefinition, home string, progressCallback prog
 		return Plan{}, err
 	}
 	defer func() { _ = safe.Close() }()
-	b := newBuilder(safe, root, progressCallback, cancelled)
+	b := newBuilder(ctx, safe, root, progressCallback)
 	for _, app := range apps {
-		if err := progress.EnsureNotCancelled(cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			return Plan{}, err
 		}
 		expandApp(app, b)
 	}
-	if err := progress.EnsureNotCancelled(cancelled); err != nil {
+	if err := progress.EnsureNotCancelled(ctx); err != nil {
 		return Plan{}, err
 	}
 	return Plan{Operations: b.operations, Skipped: b.skipped, Notices: b.notices}, nil
 }
 
 // CountFiles counts files per app without hashing their contents.
-func CountFiles(apps []*catalog.AppDefinition, home string, cancelled progress.Cancel) (CountResult, error) {
+func CountFiles(ctx context.Context, apps []*catalog.AppDefinition, home string) (CountResult, error) {
 	root := home
 	if root == "" {
 		var err error
@@ -199,10 +200,10 @@ func CountFiles(apps []*catalog.AppDefinition, home string, cancelled progress.C
 		return CountResult{}, err
 	}
 	defer func() { _ = safe.Close() }()
-	b := newBuilder(safe, root, nil, cancelled)
+	b := newBuilder(ctx, safe, root, nil)
 	b.countOnly = true
 	for _, app := range apps {
-		if err := progress.EnsureNotCancelled(cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			return CountResult{}, err
 		}
 		expandApp(app, b)
@@ -236,7 +237,7 @@ func expandApp(app *catalog.AppDefinition, b *builder) {
 }
 
 func expand(app *catalog.AppDefinition, entry string, b *builder, required, automatic bool) {
-	if err := progress.EnsureNotCancelled(b.cancelled); err != nil {
+	if err := progress.EnsureNotCancelled(b.ctx); err != nil {
 		b.skip(entry, "cancelado")
 		return
 	}
@@ -318,7 +319,7 @@ func expandXDG(app *catalog.AppDefinition, entry string, b *builder) {
 func walk(app *catalog.AppDefinition, rel string, b *builder) {
 	prune := func(child string) bool { return IsExcluded(child, app.Exclude) }
 	err := b.safe.Walk(rel, prune, func(item paths.WalkItem) error {
-		if err := progress.EnsureNotCancelled(b.cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(b.ctx); err != nil {
 			return err
 		}
 		switch item.Kind {
@@ -335,7 +336,7 @@ func walk(app *catalog.AppDefinition, rel string, b *builder) {
 }
 
 func addFile(appID, rel string, info paths.Info, b *builder) {
-	if err := progress.EnsureNotCancelled(b.cancelled); err != nil {
+	if err := progress.EnsureNotCancelled(b.ctx); err != nil {
 		return
 	}
 	source, err := paths.ToAbsolute(rel, b.root)
@@ -403,7 +404,7 @@ func expandGhostty(app *catalog.AppDefinition, b *builder) {
 
 	var parse func(string, int)
 	parse = func(rel string, depth int) {
-		if err := progress.EnsureNotCancelled(b.cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(b.ctx); err != nil {
 			return
 		}
 		if visited[rel] {

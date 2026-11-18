@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,6 +19,7 @@ import (
 	"github.com/Gunmer/kamino/internal/defaults"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
+	kerrors "github.com/Gunmer/kamino/internal/errors"
 	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/progress"
 	"github.com/Gunmer/kamino/internal/texts"
@@ -28,6 +31,9 @@ import (
 // AppOptions injects every environment dependency so tests never touch the
 // developer's HOME, clock, terminal or network.
 type AppOptions struct {
+	// Context is the parent context of every cancellable operation. The TUI
+	// entrypoint creates it once; a nil value means context.Background().
+	Context         context.Context
 	Home            string
 	Catalog         catalog.Catalog
 	ApplicationDirs []string
@@ -42,8 +48,8 @@ type AppOptions struct {
 	MenuMode        bool
 	Clone           CloneFlowOptions
 	Deploy          DeployFlowOptions
-	UpdateQuery     func() (update.Check, error)
-	UpdateRun       func(progress.Callback, progress.Cancel) (update.Result, error)
+	UpdateQuery     func(context.Context) (update.Check, error)
+	UpdateRun       func(context.Context, progress.Callback) (update.Result, error)
 }
 
 // App is the Bubble Tea root: it owns the navigation stack, the shared flow
@@ -78,24 +84,26 @@ type App struct {
 	cloneForce   bool
 	cloneDryRun  bool
 	cloneVerbose bool
-	cloneCancel  atomic.Bool
 
 	deployOptions DeployFlowOptions
 	deploySession *deploy.DeploySession
 	deployPlan    *deploy.DeployPlan
 	deployResult  *deploy.DeployResult
-	deployCancel  atomic.Bool
 	conflicts     []*conflictState
 	conflictIndex int
 
-	updateQuery  func() (update.Check, error)
-	updateRun    func(progress.Callback, progress.Cancel) (update.Result, error)
-	updateCancel atomic.Bool
+	updateQuery func(context.Context) (update.Check, error)
+	updateRun   func(context.Context, progress.Callback) (update.Result, error)
 
 	settings     config.AppConfig
 	settingsLoad config.LoadResult
 
 	snapshotTimestamp string
+
+	parent       context.Context
+	cancelMu     sync.Mutex
+	cancelOp     context.CancelFunc
+	cancelSerial int
 }
 
 type startCloneMsg struct{}
@@ -123,6 +131,10 @@ func NewApp(options AppOptions) *App {
 	// An unresolvable home leaves the field empty: every operation that needs it
 	// propagates the resolution error instead of resolving against the cwd.
 	home, _ := paths.ResolveHome(options.Home)
+	parent := options.Context
+	if parent == nil {
+		parent = context.Background()
+	}
 	now := options.Now
 	if now == nil {
 		now = time.Now
@@ -157,12 +169,52 @@ func NewApp(options AppOptions) *App {
 		cloneForce: options.Clone.Force, cloneDryRun: options.Clone.DryRun,
 		cloneVerbose: options.Clone.Verbose, cloneOutput: options.Clone.Output,
 		updateQuery: options.UpdateQuery, updateRun: options.UpdateRun,
-		snapshotTimestamp: now().UTC().Format("2006-01-02T15:04:05Z"),
+		snapshotTimestamp: now().UTC().Format("2006-01-02T15:04:05Z"), parent: parent,
 	}
 	app.menu = newMenuScreen(app)
 	app.current = app.menu
 	app.layout()
 	return app
+}
+
+// beginOperation creates the cancellable context of one operation and returns
+// the function that releases it. The cancel function is stored so Esc and
+// ctrl+c can stop the work from any screen.
+func (a *App) beginOperation() (context.Context, func()) {
+	ctx, cancel := context.WithCancel(a.parent)
+	a.cancelMu.Lock()
+	previous := a.cancelOp
+	a.cancelSerial++
+	serial := a.cancelSerial
+	a.cancelOp = cancel
+	a.cancelMu.Unlock()
+	if previous != nil {
+		previous()
+	}
+	return ctx, func() {
+		a.cancelMu.Lock()
+		if a.cancelSerial == serial {
+			a.cancelOp = nil
+		}
+		a.cancelMu.Unlock()
+		cancel()
+	}
+}
+
+// cancelOperation asks the running operation to stop.
+func (a *App) cancelOperation() {
+	a.cancelMu.Lock()
+	cancel := a.cancelOp
+	a.cancelMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// cancelled reports whether err is a cooperative cancellation.
+func cancelled(err error) bool {
+	var target *kerrors.OperationCancelled
+	return errors.As(err, &target)
 }
 
 func detectUnicode() bool {
@@ -393,7 +445,6 @@ func (a *App) startClone() {
 	a.cloneVerbose = a.cloneOptions.Verbose
 	a.cloneResult = nil
 	a.clonePlan = nil
-	a.cloneCancel.Store(false)
 	a.cloneOutput = a.cloneOptions.Output
 	destinationError := a.cloneOptions.OutputError
 	if a.cloneOutput == "" && destinationError == "" {
@@ -423,7 +474,6 @@ func (a *App) startDeploy() {
 	if !a.loadCatalog() {
 		return
 	}
-	a.deployCancel.Store(false)
 	a.deploySession = nil
 	a.deployPlan = nil
 	a.deployResult = nil
@@ -440,7 +490,6 @@ func (a *App) startDeploy() {
 }
 
 func (a *App) startUpdate() {
-	a.updateCancel.Store(false)
 	a.begin(newUpdateScreen(a))
 }
 

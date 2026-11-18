@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -25,7 +26,7 @@ func TestCreateSnapshot(t *testing.T) {
 	writeFile(t, home, ".config/app/dir/a", "a")
 	directory := t.TempDir()
 	target := filepath.Join(home, ".config/app/config")
-	path, err := CreateSnapshot([]string{target, filepath.Join(home, ".config/app")}, home, directory, "2026-01-01T00:00:00Z", 0)
+	path, err := CreateSnapshot(context.Background(), []string{target, filepath.Join(home, ".config/app")}, home, directory, "2026-01-01T00:00:00Z", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +43,7 @@ func TestCreateSnapshot(t *testing.T) {
 	if len(manifest.Apps[0].Files) != 2 {
 		t.Fatalf("expected both files with overlap removed: %#v", manifest.Apps[0].Files)
 	}
-	if err := archive.VerifyArchive(path, manifest, nil, nil); err != nil {
+	if err := archive.VerifyArchive(context.Background(), path, manifest, nil); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -52,21 +53,21 @@ func TestSnapshotSuffixAndTimestampValidation(t *testing.T) {
 	writeFile(t, home, ".config/app/config", "value")
 	directory := t.TempDir()
 	target := filepath.Join(home, ".config/app/config")
-	first, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z", 0)
+	first, err := CreateSnapshot(context.Background(), []string{target}, home, directory, "2026-01-01T00:00:00Z", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z", 0)
+	second, err := CreateSnapshot(context.Background(), []string{target}, home, directory, "2026-01-01T00:00:00Z", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if first == second || filepath.Base(second) != "2026-01-01T00:00:00Z-1.tar.gz" {
 		t.Fatalf("unexpected suffix: %s %s", first, second)
 	}
-	if _, err := CreateSnapshot([]string{target}, home, directory, "../evil", 0); err == nil {
+	if _, err := CreateSnapshot(context.Background(), []string{target}, home, directory, "../evil", 0); err == nil {
 		t.Fatal("expected timestamp rejection")
 	}
-	if path, err := CreateSnapshot(nil, home, directory, "", 0); err != nil || path != "" {
+	if path, err := CreateSnapshot(context.Background(), nil, home, directory, "", 0); err != nil || path != "" {
 		t.Fatalf("empty snapshot: %q %v", path, err)
 	}
 }
@@ -78,7 +79,7 @@ func TestCreateSnapshotPrunesOldest(t *testing.T) {
 	target := filepath.Join(home, ".config/app/config")
 	stamps := []string{"2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "2026-01-03T00:00:00Z"}
 	for _, stamp := range stamps {
-		if _, err := CreateSnapshot([]string{target}, home, directory, stamp, 2); err != nil {
+		if _, err := CreateSnapshot(context.Background(), []string{target}, home, directory, stamp, 2); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -109,7 +110,7 @@ func TestCreateSnapshotWithoutLimitKeepsEverySnapshot(t *testing.T) {
 	directory := t.TempDir()
 	target := filepath.Join(home, ".config/app/config")
 	for _, stamp := range []string{"2026-01-01T00:00:00Z", "2026-01-02T00:00:00Z", "2026-01-03T00:00:00Z"} {
-		if _, err := CreateSnapshot([]string{target}, home, directory, stamp, 0); err != nil {
+		if _, err := CreateSnapshot(context.Background(), []string{target}, home, directory, stamp, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -167,7 +168,7 @@ func TestCreateSnapshotKeepsTheNewSnapshotWhenClockMovedBack(t *testing.T) {
 	if err := os.WriteFile(future, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	path, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z", 1)
+	path, err := CreateSnapshot(context.Background(), []string{target}, home, directory, "2026-01-01T00:00:00Z", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +249,7 @@ func TestCreateSnapshotRejectsNegativeLimit(t *testing.T) {
 	writeFile(t, home, ".config/app/config", "value")
 	directory := t.TempDir()
 	target := filepath.Join(home, ".config/app/config")
-	if _, err := CreateSnapshot([]string{target}, home, directory, "2026-01-01T00:00:00Z", -1); err == nil {
+	if _, err := CreateSnapshot(context.Background(), []string{target}, home, directory, "2026-01-01T00:00:00Z", -1); err == nil {
 		t.Fatal("a negative limit must fail")
 	}
 	entries, err := os.ReadDir(directory)
@@ -308,17 +309,17 @@ func TestCreateSnapshotFailsWhenItsSnapshotVanishes(t *testing.T) {
 		return original(path)
 	}
 	t.Cleanup(func() { removeFile = original })
-	if _, err := CreateSnapshot([]string{target}, home, directory, "2026-01-02T00:00:00Z", 1); err == nil {
+	if _, err := CreateSnapshot(context.Background(), []string{target}, home, directory, "2026-01-02T00:00:00Z", 1); err == nil {
 		t.Fatal("a snapshot that vanished during the prune must fail the deploy")
 	}
 }
 
 func TestSnapshotCommandsRequireAResolvableHome(t *testing.T) {
 	t.Setenv("HOME", "")
-	if count, err := SnapshotFiles([]string{"/tmp/config"}, ""); err == nil {
+	if count, err := SnapshotFiles(context.Background(), []string{"/tmp/config"}, ""); err == nil {
 		t.Fatalf("expected an error without HOME, got %d files", count)
 	}
-	if path, err := CreateSnapshot([]string{"/tmp/config"}, "", t.TempDir(), "2026-01-01T00:00:00Z", 0); err == nil {
+	if path, err := CreateSnapshot(context.Background(), []string{"/tmp/config"}, "", t.TempDir(), "2026-01-01T00:00:00Z", 0); err == nil {
 		t.Fatalf("expected an error without HOME, got %q", path)
 	}
 }

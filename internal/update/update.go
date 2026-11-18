@@ -2,6 +2,7 @@
 package update
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -137,8 +138,8 @@ type releasePayload struct {
 }
 
 // LatestRelease queries the latest published release and validates its asset.
-func LatestRelease() (ReleaseInfo, error) {
-	request, err := http.NewRequest(http.MethodGet, APIURL, nil)
+func LatestRelease(ctx context.Context) (ReleaseInfo, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, APIURL, nil)
 	if err != nil {
 		return ReleaseInfo{}, updateError(kerrors.UpdateNetwork, "no se pudo consultar la última versión: %v", err)
 	}
@@ -217,7 +218,7 @@ func digestHex(digest string) (string, error) {
 }
 
 // QueryUpdate checks platform, binary and latest release without downloading.
-func QueryUpdate(currentVersion string, target string, release *ReleaseInfo) (Check, error) {
+func QueryUpdate(ctx context.Context, currentVersion string, target string, release *ReleaseInfo) (Check, error) {
 	targetPath := target
 	if targetPath == "" {
 		var err error
@@ -246,7 +247,7 @@ func QueryUpdate(currentVersion string, target string, release *ReleaseInfo) (Ch
 	if release != nil {
 		found = *release
 	} else {
-		found, err = LatestRelease()
+		found, err = LatestRelease(ctx)
 		if err != nil {
 			return Check{}, err
 		}
@@ -286,7 +287,7 @@ func compareParts(left, right [3]int) int {
 }
 
 // DownloadUpdate downloads and verifies the asset in a temporary file.
-func DownloadUpdate(release ReleaseInfo, targetPath string, progressCallback progress.Callback, cancelled progress.Cancel) (string, error) {
+func DownloadUpdate(ctx context.Context, release ReleaseInfo, targetPath string, progressCallback progress.Callback) (string, error) {
 	directory := filepath.Dir(targetPath)
 	temp, err := os.CreateTemp(directory, ".kamino-update-")
 	if err != nil {
@@ -294,15 +295,15 @@ func DownloadUpdate(release ReleaseInfo, targetPath string, progressCallback pro
 	}
 	tempPath := temp.Name()
 	_ = temp.Close()
-	if err := downloadAsset(release, tempPath, progressCallback, cancelled); err != nil {
+	if err := downloadAsset(ctx, release, tempPath, progressCallback); err != nil {
 		_ = os.Remove(tempPath)
 		return "", err
 	}
 	return tempPath, nil
 }
 
-func downloadAsset(release ReleaseInfo, destination string, progressCallback progress.Callback, cancelled progress.Cancel) error {
-	request, err := http.NewRequest(http.MethodGet, release.AssetURL, nil)
+func downloadAsset(ctx context.Context, release ReleaseInfo, destination string, progressCallback progress.Callback) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, release.AssetURL, nil)
 	if err != nil {
 		return updateError(kerrors.UpdateNetwork, "no se pudo descargar %s: %v", AssetName, err)
 	}
@@ -329,7 +330,7 @@ func downloadAsset(release ReleaseInfo, destination string, progressCallback pro
 	var size int64
 	buffer := make([]byte, ChunkSize)
 	for {
-		if err := progress.EnsureNotCancelled(cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			return err
 		}
 		read, readErr := response.Body.Read(buffer)
@@ -388,8 +389,8 @@ func ReplaceBinary(temp, target string) error {
 }
 
 // RunUpdate queries, downloads, verifies and replaces the binary.
-func RunUpdate(currentVersion string, target string, release *ReleaseInfo, progressCallback progress.Callback, cancelled progress.Cancel) (Result, error) {
-	check, err := QueryUpdate(currentVersion, target, release)
+func RunUpdate(ctx context.Context, currentVersion string, target string, release *ReleaseInfo, progressCallback progress.Callback) (Result, error) {
+	check, err := QueryUpdate(ctx, currentVersion, target, release)
 	if err != nil {
 		return Result{}, err
 	}
@@ -402,7 +403,7 @@ func RunUpdate(currentVersion string, target string, release *ReleaseInfo, progr
 			Outcome:        check.Outcome,
 		}, nil
 	}
-	temp, err := DownloadUpdate(check.Release, check.Target, progressCallback, cancelled)
+	temp, err := DownloadUpdate(ctx, check.Release, check.Target, progressCallback)
 	if err != nil {
 		return Result{}, err
 	}
@@ -412,7 +413,7 @@ func RunUpdate(currentVersion string, target string, release *ReleaseInfo, progr
 			_ = os.Remove(temp)
 		}
 	}()
-	if err := progress.EnsureNotCancelled(cancelled); err != nil {
+	if err := progress.EnsureNotCancelled(ctx); err != nil {
 		return Result{}, err
 	}
 	progress.Emit(progressCallback, progress.Replacing, 0, 1, check.Target)

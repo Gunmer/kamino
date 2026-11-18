@@ -31,9 +31,6 @@ type Event struct {
 // Callback receives progress events.
 type Callback func(Event)
 
-// Cancel reports whether the user requested cancellation.
-type Cancel func() bool
-
 // Emit notifies one step when a callback is present.
 func Emit(callback Callback, phase Phase, current, total int, path string) {
 	if callback != nil {
@@ -41,24 +38,12 @@ func Emit(callback Callback, phase Phase, current, total int, path string) {
 	}
 }
 
-// EnsureNotCancelled aborts cooperatively when the UI requested it.
-func EnsureNotCancelled(cancelled Cancel) error {
-	if cancelled != nil && cancelled() {
+// EnsureNotCancelled aborts cooperatively when the context is done.
+func EnsureNotCancelled(ctx context.Context) error {
+	if ctx.Err() != nil {
 		return &kerrors.OperationCancelled{
 			KaminoError: kerrors.KaminoError{Msg: "operación cancelada"},
 		}
 	}
 	return nil
-}
-
-// ContextCancel adapts a context to the cancellation callback contract.
-func ContextCancel(ctx context.Context) Cancel {
-	return func() bool {
-		select {
-		case <-ctx.Done():
-			return true
-		default:
-			return false
-		}
-	}
 }

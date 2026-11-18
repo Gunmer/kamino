@@ -79,8 +79,10 @@ func countAppsCmd(app *App) tea.Cmd {
 		}
 	}
 	home := app.home
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
-		counted, err := plan.CountFiles(definitions, home, nil)
+		defer done()
+		counted, err := plan.CountFiles(ctx, definitions, home)
 		if err != nil {
 			return appsCountedMsg{err: err}
 		}
@@ -675,15 +677,15 @@ func (s *cloneReviewScreen) Init() tea.Cmd {
 }
 
 func planCloneCmd(app *App) tea.Cmd {
-	app.cloneCancel.Store(false)
 	selected := app.selectedCloneIDs()
 	options := clone.PlanOptions{
 		Home: app.home, Selected: &selected, Output: app.cloneOutput, Catalog: app.catalog,
 		ApplicationDirs: app.applicationDirs, Path: app.pathValue, Now: app.now(),
-		Cancelled: func() bool { return app.cloneCancel.Load() },
 	}
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
-		planned, err := clone.PlanClone(options)
+		defer done()
+		planned, err := clone.PlanClone(ctx, options)
 		return clonePlanDoneMsg{plan: planned, err: err}
 	}
 }
@@ -694,7 +696,7 @@ func (s *cloneReviewScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		return s.updateKey(value)
 	case clonePlanDoneMsg:
 		if value.err != nil {
-			if s.app.cloneCancel.Load() {
+			if cancelled(value.err) {
 				s.phase = clonePhaseCancelled
 				s.messages = []Message{{Kind: MessageWarning, Text: texts.C3CancelledInfo}}
 				return s, nil
@@ -720,13 +722,13 @@ func (s *cloneReviewScreen) updateKey(keyMessage tea.KeyMsg) (Screen, tea.Cmd) {
 	case "ctrl+c":
 		switch s.phase {
 		case clonePhasePlanning:
-			s.app.cloneCancel.Store(true)
+			s.app.cancelOperation()
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.CloneCancelling}}
 		case clonePhaseReady:
 			s.phase = clonePhaseCancelled
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.C3CancelledInfo}}
 		case clonePhaseWriting:
-			s.app.cloneCancel.Store(true)
+			s.app.cancelOperation()
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.CloneCancelling}}
 		}
 		return s, nil
@@ -774,7 +776,7 @@ func (s *cloneReviewScreen) updateKey(keyMessage tea.KeyMsg) (Screen, tea.Cmd) {
 		}
 	case clonePhasePlanning:
 		if keyMessage.String() == "esc" {
-			s.app.cloneCancel.Store(true)
+			s.app.cancelOperation()
 			return s, popScreen()
 		}
 	}
@@ -798,7 +800,7 @@ func (s *cloneReviewScreen) handleOperation(event operationEvent) (Screen, tea.C
 	}
 	s.phase = clonePhaseDone
 	if event.err != nil {
-		if s.app.cloneCancel.Load() {
+		if cancelled(event.err) {
 			s.phase = clonePhaseCancelled
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.C3CancelledInfo}}
 			return s, nil
@@ -816,16 +818,17 @@ func (s *cloneReviewScreen) handleOperation(event operationEvent) (Screen, tea.C
 }
 
 func startCloneWrite(app *App, plan *clone.ClonePlan) tea.Cmd {
-	app.cloneCancel.Store(false)
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
 		events := make(chan operationEvent, 64)
 		go func() {
-			result, err := clone.WriteClone(plan, app.home, app.cloneForce, nil, func(event progress.Event) {
+			defer done()
+			result, err := clone.WriteClone(ctx, plan, app.home, app.cloneForce, nil, func(event progress.Event) {
 				select {
 				case events <- operationEvent{progress: event}:
 				default:
 				}
-			}, func() bool { return app.cloneCancel.Load() })
+			})
 			if err == nil {
 				events <- operationEvent{clone: &result}
 			}

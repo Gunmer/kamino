@@ -4,6 +4,7 @@ package archive
 import (
 	"archive/tar"
 	"compress/gzip"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -38,7 +39,6 @@ type WriteOptions struct {
 	Overwrite     bool
 	ExpectedState *DestState
 	Progress      progress.Callback
-	Cancelled     progress.Cancel
 }
 
 // DestinationState returns the current destination fingerprint, if any.
@@ -55,7 +55,7 @@ func DestinationState(output string) *DestState {
 }
 
 // WriteArchive writes manifest.json and every manifest file to a gzip tar.
-func WriteArchive(output string, manifest *Manifest, options WriteOptions) error {
+func WriteArchive(ctx context.Context, output string, manifest *Manifest, options WriteOptions) error {
 	if err := manifest.Validate(); err != nil {
 		return &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{Msg: err.Error()}}
 	}
@@ -112,7 +112,7 @@ func WriteArchive(output string, manifest *Manifest, options WriteOptions) error
 			return err
 		}
 		for index, ref := range entries {
-			if err := progress.EnsureNotCancelled(options.Cancelled); err != nil {
+			if err := progress.EnsureNotCancelled(ctx); err != nil {
 				return err
 			}
 			if err := addFile(tw, safe, ref.appID, ref.entry); err != nil {
@@ -144,7 +144,7 @@ func WriteArchive(output string, manifest *Manifest, options WriteOptions) error
 	if err := file.Close(); err != nil {
 		return archiveError("no se pudo cerrar el archivo del clon: %v", err)
 	}
-	if err := progress.EnsureNotCancelled(options.Cancelled); err != nil {
+	if err := progress.EnsureNotCancelled(ctx); err != nil {
 		return err
 	}
 	if err := commit(temp, output, options.Overwrite, initial); err != nil {
@@ -366,7 +366,7 @@ func expectedMembers(manifest *Manifest) map[string]FileEntry {
 }
 
 // VerifyArchive checks every manifest member and rejects extras.
-func VerifyArchive(file string, manifest *Manifest, callback progress.Callback, cancelled progress.Cancel) error {
+func VerifyArchive(ctx context.Context, file string, manifest *Manifest, callback progress.Callback) error {
 	expected := expectedMembers(manifest)
 	total := len(expected)
 	current := 0
@@ -383,7 +383,7 @@ func VerifyArchive(file string, manifest *Manifest, callback progress.Callback, 
 	tr := tar.NewReader(gz)
 	index := 0
 	for {
-		if err := progress.EnsureNotCancelled(cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			return err
 		}
 		header, err := tr.Next()
@@ -450,7 +450,7 @@ func hashTarMember(reader io.Reader) (string, error) {
 }
 
 // ExtractArchive extracts safely into a staging directory.
-func ExtractArchive(file, dest string, callback progress.Callback, cancelled progress.Cancel) error {
+func ExtractArchive(ctx context.Context, file, dest string, callback progress.Callback) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
 		return archiveError("extracción insegura o fallida: %v", err)
 	}
@@ -516,7 +516,7 @@ func ExtractArchive(file, dest string, callback progress.Callback, cancelled pro
 		progress.Emit(callback, progress.Extracting, index, total, header.Name)
 	}
 	for _, member := range members {
-		if err := progress.EnsureNotCancelled(cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			return err
 		}
 		if member.Typeflag != tar.TypeSymlink {

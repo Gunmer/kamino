@@ -2,6 +2,7 @@
 package snapshot
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,7 +43,7 @@ type snapshotFile struct {
 // CreateSnapshot stores the current state of paths in a snapshot archive and
 // prunes the oldest snapshots so that at most limit remain. A limit of zero
 // keeps every snapshot.
-func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limit int) (string, error) {
+func CreateSnapshot(ctx context.Context, targets []string, home, snapshotsDir, timestamp string, limit int) (string, error) {
 	if limit < 0 {
 		return "", negativeLimitError(limit)
 	}
@@ -64,7 +65,7 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 	if err != nil {
 		return "", err
 	}
-	built, err := plan.BuildPlan([]*catalog.AppDefinition{definition}, root, nil, nil)
+	built, err := plan.BuildPlan(ctx, []*catalog.AppDefinition{definition}, root, nil)
 	if err != nil {
 		return "", err
 	}
@@ -105,7 +106,7 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 	if err != nil {
 		return "", err
 	}
-	if err := archive.WriteArchive(output, manifest, archive.WriteOptions{SourceRoot: root}); err != nil {
+	if err := archive.WriteArchive(ctx, output, manifest, archive.WriteOptions{SourceRoot: root}); err != nil {
 		return "", err
 	}
 	if _, err := PruneSnapshots(directory, limit, output); err != nil {
@@ -198,7 +199,7 @@ func PruneSnapshots(directory string, limit int, keep string) ([]string, error) 
 }
 
 // SnapshotFiles counts the files a snapshot would protect without writing.
-func SnapshotFiles(targets []string, home string) (int, error) {
+func SnapshotFiles(ctx context.Context, targets []string, home string) (int, error) {
 	if len(targets) == 0 {
 		return 0, nil
 	}
@@ -210,7 +211,7 @@ func SnapshotFiles(targets []string, home string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	built, err := plan.BuildPlan([]*catalog.AppDefinition{definition}, root, nil, nil)
+	built, err := plan.BuildPlan(ctx, []*catalog.AppDefinition{definition}, root, nil)
 	if err != nil {
 		return 0, err
 	}

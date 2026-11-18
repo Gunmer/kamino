@@ -2,6 +2,7 @@
 package deploy
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -216,21 +217,21 @@ func PrepareDeploy(cloneFile string, options Options) (*DeploySession, error) {
 }
 
 // Plan classifies the chosen apps and builds every content conflict.
-func (s *DeploySession) Plan(selected *[]string, dryRun bool, requested []string, progressCallback progress.Callback, cancelled progress.Cancel) (*DeployPlan, error) {
+func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun bool, requested []string, progressCallback progress.Callback) (*DeployPlan, error) {
 	if s.closed {
 		return nil, fmt.Errorf("deploy session is closed")
 	}
 	if !dryRun {
-		if err := archive.VerifyArchive(s.CloneFile, s.Manifest, progressCallback, cancelled); err != nil {
+		if err := archive.VerifyArchive(ctx, s.CloneFile, s.Manifest, progressCallback); err != nil {
 			return nil, err
 		}
-		if err := progress.EnsureNotCancelled(cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			return nil, err
 		}
 		if err := os.MkdirAll(s.Home, 0o755); err != nil {
 			return nil, err
 		}
-		if err := s.resetStaging(progressCallback, cancelled); err != nil {
+		if err := s.resetStaging(ctx, progressCallback); err != nil {
 			return nil, err
 		}
 	}
@@ -269,7 +270,7 @@ func (s *DeploySession) Plan(selected *[]string, dryRun bool, requested []string
 		defer func() { _ = opened.Close() }()
 	}
 	for index, current := range active {
-		if err := progress.EnsureNotCancelled(cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			s.clearStaging()
 			return nil, err
 		}
@@ -324,7 +325,7 @@ func (s *DeploySession) Plan(selected *[]string, dryRun bool, requested []string
 			}
 		}
 	}
-	if err := progress.EnsureNotCancelled(cancelled); err != nil {
+	if err := progress.EnsureNotCancelled(ctx); err != nil {
 		s.clearStaging()
 		return nil, err
 	}
@@ -385,7 +386,7 @@ func (s *DeploySession) DryRunResult(plan *DeployPlan) DeployResult {
 }
 
 // Apply applies the decisions with a snapshot and atomic per-file writes.
-func (s *DeploySession) Apply(decisions conflicts.ConflictDecisions, progressCallback progress.Callback, cancelled progress.Cancel) (DeployResult, error) {
+func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictDecisions, progressCallback progress.Callback) (DeployResult, error) {
 	if s.closed {
 		return DeployResult{}, fmt.Errorf("deploy session is closed")
 	}
@@ -418,7 +419,7 @@ func (s *DeploySession) Apply(decisions conflicts.ConflictDecisions, progressCal
 		return DeployResult{}, err
 	}
 	for _, item := range writes {
-		if err := progress.EnsureNotCancelled(cancelled); err != nil {
+		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			_ = safe.Close()
 			return DeployResult{}, err
 		}
@@ -448,14 +449,14 @@ func (s *DeploySession) Apply(decisions conflicts.ConflictDecisions, progressCal
 		return DeployResult{}, err
 	}
 	defer func() { _ = release() }()
-	protected, err := snapshot.SnapshotFiles(destinations, s.Home)
+	protected, err := snapshot.SnapshotFiles(ctx, destinations, s.Home)
 	if err != nil {
 		return DeployResult{}, err
 	}
-	if err := progress.EnsureNotCancelled(cancelled); err != nil {
+	if err := progress.EnsureNotCancelled(ctx); err != nil {
 		return DeployResult{}, err
 	}
-	snapshotPath, err := snapshot.CreateSnapshot(destinations, s.Home, directory, "", s.SnapshotsLimit)
+	snapshotPath, err := snapshot.CreateSnapshot(ctx, destinations, s.Home, directory, "", s.SnapshotsLimit)
 	if err != nil {
 		return DeployResult{}, err
 	}
@@ -491,7 +492,7 @@ func (s *DeploySession) clearStaging() {
 	}
 }
 
-func (s *DeploySession) resetStaging(progressCallback progress.Callback, cancelled progress.Cancel) error {
+func (s *DeploySession) resetStaging(ctx context.Context, progressCallback progress.Callback) error {
 	if s.staging != "" {
 		_ = os.RemoveAll(s.staging)
 	}
@@ -500,7 +501,7 @@ func (s *DeploySession) resetStaging(progressCallback progress.Callback, cancell
 		return err
 	}
 	s.staging = directory
-	if err := archive.ExtractArchive(s.CloneFile, s.staging, progressCallback, cancelled); err != nil {
+	if err := archive.ExtractArchive(ctx, s.CloneFile, s.staging, progressCallback); err != nil {
 		_ = os.RemoveAll(s.staging)
 		s.staging = ""
 		return err
@@ -938,18 +939,18 @@ func ghosttyPortabilityNotices(manifest *archive.Manifest, cloneFile, home strin
 }
 
 // RunDeploy is the non-interactive deploy facade.
-func RunDeploy(cloneFile string, options Options, selected *[]string, dryRun bool) (DeployResult, error) {
+func RunDeploy(ctx context.Context, cloneFile string, options Options, selected *[]string, dryRun bool) (DeployResult, error) {
 	session, err := PrepareDeploy(cloneFile, options)
 	if err != nil {
 		return DeployResult{}, err
 	}
 	defer session.Close()
-	plan, err := session.Plan(selected, dryRun, nil, nil, nil)
+	plan, err := session.Plan(ctx, selected, dryRun, nil, nil)
 	if err != nil {
 		return DeployResult{}, err
 	}
 	if dryRun {
 		return session.DryRunResult(plan), nil
 	}
-	return session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil)
+	return session.Apply(ctx, conflicts.ApplyAll(plan.Conflicts), nil)
 }
