@@ -2,6 +2,43 @@
 
 <!-- version list -->
 
+## v0.12.0 (2026-11-18)
+
+### Correcciones
+
+- serialize snapshot pruning across concurrent deploys ([`5504f4d`](https://github.com/Gunmer/kamino/commit/5504f4deba20ebfcc7f21f1ba2c9187e09bb9e21))
+- abort when the new snapshot disappears during the prune ([`ee18c70`](https://github.com/Gunmer/kamino/commit/ee18c70f1fe4445e7269fac1630966f349f4ed9d))
+- use the default limit when the config file is invalid ([`4aafa49`](https://github.com/Gunmer/kamino/commit/4aafa490454be81195b3ef388387fbc7c122325c))
+- reject a negative limit and cover the failure paths ([`30d7968`](https://github.com/Gunmer/kamino/commit/30d796855aed8369bdfa34fde2df0d900b2d23e0))
+- treat an already pruned snapshot as pruned ([`cd65e77`](https://github.com/Gunmer/kamino/commit/cd65e7700312ea9e261bf1cd999585d28d017518))
+- never prune the snapshot that was just written ([`5fcea81`](https://github.com/Gunmer/kamino/commit/5fcea81f08271e73caa1f4350dc8fbf02ab6d0d8))
+- decouple menu goldens from the released version ([`6fa0bec`](https://github.com/Gunmer/kamino/commit/6fa0bec3228028f109c0394c9fc3427de983a54a))
+
+### Documentación
+
+- document the snapshot lock between concurrent deploys ([`4e41f12`](https://github.com/Gunmer/kamino/commit/4e41f12a938fbd44f95824cbd516377155c826a1))
+- record the closed review follow-ups ([`e1a9de5`](https://github.com/Gunmer/kamino/commit/e1a9de57be87d1f67dd9af2f073622eeaea8a861))
+- record the retention review outcome and follow-ups ([`f14f68c`](https://github.com/Gunmer/kamino/commit/f14f68c584bbcab7b19ce4801b2150cfe736923e))
+- rename design documents to ASCII file names ([`9808e93`](https://github.com/Gunmer/kamino/commit/9808e937396e70228e4bdb6518f698d3dc00463d))
+- document the snapshot retention limit ([`58fb9eb`](https://github.com/Gunmer/kamino/commit/58fb9ebad4ce40ed4d74892612425e35789e0906))
+
+### Funcionalidades
+
+- edit the snapshot limit from the settings screen ([`7af9e8d`](https://github.com/Gunmer/kamino/commit/7af9e8dc5b91b3920515756d22221ca7c89c2586))
+- prune the oldest snapshots beyond the configured limit ([`e11ebd1`](https://github.com/Gunmer/kamino/commit/e11ebd1d72647066cd66132f1292ca7bc7ce552b))
+- add deploy.snapshots_limit with a default of 5 ([`e576a7c`](https://github.com/Gunmer/kamino/commit/e576a7c18c54091c4209d80def86ae6b2ff09ab8))
+- show the build version under the menu wordmark ([`50e0865`](https://github.com/Gunmer/kamino/commit/50e08656edc4cc1a87198b97ec175324502a68dc))
+
+### Refactorización
+
+- clarify the settings subtitle and the limit field layout ([`d360ed0`](https://github.com/Gunmer/kamino/commit/d360ed0ee5e5aef39709927de69d46786633db90))
+
+### Pruebas
+
+- assert the ASCII mode the no-wordmark test needs ([`d61318c`](https://github.com/Gunmer/kamino/commit/d61318c5c8b3c92596c91ca04066027349a41b76))
+- pin the version order and the height cutoff ([`4a6d829`](https://github.com/Gunmer/kamino/commit/4a6d82977c355df29fa18b49f6bb5988aa9dcd8f))
+- pin the menu version outside the wordmark branch ([`f8f2982`](https://github.com/Gunmer/kamino/commit/f8f298226993a074068269f978302f7e535ae500))
+
 ## v0.11.0 (2026-11-15)
 
 ### Funcionalidades
@@ -159,4 +196,5 @@
 ## v0.1.0 (2026-10-31)
 
 - Versión inicial
+
 
