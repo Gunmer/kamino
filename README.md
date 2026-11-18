@@ -353,8 +353,8 @@ el identificador de la aplicación; nunca ejecuta la herramienta.
 
 | Grupo | Ids |
 | --- | --- |
-| Agentes y asistentes | `opencode`, `claude-code`, `codex`, `gemini-cli`, `copilot-cli`, `pi`, `aider`, `goose`, `gentle-shell`, `gentle-ai`, `gga`, `openspec`, `caveman` |
-| Terminales y utilidades | `lazygit`, `micro`, `navi`, `glow`, `bat`, `eza`, `fd`, `github-cli`, `git`, `herdr`, `yazi`, `ghostty`, `oh-my-zsh` |
+| Agentes y asistentes | `opencode`, `claude-code`, `codex`, `gemini-cli`, `copilot-cli`, `pi`, `gentle-shell`, `openspec` |
+| Terminales y utilidades | `lazygit`, `micro`, `glow`, `bat`, `github-cli`, `git`, `herdr`, `yazi`, `ghostty`, `oh-my-zsh` |
 
 Ejemplo:
 
