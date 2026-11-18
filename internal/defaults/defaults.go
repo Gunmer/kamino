@@ -2,29 +2,34 @@
 package defaults
 
 import (
-	"os"
 	"path/filepath"
+
+	"github.com/Gunmer/kamino/internal/paths"
 )
 
 // CatalogDir is the default directory for user application definitions.
-func CatalogDir(home string) string {
-	return filepath.Join(homeOrUser(home), ".config", "kamino", "apps")
+func CatalogDir(home string) (string, error) {
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, ".config", "kamino", "apps"), nil
 }
 
 // VaultDir is the default directory for clones and snapshots.
-func VaultDir(home string) string {
-	return filepath.Join(homeOrUser(home), ".config", "kamino", "vault")
+func VaultDir(home string) (string, error) {
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, ".config", "kamino", "vault"), nil
 }
 
 // SnapshotsDir is the default directory for safety snapshots.
-func SnapshotsDir(home string) string {
-	return filepath.Join(VaultDir(home), "snapshot")
-}
-
-func homeOrUser(home string) string {
-	if home != "" {
-		return home
+func SnapshotsDir(home string) (string, error) {
+	vault, err := VaultDir(home)
+	if err != nil {
+		return "", err
 	}
-	value, _ := os.UserHomeDir()
-	return value
+	return filepath.Join(vault, "snapshot"), nil
 }

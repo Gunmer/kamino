@@ -49,9 +49,9 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 	if len(targets) == 0 {
 		return "", nil
 	}
-	root := home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return "", err
 	}
 	when := timestamp
 	if when == "" {
@@ -96,7 +96,10 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 	}
 	directory := snapshotsDir
 	if directory == "" {
-		directory = defaults.SnapshotsDir(root)
+		directory, err = defaults.SnapshotsDir(root)
+		if err != nil {
+			return "", err
+		}
 	}
 	output, err := outputPath(directory, when)
 	if err != nil {
@@ -195,23 +198,23 @@ func PruneSnapshots(directory string, limit int, keep string) ([]string, error) 
 }
 
 // SnapshotFiles counts the files a snapshot would protect without writing.
-func SnapshotFiles(targets []string, home string) int {
+func SnapshotFiles(targets []string, home string) (int, error) {
 	if len(targets) == 0 {
-		return 0
+		return 0, nil
 	}
-	root := home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return 0, err
 	}
 	definition, err := snapshotDefinition(targets, root)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	built, err := plan.BuildPlan([]*catalog.AppDefinition{definition}, root, nil, nil)
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return len(built.Operations)
+	return len(built.Operations), nil
 }
 
 func negativeLimitError(limit int) error {

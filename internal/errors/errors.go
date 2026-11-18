@@ -1,6 +1,8 @@
 // Package errors contains the domain errors of Kamino.
 package errors
 
+import "errors"
+
 // Kamino is implemented by every domain error.
 type Kamino interface {
 	error
@@ -75,8 +77,11 @@ type PartialApplyError struct {
 	Snapshot string
 }
 
-// AsKamino reports whether err is a Kamino domain error.
+// AsKamino reports whether err is or wraps a Kamino domain error.
 func AsKamino(err error) (Kamino, bool) {
-	k, ok := err.(Kamino)
-	return k, ok
+	var k Kamino
+	if errors.As(err, &k) {
+		return k, true
+	}
+	return nil, false
 }

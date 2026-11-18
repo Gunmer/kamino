@@ -39,7 +39,7 @@ func Publish(root, repository, tag, binary string) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(directory)
+	defer func() { _ = os.RemoveAll(directory) }()
 	notesFile := filepath.Join(directory, "notes.md")
 	if err := os.WriteFile(notesFile, []byte(notes), 0o644); err != nil {
 		return err
@@ -115,7 +115,7 @@ func runGH(arguments ...string) error {
 	command := exec.Command("gh", arguments...)
 	output, err := command.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("gh %s: %v\n%s", strings.Join(arguments, " "), err, output)
+		return fmt.Errorf("gh %s: %w\n%s", strings.Join(arguments, " "), err, output)
 	}
 	return nil
 }

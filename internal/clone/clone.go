@@ -77,15 +77,18 @@ func (c CloneResult) Size() int64 {
 
 // PlanClone builds the plan, manifest and destination without writing.
 func PlanClone(options PlanOptions) (*ClonePlan, error) {
-	root := options.Home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+	root, err := paths.ResolveHome(options.Home)
+	if err != nil {
+		return nil, err
 	}
 	definitions := options.Catalog
 	if definitions == nil {
 		directory := options.CatalogDir
 		if directory == "" {
-			directory = defaults.CatalogDir(root)
+			directory, err = defaults.CatalogDir(root)
+			if err != nil {
+				return nil, err
+			}
 		}
 		loaded, err := catalog.LoadCatalog(directory)
 		if err != nil {
@@ -108,9 +111,9 @@ func PlanClone(options PlanOptions) (*ClonePlan, error) {
 
 // WriteClone writes the planned archive atomically.
 func WriteClone(planned *ClonePlan, home string, force bool, expectedState *archive.DestState, progressCallback progress.Callback, cancelled progress.Cancel) (CloneResult, error) {
-	root := home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return CloneResult{}, err
 	}
 	if err := archive.WriteArchive(planned.Output, planned.Manifest, archive.WriteOptions{
 		SourceRoot:    root,
@@ -229,7 +232,11 @@ func destination(output, outputDir, root string, now time.Time) (string, error) 
 	}
 	directory := outputDir
 	if directory == "" {
-		directory = defaults.VaultDir(root)
+		resolved, err := defaults.VaultDir(root)
+		if err != nil {
+			return "", err
+		}
+		directory = resolved
 	}
 	if info, err := os.Stat(directory); err == nil && !info.IsDir() {
 		return "", &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
@@ -291,5 +298,3 @@ func RelativeSources(operations []plan.Operation) []string {
 	sort.Strings(result)
 	return result
 }
-
-var _ = paths.ToAbsolute

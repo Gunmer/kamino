@@ -2,8 +2,6 @@
 package app
 
 import (
-	"os"
-
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/clone"
 	"github.com/Gunmer/kamino/internal/config"
@@ -11,6 +9,7 @@ import (
 	"github.com/Gunmer/kamino/internal/defaults"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
+	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/update"
 )
 
@@ -43,11 +42,15 @@ func InstalledApps(definitions catalog.Catalog, home string, applicationDirs []s
 // ExecuteClone runs the text clone flow.
 func ExecuteClone(requested *[]string, output string, dryRun, force bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue string) (CloneOutcome, error) {
 	if definitions == nil {
-		root := home
-		if root == "" {
-			root, _ = userHome()
+		root, err := paths.ResolveHome(home)
+		if err != nil {
+			return CloneOutcome{}, err
 		}
-		loaded, err := catalog.LoadCatalog(defaults.CatalogDir(root))
+		directory, err := defaults.CatalogDir(root)
+		if err != nil {
+			return CloneOutcome{}, err
+		}
+		loaded, err := catalog.LoadCatalog(directory)
 		if err != nil {
 			return CloneOutcome{}, err
 		}
@@ -168,8 +171,4 @@ func ptrValue(value *[]string) []string {
 		return nil
 	}
 	return *value
-}
-
-func userHome() (string, error) {
-	return os.UserHomeDir()
 }

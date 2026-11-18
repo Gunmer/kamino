@@ -21,8 +21,8 @@ const (
 	MaxGhosttyDepth = 12
 )
 
-// SensitivePatterns are never included in automatic Ghostty references.
-var SensitivePatterns = []string{
+// sensitivePatterns are never included in automatic Ghostty references.
+var sensitivePatterns = []string{
 	"**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json",
 	"**/credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml",
 	"**/.ssh", "**/.ssh/**", "**/.aws/credentials", "**/id_rsa", "**/id_ed25519",
@@ -170,7 +170,7 @@ func BuildPlan(apps []*catalog.AppDefinition, home string, progressCallback prog
 	if err != nil {
 		return Plan{}, err
 	}
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	b := newBuilder(safe, root, progressCallback, cancelled)
 	for _, app := range apps {
 		if err := progress.EnsureNotCancelled(cancelled); err != nil {
@@ -198,7 +198,7 @@ func CountFiles(apps []*catalog.AppDefinition, home string, cancelled progress.C
 	if err != nil {
 		return CountResult{}, err
 	}
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	b := newBuilder(safe, root, nil, cancelled)
 	b.countOnly = true
 	for _, app := range apps {
@@ -245,7 +245,7 @@ func expand(app *catalog.AppDefinition, entry string, b *builder, required, auto
 		b.skip(rel, "ruta insegura o ilegible")
 		return
 	}
-	if IsExcluded(rel, app.Exclude) || (automatic && IsExcluded(rel, SensitivePatterns)) {
+	if IsExcluded(rel, app.Exclude) || (automatic && IsExcluded(rel, sensitivePatterns)) {
 		return
 	}
 	info, err := b.safe.Lstat(rel)
@@ -396,7 +396,7 @@ func expandGhostty(app *catalog.AppDefinition, b *builder) {
 
 	initial := make([]string, 0)
 	for _, operation := range b.operations {
-		if operation.AppID == app.ID && operation.Link == nil && ghostty.ConfigFilenames[path.Base(operation.Path)] {
+		if operation.AppID == app.ID && operation.Link == nil && ghostty.IsConfigFilename(path.Base(operation.Path)) {
 			initial = append(initial, operation.Path)
 		}
 	}
@@ -510,7 +510,7 @@ func followTheme(app *catalog.AppDefinition, raw, baseRel string, b *builder, th
 }
 
 func blockedReference(app *catalog.AppDefinition, rel string) bool {
-	return IsExcluded(rel, app.Exclude) || IsExcluded(rel, SensitivePatterns)
+	return IsExcluded(rel, app.Exclude) || IsExcluded(rel, sensitivePatterns)
 }
 
 func ghosttyThemeDirsFor(b *builder) []string {

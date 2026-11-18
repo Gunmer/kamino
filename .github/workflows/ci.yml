@@ -37,7 +37,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: latest
+          version: v2.15.0
           args: --timeout=5m
 
       - name: Tests

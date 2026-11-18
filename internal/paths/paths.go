@@ -79,6 +79,22 @@ func pathError(msg string) error {
 	return &kerrors.PathError{KaminoError: kerrors.KaminoError{Msg: msg}}
 }
 
+// ResolveHome returns home when it is set and the user home directory otherwise.
+// It never returns an empty path, so callers cannot resolve against the cwd.
+func ResolveHome(home string) (string, error) {
+	if home != "" {
+		return home, nil
+	}
+	value, err := os.UserHomeDir()
+	if err != nil {
+		return "", pathError("no se pudo determinar el directorio del usuario: " + err.Error())
+	}
+	if value == "" {
+		return "", pathError("no se pudo determinar el directorio del usuario: HOME vacío")
+	}
+	return value, nil
+}
+
 // Parts validates a home-relative path and returns its normalized components.
 func Parts(rel string) ([]string, error) {
 	if err := EnsureRelative(rel); err != nil {
@@ -232,7 +248,7 @@ func (s *SafeHome) Lstat(rel string) (Info, error) {
 	if err != nil {
 		return Info{}, err
 	}
-	defer unix.Close(parent)
+	defer func() { _ = unix.Close(parent) }()
 	var st unix.Stat_t
 	if err := unix.Fstatat(parent, name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
 		if errors.Is(err, fs.ErrNotExist) {
@@ -249,13 +265,13 @@ func (s *SafeHome) ReadBytes(rel string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer unix.Close(parent)
+	defer func() { _ = unix.Close(parent) }()
 	fd, err := unix.Openat(parent, name, unix.O_RDONLY|unix.O_NOFOLLOW, 0)
 	if err != nil {
 		return nil, pathError(fmt.Sprintf("no se pudo leer %q sin seguir enlaces: %v", rel, err))
 	}
 	file := os.NewFile(uintptr(fd), rel)
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
 		return nil, pathError(fmt.Sprintf("no se pudo inspeccionar %q: %v", rel, err))
@@ -294,7 +310,7 @@ func (s *SafeHome) Readlink(rel string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer unix.Close(parent)
+	defer func() { _ = unix.Close(parent) }()
 	buf := make([]byte, 256)
 	for {
 		n, err := unix.Readlinkat(parent, name, buf)
@@ -315,7 +331,7 @@ func (s *SafeHome) Listdir(rel string) ([]string, error) {
 		return nil, err
 	}
 	file := os.NewFile(uintptr(fd), rel)
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	entries, err := file.ReadDir(-1)
 	if err != nil {
 		return nil, pathError(fmt.Sprintf("no se pudo listar %q: %v", rel, err))
@@ -348,7 +364,7 @@ func (s *SafeHome) walkDir(rel string, prune func(string) bool, visit func(WalkI
 		return err
 	}
 	file := os.NewFile(uintptr(fd), rel)
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	entries, readErr := file.ReadDir(-1)
 	if readErr != nil {
 		return visit(WalkItem{Path: rel, Kind: KindSkipped})
@@ -438,7 +454,7 @@ func (s *SafeHome) WriteFile(rel string, data []byte, mode os.FileMode) error {
 	if err != nil {
 		return err
 	}
-	defer unix.Close(parent)
+	defer func() { _ = unix.Close(parent) }()
 	temp := randomName()
 	fd, err := unix.Openat(parent, temp, unix.O_WRONLY|unix.O_CREAT|unix.O_EXCL|unix.O_NOFOLLOW, uint32(mode.Perm()))
 	if err != nil {
@@ -480,7 +496,7 @@ func (s *SafeHome) ReplaceWithSymlink(rel, target string) error {
 	if err != nil {
 		return err
 	}
-	defer unix.Close(parent)
+	defer func() { _ = unix.Close(parent) }()
 	temp := randomName()
 	if err := unix.Symlinkat(target, parent, temp); err != nil {
 		return pathError(fmt.Sprintf("no se pudo crear el enlace %q: %v", rel, err))

@@ -60,7 +60,6 @@ type flowScreen interface {
 
 type pushMsg struct{ screen Screen }
 type popMsg struct{}
-type replaceMsg struct{ screen Screen }
 type quitMsg struct{ code int }
 type errorMsg struct{ what, safety, action, detail string }
 
@@ -70,10 +69,6 @@ func pushScreen(screen Screen) tea.Cmd {
 
 func popScreen() tea.Cmd {
 	return func() tea.Msg { return popMsg{} }
-}
-
-func replaceScreen(screen Screen) tea.Cmd {
-	return func() tea.Msg { return replaceMsg{screen: screen} }
 }
 
 func quitApp(code int) tea.Cmd {

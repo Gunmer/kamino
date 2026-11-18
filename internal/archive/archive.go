@@ -1,3 +1,4 @@
+// Package archive owns the versioned manifest and the clone archive format.
 package archive
 
 import (
@@ -97,14 +98,14 @@ func WriteArchive(output string, manifest *Manifest, options WriteOptions) error
 	if err != nil {
 		return err
 	}
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 
 	file, err := os.OpenFile(temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return archiveError("no se pudo crear el temporal del clon: %v", err)
 	}
 	gz := gzip.NewWriter(file)
-	gz.Header.ModTime = time.Time{}
+	gz.ModTime = time.Time{}
 	tw := tar.NewWriter(gz)
 	writeErr := func() error {
 		if err := addManifest(tw, manifest); err != nil {
@@ -272,12 +273,12 @@ func ReadManifest(file string) (*Manifest, error) {
 	if err != nil {
 		return nil, archiveError("no se pudo leer el archivo del clon: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, archiveError("no se pudo leer el archivo del clon: %v", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	var raw []byte
 	found := false
@@ -328,12 +329,12 @@ func ReadFileFromArchive(file, appID, rel string, limit int64) []byte {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return nil
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	for {
 		header, err := tr.Next()
@@ -373,12 +374,12 @@ func VerifyArchive(file string, manifest *Manifest, callback progress.Callback, 
 	if err != nil {
 		return archiveError("no se pudo verificar el archivo del clon: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return archiveError("no se pudo verificar el archivo del clon: %v", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	index := 0
 	for {
@@ -477,12 +478,12 @@ func ExtractArchive(file, dest string, callback progress.Callback, cancelled pro
 	if err != nil {
 		return archiveError("extracción insegura o fallida: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return archiveError("extracción insegura o fallida: %v", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	index := 0
 	for {
@@ -548,12 +549,12 @@ func scanMembers(file string) ([]memberInfo, error) {
 	if err != nil {
 		return nil, archiveError("extracción insegura o fallida: %v", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		return nil, archiveError("extracción insegura o fallida: %v", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	members := make([]memberInfo, 0)
 	for {

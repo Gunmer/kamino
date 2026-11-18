@@ -12,7 +12,7 @@ func TestDefaultsAndMissingFile(t *testing.T) {
 	if result.Error != nil || result.Exists {
 		t.Fatalf("unexpected missing file result: %#v", result)
 	}
-	expected := DefaultConfig(home)
+	expected := mustDefaultConfig(t, home)
 	if result.Config != expected {
 		t.Fatalf("unexpected defaults: %#v", result.Config)
 	}
@@ -28,11 +28,11 @@ func TestLoadValidAndInvalidConfig(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(ConfigPath(home)), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(mustConfigPath(t, home)), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	content := "[catalog]\ndir = \"" + catalog + "\"\n\n[clone]\noutput_dir = \"" + clones + "\"\n\n[deploy]\nsnapshots_dir = \"" + snapshots + "\"\n"
-	if err := os.WriteFile(ConfigPath(home), []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(mustConfigPath(t, home), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	result := LoadConfig(home, "")
@@ -41,14 +41,14 @@ func TestLoadValidAndInvalidConfig(t *testing.T) {
 	}
 
 	invalid := "[ui]\nplain = false\n"
-	if err := os.WriteFile(ConfigPath(home), []byte(invalid), 0o644); err != nil {
+	if err := os.WriteFile(mustConfigPath(t, home), []byte(invalid), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	result = LoadConfig(home, "")
 	if result.Error == nil || !result.Exists {
 		t.Fatalf("expected invalid config error: %#v", result)
 	}
-	if result.Config != DefaultConfig(home) {
+	if result.Config != mustDefaultConfig(t, home) {
 		t.Fatalf("invalid config must fall back: %#v", result.Config)
 	}
 }
@@ -89,10 +89,10 @@ func TestSnapshotsLimitDefaultAndLoad(t *testing.T) {
 	}
 	writeConfig := func(content string) {
 		t.Helper()
-		if err := os.MkdirAll(filepath.Dir(ConfigPath(home)), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Dir(mustConfigPath(t, home)), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(ConfigPath(home), []byte(content), 0o644); err != nil {
+		if err := os.WriteFile(mustConfigPath(t, home), []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -124,17 +124,17 @@ func TestSnapshotsLimitRejectsInvalidValues(t *testing.T) {
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {
 			home := t.TempDir()
-			if err := os.MkdirAll(filepath.Dir(ConfigPath(home)), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(mustConfigPath(t, home)), 0o755); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(ConfigPath(home), []byte(content), 0o644); err != nil {
+			if err := os.WriteFile(mustConfigPath(t, home), []byte(content), 0o644); err != nil {
 				t.Fatal(err)
 			}
 			loaded := LoadConfig(home, "")
 			if loaded.Error == nil {
 				t.Fatalf("expected a configuration error for %s", name)
 			}
-			if loaded.Config != DefaultConfig(home) {
+			if loaded.Config != mustDefaultConfig(t, home) {
 				t.Fatalf("invalid configuration must fall back to defaults: %#v", loaded.Config)
 			}
 		})
@@ -143,7 +143,7 @@ func TestSnapshotsLimitRejectsInvalidValues(t *testing.T) {
 
 func TestSaveAndLoadSnapshotsLimit(t *testing.T) {
 	home := t.TempDir()
-	value := DefaultConfig(home)
+	value := mustDefaultConfig(t, home)
 	value.SnapshotsLimit = 2
 	path, err := SaveConfig(value, home, "")
 	if err != nil {
@@ -180,9 +180,27 @@ func TestSaveRejectsNonDirectory(t *testing.T) {
 	if err := os.WriteFile(file, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	value := DefaultConfig(home)
+	value := mustDefaultConfig(t, home)
 	value.CatalogDir = file
 	if _, err := SaveConfig(value, home, ""); err == nil {
 		t.Fatal("expected non-directory rejection")
 	}
+}
+
+func mustDefaultConfig(t *testing.T, home string) AppConfig {
+	t.Helper()
+	value, err := DefaultConfig(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+
+func mustConfigPath(t *testing.T, home string) string {
+	t.Helper()
+	path, err := ConfigPath(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return path
 }

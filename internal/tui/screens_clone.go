@@ -323,7 +323,11 @@ func newCloneDestinationScreen(app *App, outputError string) *cloneDestinationSc
 	configValue := config.LoadConfig(app.home, "").Config
 	vault := configValue.CloneOutputDir
 	if vault == "" {
-		vault = defaults.VaultDir(app.home)
+		resolved, err := defaults.VaultDir(app.home)
+		if err != nil {
+			outputError = err.Error()
+		}
+		vault = resolved
 	}
 	screen := &cloneDestinationScreen{
 		screenBase: screenBase{app: app},

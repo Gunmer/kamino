@@ -148,7 +148,7 @@ func LatestRelease() (ReleaseInfo, error) {
 	if err != nil {
 		return ReleaseInfo{}, updateError(kerrors.UpdateNetwork, "no se pudo consultar la última versión: %v", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode == http.StatusForbidden {
 		return ReleaseInfo{}, updateError(kerrors.UpdateNetwork,
 			"GitHub ha limitado las peticiones de la API; inténtalo más tarde "+
@@ -311,7 +311,7 @@ func downloadAsset(release ReleaseInfo, destination string, progressCallback pro
 	if err != nil {
 		return updateError(kerrors.UpdateNetwork, "no se pudo descargar %s: %v", AssetName, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		return updateError(kerrors.UpdateNetwork, "no se pudo descargar %s: HTTP %d", AssetName, response.StatusCode)
 	}
@@ -319,7 +319,12 @@ func downloadAsset(release ReleaseInfo, destination string, progressCallback pro
 	if err != nil {
 		return updateError(kerrors.UpdateReplace, "no se pudo escribir el temporal: %v", err)
 	}
-	defer file.Close()
+	closed := false
+	defer func() {
+		if !closed {
+			_ = file.Close()
+		}
+	}()
 	digest := sha256.New()
 	var size int64
 	buffer := make([]byte, ChunkSize)
@@ -357,6 +362,11 @@ func downloadAsset(release ReleaseInfo, destination string, progressCallback pro
 	if err := file.Sync(); err != nil {
 		return updateError(kerrors.UpdateReplace, "no se pudo sincronizar el temporal: %v", err)
 	}
+	if err := file.Close(); err != nil {
+		closed = true
+		return updateError(kerrors.UpdateReplace, "no se pudo cerrar el temporal: %v", err)
+	}
+	closed = true
 	return nil
 }
 

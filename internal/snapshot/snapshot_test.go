@@ -312,3 +312,13 @@ func TestCreateSnapshotFailsWhenItsSnapshotVanishes(t *testing.T) {
 		t.Fatal("a snapshot that vanished during the prune must fail the deploy")
 	}
 }
+
+func TestSnapshotCommandsRequireAResolvableHome(t *testing.T) {
+	t.Setenv("HOME", "")
+	if count, err := SnapshotFiles([]string{"/tmp/config"}, ""); err == nil {
+		t.Fatalf("expected an error without HOME, got %d files", count)
+	}
+	if path, err := CreateSnapshot([]string{"/tmp/config"}, "", t.TempDir(), "2026-01-01T00:00:00Z", 0); err == nil {
+		t.Fatalf("expected an error without HOME, got %q", path)
+	}
+}

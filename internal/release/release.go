@@ -329,7 +329,7 @@ func runGit(root string, arguments ...string) (string, error) {
 	command.Stdout = &stdout
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
-		return "", fmt.Errorf("git %s: %v\n%s", strings.Join(arguments, " "), err, stderr.String())
+		return "", fmt.Errorf("git %s: %w\n%s", strings.Join(arguments, " "), err, stderr.String())
 	}
 	return strings.TrimSpace(stdout.String()), nil
 }

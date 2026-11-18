@@ -6,8 +6,19 @@ run:
 linters:
   default: none
   enable:
+    - errcheck
     - govet
     - ineffassign
+    - staticcheck
+    - unused
+  settings:
+    errcheck:
+      # A failed write to a terminal stream cannot be recovered and must not
+      # abort a report, so printing helpers are excluded from the check.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
 
 formatters:
   enable:

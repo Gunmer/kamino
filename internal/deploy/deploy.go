@@ -159,24 +159,27 @@ type DeploySession struct {
 }
 
 // SnapshotDirectory is where the previous-state snapshot will be written.
-func (s *DeploySession) SnapshotDirectory() string {
+func (s *DeploySession) SnapshotDirectory() (string, error) {
 	if s.SnapshotsDir != "" {
-		return s.SnapshotsDir
+		return s.SnapshotsDir, nil
 	}
 	return defaults.SnapshotsDir(s.Home)
 }
 
 // PrepareDeploy reads the manifest and splits deployable and missing apps.
 func PrepareDeploy(cloneFile string, options Options) (*DeploySession, error) {
-	root := options.Home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+	root, err := paths.ResolveHome(options.Home)
+	if err != nil {
+		return nil, err
 	}
 	definitions := options.Catalog
 	if definitions == nil {
 		directory := options.CatalogDir
 		if directory == "" {
-			directory = defaults.CatalogDir(root)
+			directory, err = defaults.CatalogDir(root)
+			if err != nil {
+				return nil, err
+			}
 		}
 		loaded, err := catalog.LoadCatalog(directory)
 		if err != nil {
@@ -256,11 +259,14 @@ func (s *DeploySession) Plan(selected *[]string, dryRun bool, requested []string
 	seenConflicts := map[string]bool{}
 	fingerprints := map[string]fingerprint{}
 	var safe *paths.SafeHome
-	if info, err := os.Stat(s.Home); err == nil && info.IsDir() {
-		safe, _ = paths.NewSafeHome(s.Home, false)
-	}
-	if safe != nil {
-		defer safe.Close()
+	if info, statErr := os.Stat(s.Home); statErr == nil && info.IsDir() {
+		opened, openErr := paths.NewSafeHome(s.Home, false)
+		if openErr != nil {
+			s.clearStaging()
+			return nil, openErr
+		}
+		safe = opened
+		defer func() { _ = opened.Close() }()
 	}
 	for index, current := range active {
 		if err := progress.EnsureNotCancelled(cancelled); err != nil {
@@ -295,9 +301,10 @@ func (s *DeploySession) Plan(selected *[]string, dryRun bool, requested []string
 			AppID: app.ID, Path: file.Path, Destination: destination,
 			Size: file.Size, SHA256: file.SHA256, Mode: file.Mode, Link: file.Link, Status: status,
 		})
-		if status == StatusIdentical {
+		switch status {
+		case StatusIdentical:
 			unchanged = append(unchanged, file.Path)
-		} else if status == StatusUnsupported {
+		case StatusUnsupported:
 			omitted = append(omitted, file.Path)
 		}
 		if status == StatusDifferent && !seenConflicts[file.Path] {
@@ -432,13 +439,19 @@ func (s *DeploySession) Apply(decisions conflicts.ConflictDecisions, progressCal
 	}
 	// Hold the snapshots directory for the whole snapshot-and-apply window so a
 	// concurrent deploy cannot prune the recovery snapshot of this one.
-	directory := s.SnapshotDirectory()
+	directory, err := s.SnapshotDirectory()
+	if err != nil {
+		return DeployResult{}, err
+	}
 	release, err := snapshot.Lock(directory)
 	if err != nil {
 		return DeployResult{}, err
 	}
 	defer func() { _ = release() }()
-	protected := snapshot.SnapshotFiles(destinations, s.Home)
+	protected, err := snapshot.SnapshotFiles(destinations, s.Home)
+	if err != nil {
+		return DeployResult{}, err
+	}
 	if err := progress.EnsureNotCancelled(cancelled); err != nil {
 		return DeployResult{}, err
 	}
@@ -771,7 +784,7 @@ func validateDestinations(entries []DeployEntry, home string) error {
 	if err != nil {
 		return err
 	}
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	for _, entry := range entries {
 		if _, err := safe.Lstat(entry.Path); err != nil {
 			if errors.Is(err, fs.ErrNotExist) {
@@ -790,7 +803,7 @@ func writeResolved(entries []resolvedFile, home, snapshotPath string, progressCa
 	if err != nil {
 		return err
 	}
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	for index, entry := range entries {
 		if entry.link != "" {
 			err = safe.ReplaceWithSymlink(entry.path, entry.link)

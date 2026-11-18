@@ -12,6 +12,7 @@ import (
 	"github.com/Gunmer/kamino/internal/app"
 	"github.com/Gunmer/kamino/internal/clone"
 	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/tui"
 	"github.com/Gunmer/kamino/internal/ui"
@@ -151,7 +152,7 @@ func parseFlags(args []string, valueFlags, boolFlags map[string]string) (parsedF
 			if canonical, ok := valueFlags[name]; ok {
 				if !hasValue {
 					if index+1 >= len(args) {
-						return result, fmt.Errorf("Option %q requires an argument.", name)
+						return result, fmt.Errorf("la opción %q requiere un argumento", name)
 					}
 					index++
 					value = args[index]
@@ -159,7 +160,7 @@ func parseFlags(args []string, valueFlags, boolFlags map[string]string) (parsedF
 				result.values[canonical] = value
 				continue
 			}
-			return result, fmt.Errorf("No such option: %s", name)
+			return result, fmt.Errorf("opción desconocida: %s", name)
 		}
 		result.positionals = append(result.positionals, arg)
 	}
@@ -189,7 +190,12 @@ func runCloneCommand(args []string, options Options, interactive func() bool) in
 		outputPath := ""
 		outputError := ""
 		if outputValue != "" {
-			outputPath = resolveUserPath(outputValue)
+			resolved, err := resolveUserPath(outputValue)
+			if err != nil {
+				fmt.Fprintln(options.Stderr, "Error: "+err.Error())
+				return 2
+			}
+			outputPath = resolved
 			outputError = clone.ValidateDestination(outputPath, false)
 		}
 		return runCloneFlow(tui.CloneFlowOptions{
@@ -229,7 +235,7 @@ func runDeployCommand(args []string, options Options, interactive func() bool) i
 		return 0
 	}
 	if len(flags.positionals) != 1 {
-		fmt.Fprintln(options.Stderr, "Error: Missing argument 'CLONE_FILE'.")
+		fmt.Fprintln(options.Stderr, "Error: falta el argumento 'CLONE_FILE'.")
 		return 2
 	}
 	cloneFile := flags.positionals[0]
@@ -313,9 +319,12 @@ func parseApps(value string) *[]string {
 	return &result
 }
 
-func resolveUserPath(value string) string {
+func resolveUserPath(value string) (string, error) {
 	if strings.HasPrefix(value, "~") {
-		home, _ := os.UserHomeDir()
+		home, err := paths.ResolveHome("")
+		if err != nil {
+			return "", err
+		}
 		if value == "~" {
 			value = home
 		} else if strings.HasPrefix(value, "~/") {
@@ -324,9 +333,9 @@ func resolveUserPath(value string) string {
 	}
 	absolute, err := filepath.Abs(value)
 	if err != nil {
-		return value
+		return "", err
 	}
-	return absolute
+	return absolute, nil
 }
 
 func printMainHelp(w io.Writer) {

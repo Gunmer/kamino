@@ -51,17 +51,24 @@ func newDeployFileScreen(app *App, initialError string) *deployFileScreen {
 }
 
 func discoverDeployCandidates(home, cwd string) ([]deployCandidate, []Message) {
+	messages := make([]Message, 0)
+	vault, err := defaults.VaultDir(home)
+	if err != nil {
+		messages = append(messages, Message{Kind: MessageError, Text: err.Error()})
+	}
 	sources := []struct {
 		path   string
 		origin string
 	}{
-		{defaults.VaultDir(home), texts.DeployOriginDefault},
+		{vault, texts.DeployOriginDefault},
 		{cwd, texts.DeployOriginCWD},
 	}
 	seen := map[string]bool{}
 	candidates := make([]deployCandidate, 0)
-	messages := make([]Message, 0)
 	for _, source := range sources {
+		if source.path == "" {
+			continue
+		}
 		entries, err := os.ReadDir(source.path)
 		if err != nil {
 			if !os.IsNotExist(err) {
@@ -1337,7 +1344,12 @@ func (s *deployConfirmScreen) build() {
 	}
 	s.protected = s.totals.Replaced + s.totals.Hybrid
 	if s.protected > 0 {
-		s.snapshot = app.snapshotPath()
+		path, err := app.snapshotPath()
+		if err != nil {
+			s.messages = append(s.messages, Message{Kind: MessageError, Text: err.Error()})
+		} else {
+			s.snapshot = path
+		}
 	}
 }
 
@@ -1485,7 +1497,7 @@ func (s *deployConfirmScreen) View(width, height int) string {
 	lines = append(lines, "")
 	protected := strings.ReplaceAll(texts.D4Protected, "{count}", fmt.Sprintf("%d", s.protected))
 	snapshot := texts.D4NoSnapshot
-	if s.protected > 0 {
+	if s.protected > 0 && s.snapshot != "" {
 		snapshot = strings.ReplaceAll(texts.D4Snapshot, "{path}", s.app.displayPath(s.snapshot))
 	}
 	lines = append(lines, "  "+protected+"    "+snapshot, "")

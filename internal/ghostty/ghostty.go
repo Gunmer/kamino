@@ -13,7 +13,12 @@ const (
 	MaxConfigSize = 1024 * 1024
 )
 
-var ConfigFilenames = map[string]bool{"config": true, "config.ghostty": true}
+var configFilenames = map[string]bool{"config": true, "config.ghostty": true}
+
+// IsConfigFilename reports whether name is a Ghostty configuration file.
+func IsConfigFilename(name string) bool {
+	return configFilenames[name]
+}
 
 // IterDirectives yields key/value pairs ignoring comments and blank lines.
 func IterDirectives(text string) [][2]string {
@@ -88,12 +93,13 @@ func AbsoluteReferences(text string) []string {
 	references := make([]string, 0)
 	for _, directive := range IterDirectives(text) {
 		key, value := directive[0], directive[1]
-		if key == "config-file" {
+		switch key {
+		case "config-file":
 			raw, _ := ConfigReference(value)
 			if strings.HasPrefix(raw, "/") {
 				references = append(references, raw)
 			}
-		} else if key == "theme" {
+		case "theme":
 			for _, raw := range ThemeReferences(value) {
 				if strings.HasPrefix(raw, "/") {
 					references = append(references, raw)
@@ -114,9 +120,10 @@ func StripComment(line string) string {
 			}
 			continue
 		}
-		if character == '\'' || character == '"' {
+		switch character {
+		case '\'', '"':
 			quote = character
-		} else if character == '#' {
+		case '#':
 			return line[:index]
 		}
 	}
