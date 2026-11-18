@@ -159,15 +159,6 @@ func snapshotsLimit(home string) int {
 	return loaded.Config.SnapshotsLimit
 }
 
-// DeployableIDs returns the ids the manifest allows deploying here.
-func DeployableIDs(session *deploy.DeploySession) map[string]bool {
-	result := map[string]bool{}
-	for _, item := range session.DeployableApps {
-		result[item.ID] = true
-	}
-	return result
-}
-
 func ptrValue(value *[]string) []string {
 	if value == nil {
 		return nil

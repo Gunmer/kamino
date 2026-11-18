@@ -604,6 +604,3 @@ func parsePlistText(text string) error {
 	}
 	return nil
 }
-
-// BuildHunks exposes the hunk builder for integration tests.
-func BuildHunks(localText, cloneText string) []Hunk { return buildHunks(localText, cloneText) }

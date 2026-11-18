@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -286,14 +285,4 @@ func ValidateDestination(output string, allowMissingParent bool) string {
 		return fmt.Sprintf("el destino es un directorio: %s", output)
 	}
 	return ""
-}
-
-// RelativeSources returns the plan operations ordered by app and path.
-func RelativeSources(operations []plan.Operation) []string {
-	result := make([]string, 0, len(operations))
-	for _, operation := range operations {
-		result = append(result, operation.Path)
-	}
-	sort.Strings(result)
-	return result
 }

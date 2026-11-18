@@ -82,14 +82,6 @@ type DeployClassification struct {
 	MissingRequested []string
 }
 
-// ClassificationCode returns 3 only for omitted files or unmet requests.
-func ClassificationCode(classification DeployClassification) int {
-	if len(classification.Omitted) > 0 || len(classification.MissingRequested) > 0 {
-		return 3
-	}
-	return 0
-}
-
 // ResultCode returns the exit code of a finished deploy.
 func ResultCode(result DeployResult) int {
 	if len(result.Omitted) > 0 || len(result.MissingRequested) > 0 {
@@ -212,21 +204,4 @@ func (s *DeploySession) resetStaging(ctx context.Context, progressCallback progr
 		return err
 	}
 	return nil
-}
-
-// RunDeploy is the non-interactive deploy facade.
-func RunDeploy(ctx context.Context, cloneFile string, options Options, selected *[]string, dryRun bool) (DeployResult, error) {
-	session, err := PrepareDeploy(cloneFile, options)
-	if err != nil {
-		return DeployResult{}, err
-	}
-	defer session.Close()
-	plan, err := session.Plan(ctx, selected, dryRun, nil, nil)
-	if err != nil {
-		return DeployResult{}, err
-	}
-	if dryRun {
-		return session.DryRunResult(plan), nil
-	}
-	return session.Apply(ctx, conflicts.ApplyAll(plan.Conflicts), nil)
 }

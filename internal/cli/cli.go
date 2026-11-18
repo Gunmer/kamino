@@ -20,9 +20,6 @@ import (
 	"github.com/Gunmer/kamino/internal/version"
 )
 
-// Version is the CLI version.
-const Version = "0.8.0"
-
 var (
 	executeClone  = app.ExecuteClone
 	executeDeploy = app.ExecuteDeploy

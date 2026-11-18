@@ -507,20 +507,3 @@ func (s *SafeHome) ReplaceWithSymlink(rel, target string) error {
 	}
 	return nil
 }
-
-// EnsureParent exposes the safe parent creation used by callers that need an fd.
-func (s *SafeHome) EnsureParent(rel string) (int, string, error) { return s.ensureParent(rel) }
-
-// JoinPosix joins POSIX-style relative components.
-func JoinPosix(parts ...string) string {
-	filtered := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if part != "" {
-			filtered = append(filtered, part)
-		}
-	}
-	return path.Join(filtered...)
-}
-
-// DirnamePosix returns the POSIX parent of a relative path.
-func DirnamePosix(rel string) string { return path.Dir(rel) }
