@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/paths"
 )
 
 const (
@@ -52,22 +53,6 @@ type Manifest struct {
 	Apps          []AppEntry `json:"apps"`
 }
 
-// EnsureRelative rejects empty, absolute or escaping manifest paths.
-func EnsureRelative(raw string) error {
-	if raw == "" {
-		return fmt.Errorf("ruta vacía no admitida")
-	}
-	if strings.HasPrefix(raw, "/") {
-		return fmt.Errorf("ruta absoluta no admitida: %q", raw)
-	}
-	for _, part := range strings.Split(raw, "/") {
-		if part == ".." {
-			return fmt.Errorf("ruta con '..' no admitida: %q", raw)
-		}
-	}
-	return nil
-}
-
 func (f *FileEntry) normalize() {
 	if f.Mode == "" {
 		f.Mode = defaultFileMode
@@ -76,14 +61,14 @@ func (f *FileEntry) normalize() {
 
 func (f *FileEntry) validate() error {
 	f.normalize()
-	if err := EnsureRelative(f.Path); err != nil {
+	if err := paths.EnsureRelative(f.Path); err != nil {
 		return err
 	}
 	if f.SHA256 != nil && !sha256Pattern.MatchString(*f.SHA256) {
 		return fmt.Errorf("'sha256' debe ser 64 caracteres hexadecimales")
 	}
 	if f.Link != nil {
-		if err := EnsureRelative(*f.Link); err != nil {
+		if err := paths.EnsureRelative(*f.Link); err != nil {
 			return err
 		}
 	}
