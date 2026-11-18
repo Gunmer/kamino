@@ -21,6 +21,7 @@ import (
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/tui/theme"
 	"github.com/Gunmer/kamino/internal/update"
+	"github.com/Gunmer/kamino/internal/version"
 )
 
 // AppOptions injects every environment dependency so tests never touch the
@@ -36,6 +37,7 @@ type AppOptions struct {
 	NoColor         bool
 	Unicode         *bool
 	Phrase          string
+	Version         string
 	MenuMode        bool
 	Clone           CloneFlowOptions
 	Deploy          DeployFlowOptions
@@ -63,6 +65,7 @@ type App struct {
 	cwd             string
 	now             func() time.Time
 	phrase          string
+	version         string
 	lastMission     string
 	exitCode        int
 
@@ -141,11 +144,15 @@ func NewApp(options AppOptions) *App {
 	if phrase == "" && len(texts.Phrases) > 0 {
 		phrase = texts.Phrases[int(now().UnixNano())%len(texts.Phrases)]
 	}
+	buildVersion := options.Version
+	if buildVersion == "" {
+		buildVersion = version.Version
+	}
 	currentTheme := theme.New(theme.Options{Name: themeName, NoColor: noColor, Unicode: unicode})
 	app := &App{
 		width: 80, height: 24, theme: currentTheme, frame: newFrame(currentTheme),
 		home: home, catalog: options.Catalog, applicationDirs: options.ApplicationDirs,
-		pathValue: options.PathValue, cwd: cwd, now: now, phrase: phrase,
+		pathValue: options.PathValue, cwd: cwd, now: now, phrase: phrase, version: buildVersion,
 		menuMode: options.MenuMode, cloneOptions: options.Clone, deployOptions: options.Deploy,
 		cloneForce: options.Clone.Force, cloneDryRun: options.Clone.DryRun,
 		cloneVerbose: options.Clone.Verbose, cloneOutput: options.Clone.Output,

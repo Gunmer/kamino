@@ -316,7 +316,7 @@ func prepareDeployCmd(app *App, cloneFile string) tea.Cmd {
 	loaded := config.LoadConfig(app.home, "")
 	options := deploy.Options{
 		Home: app.home, Catalog: app.catalog, ApplicationDirs: app.applicationDirs,
-		Path: app.pathValue, SnapshotsDir: loaded.Config.SnapshotsDir,
+		Path: app.pathValue, SnapshotsDir: loaded.Config.SnapshotsDir, SnapshotsLimit: loaded.Config.SnapshotsLimit,
 	}
 	return func() tea.Msg {
 		session, err := deploy.PrepareDeploy(cloneFile, options)

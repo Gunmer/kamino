@@ -276,6 +276,7 @@ kamino · Menú                                    o o o o o o o *
 --------------------------------------------------------------------------------
 
    [wordmark KAMINO]
+   v0.10.0
 
    Clona y despliega configuraciones de macOS en un solo archivo.
    La Fuerza estará contigo.
@@ -297,6 +298,10 @@ Notas:
 
 - Las ocho cápsulas viven en el lado derecho del header; la última es la original
   (`*`). El wordmark sigue en el body.
+- La versión de la compilación se muestra en dim justo debajo del wordmark, alineada
+  con su borde izquierdo. Acompaña al cuerpo del menú: aparece desde 24 filas y sigue
+  visible cuando `KAMINO_NO_LOGO` oculta el wordmark; por debajo de 24 filas el aviso de
+  terminal pequeña reemplaza el cuerpo.
 - No hay atajos de una tecla para las opciones. Escape no cierra.
 - La frase se elige al arrancar y no cambia durante la sesión.
 - `KAMINO_NO_LOGO` oculta el wordmark y fuerza los símbolos ASCII.
@@ -819,7 +824,7 @@ kamino · Configuración
 --------------------------------------------------------------------------------
 
   Configuración
-  Estos valores solo afectan a la TUI; la CLI usa los valores integrados.
+  Las rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.
 
   Catálogo
   > ~/.config/kamino/apps_
@@ -833,19 +838,26 @@ kamino · Configuración
     ~/.config/kamino/vault/snapshot_
   Copia del estado anterior antes de desplegar.
 
+  Holocrones a conservar
+    5_
+  Cuántos holocrones conservar; el resto se borra al crear uno nuevo. 0 = ilimitado.
+
 --------------------------------------------------------------------------------
 Tab/Mayús+Tab mover  Ctrl+S guardar  Esc volver  ? ayuda
 ```
 
 Notas:
 
-- Las tres rutas son inputs editables, no una lista de solo lectura. El foco se
-  marca con `>` y el cursor de edición con `_`.
-- `Tab`/`Shift+Tab` mueve el foco entre los tres inputs; las etiquetas y ayudas
+- Las tres rutas y el límite son inputs editables, no una lista de solo lectura.
+  El foco se marca con `>` y el cursor de edición con `_`.
+- `Tab`/`Shift+Tab` mueve el foco entre los cuatro inputs; las etiquetas y ayudas
   no son focusables. El foco empieza en Catálogo.
+- El campo del límite solo admite dígitos; un valor vacío, negativo o fuera de
+  rango se rechaza con `ERROR` al guardar.
 - `Ctrl+S` valida y guarda de forma atómica; `Esc` vuelve sin escribir.
 - Los paths largos se desplazan dentro del input para mantener el cursor visible;
-  sin foco, se abrevian con `~` y conservan el final.
+  sin foco, se abrevian con `~` y conservan el final. El límite se muestra como un
+  número, sin abreviar.
 - Si el archivo es inválido, la pantalla se abre con los valores legibles y los
   defaults, muestra un `ERROR` en la zona de mensajes y marca el input afectado.
 - El aviso «Configuración guardada» va en la zona de mensajes como `INFO`.
@@ -1049,8 +1061,8 @@ ERROR  No se pudo copiar la ruta.
 | `tui-ansi-theme` | Solo ANSI, jerarquía, `theme.Styles`, `NO_COLOR`, ASCII, `ansi-light` |
 | `clone-tui` | C1 como tabla; C2 con tres opciones de carpeta, input de nombre y diálogo Sobrescribir/Cambiar nombre/Volver; C3 absorbe C4: revisión, progreso y resultado en la misma tabla; el flujo sigue en tres pasos |
 | `deploy-conflicts` | D2 como tabla, D3 con archivo completo, D4 por app y protegidos |
-| `docs/Diseño técnico.md` | Sustituir «ANSI propio, sin framework» por Bubble Tea/Lip Gloss y el contrato de pantalla |
-| `docs/Diseño funcional.md` | Actualizar C1, C3/C4, D3 y D4 |
+| `docs/diseno-tecnico.md` | Sustituir «ANSI propio, sin framework» por Bubble Tea/Lip Gloss y el contrato de pantalla |
+| `docs/diseno-funcional.md` | Actualizar C1, C3/C4, D3 y D4 |
 | `AGENTS.md` | Retirar el invariante «sin framework» y describir el nuevo runtime |
 
 ## 8. Plan de implementación
@@ -1063,7 +1075,7 @@ ERROR  No se pudo copiar la ruta.
    aviso de terminal pequeña.
 4. Comandos asíncronos para recuento, planificación, escritura, despliegue y
    actualización; pruebas de cancelación y códigos de salida.
-5. Actualizar specs, `Diseño técnico.md`, `Diseño funcional.md` y `AGENTS.md`.
+5. Actualizar specs, `diseno-tecnico.md`, `diseno-funcional.md` y `AGENTS.md`.
 
 Cada paso debe compilar y pasar los golden files. Los commits siguen
 Conventional Commits (`feat(tui):`, `refactor(tui):`, `test(tui):`).

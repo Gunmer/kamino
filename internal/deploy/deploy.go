@@ -137,6 +137,8 @@ type Options struct {
 	ApplicationDirs []string
 	Path            string
 	SnapshotsDir    string
+	// SnapshotsLimit is how many snapshots survive the next deploy; zero keeps all.
+	SnapshotsLimit int
 }
 
 // DeploySession is a prepared deploy with plan, preview and apply steps.
@@ -147,6 +149,7 @@ type DeploySession struct {
 	DeployableApps   []archive.AppEntry
 	NotInstalledApps []archive.AppEntry
 	SnapshotsDir     string
+	SnapshotsLimit   int
 	Notices          []string
 	Warnings         []string
 	staging          string
@@ -201,6 +204,7 @@ func PrepareDeploy(cloneFile string, options Options) (*DeploySession, error) {
 		DeployableApps:   deployable,
 		NotInstalledApps: missing,
 		SnapshotsDir:     options.SnapshotsDir,
+		SnapshotsLimit:   options.SnapshotsLimit,
 		fingerprints:     map[string]fingerprint{},
 	}
 	session.Notices = ghosttyPortabilityNotices(manifest, cloneFile, root)
@@ -426,11 +430,19 @@ func (s *DeploySession) Apply(decisions conflicts.ConflictDecisions, progressCal
 	for _, item := range writes {
 		destinations = append(destinations, item.destination)
 	}
+	// Hold the snapshots directory for the whole snapshot-and-apply window so a
+	// concurrent deploy cannot prune the recovery snapshot of this one.
+	directory := s.SnapshotDirectory()
+	release, err := snapshot.Lock(directory)
+	if err != nil {
+		return DeployResult{}, err
+	}
+	defer func() { _ = release() }()
 	protected := snapshot.SnapshotFiles(destinations, s.Home)
 	if err := progress.EnsureNotCancelled(cancelled); err != nil {
 		return DeployResult{}, err
 	}
-	snapshotPath, err := snapshot.CreateSnapshot(destinations, s.Home, s.SnapshotsDir, "")
+	snapshotPath, err := snapshot.CreateSnapshot(destinations, s.Home, directory, "", s.SnapshotsLimit)
 	if err != nil {
 		return DeployResult{}, err
 	}

@@ -61,6 +61,7 @@ const (
 	SmallRunning = "Operación en curso: {operation}."
 
 	MenuSubtitle    = Subtitle
+	MenuVersion     = "v{version}"
 	MenuLastMission = "Última misión: {summary}"
 	MenuPrivacy     = "aviso: el clon no está cifrado y puede contener secretos."
 
@@ -235,12 +236,13 @@ const (
 	U1Updated      = "kamino {current} → {latest}. Actualizado: {path}"
 	U1Restart      = "Reinicia kamino para usar la versión nueva."
 
-	SettingsCatalog     = "Catálogo"
-	SettingsClones      = "Clones"
-	SettingsSnapshots   = "Holocrones"
-	SettingsSavedInfo   = "Configuración guardada"
-	SettingsSubtitleTUI = "Estos valores solo afectan a la TUI; la CLI usa los valores integrados."
-	SettingsNone        = "Sin configuración"
+	SettingsCatalog        = "Catálogo"
+	SettingsClones         = "Clones"
+	SettingsSnapshots      = "Holocrones"
+	SettingsSnapshotsLimit = "Holocrones a conservar"
+	SettingsSavedInfo      = "Configuración guardada"
+	SettingsSubtitleTUI    = "Las rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI."
+	SettingsNone           = "Sin configuración"
 
 	HelpBodyTitle       = "Ayuda · {screen}"
 	HelpScreenShortcuts = "Atajos de esta pantalla"

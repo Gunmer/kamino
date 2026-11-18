@@ -11,6 +11,7 @@ import (
 	"github.com/Gunmer/kamino/internal/conflicts"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/texts"
+	"github.com/Gunmer/kamino/internal/version"
 )
 
 func TestDeployCandidatesOrderAndSources(t *testing.T) {
@@ -294,6 +295,115 @@ func TestExitCodeInMenuMode(t *testing.T) {
 	}
 	if message.(quitMsg).code != 3 {
 		t.Fatalf("menu exit must preserve code 3, got %d", message.(quitMsg).code)
+	}
+}
+
+func TestMenuShowsVersionUnderWordmark(t *testing.T) {
+	app := testApp(false, true)
+	screen := newMenuScreen(app)
+	view := renderCase(app, screen, 80, 24)
+	lines := strings.Split(view, "\n")
+	want := "v" + testVersion
+	lastWordmark := -1
+	for index, line := range lines {
+		if strings.Contains(line, texts.Wordmark[len(texts.Wordmark)-1]) {
+			lastWordmark = index
+		}
+	}
+	if lastWordmark < 0 {
+		t.Fatalf("missing wordmark:\n%s", view)
+	}
+	if lastWordmark+1 >= len(lines) {
+		t.Fatalf("missing version line after the wordmark:\n%s", view)
+	}
+	versionLine := lines[lastWordmark+1]
+	if !strings.Contains(versionLine, want) {
+		t.Fatalf("expected %q right under the wordmark, got %q:\n%s", want, versionLine, view)
+	}
+	if strings.Contains(view, texts.MenuSubtitle) {
+		t.Fatalf("80x24 must not show the subtitle, the version is not part of it:\n%s", view)
+	}
+}
+
+func TestMenuShowsVersionWithoutWordmark(t *testing.T) {
+	// testApp(noColor, unicode): unicode=false is ASCII mode, where the wordmark
+	// is hidden, so the version alone must carry the identity. The mode is
+	// asserted, never assumed, so a helper change cannot silently test the logo.
+	app := testApp(false, false)
+	if app.theme.Unicode {
+		t.Fatal("the test needs ASCII mode, otherwise the wordmark renders")
+	}
+	view := renderCase(app, newMenuScreen(app), 80, 24)
+	if strings.Contains(view, texts.Wordmark[len(texts.Wordmark)-1]) {
+		t.Fatalf("ASCII mode must hide the wordmark:\n%s", view)
+	}
+	if !strings.Contains(view, "v"+testVersion) {
+		t.Fatalf("the version must stay visible without the wordmark:\n%s", view)
+	}
+}
+
+func TestMenuShowsVersionAboveSubtitle(t *testing.T) {
+	app := testApp(false, true)
+	view := renderCase(app, newMenuScreen(app), 80, 40)
+	lines := strings.Split(view, "\n")
+	lastWordmark := -1
+	for index, line := range lines {
+		if strings.Contains(line, texts.Wordmark[len(texts.Wordmark)-1]) {
+			lastWordmark = index
+		}
+	}
+	if lastWordmark < 0 || lastWordmark+1 >= len(lines) {
+		t.Fatalf("missing wordmark or version line:\n%s", view)
+	}
+	if !strings.Contains(lines[lastWordmark+1], "v"+testVersion) {
+		t.Fatalf("the version must follow the wordmark at 80x40, got %q:\n%s", lines[lastWordmark+1], view)
+	}
+	subtitle := -1
+	for index, line := range lines {
+		if strings.Contains(line, texts.MenuSubtitle) {
+			subtitle = index
+			break
+		}
+	}
+	if subtitle < 0 {
+		t.Fatalf("80x40 must show the subtitle:\n%s", view)
+	}
+	if subtitle <= lastWordmark+1 {
+		t.Fatalf("the subtitle must come after the version line, got subtitle %d and version %d:\n%s", subtitle, lastWordmark+1, view)
+	}
+}
+
+func TestMenuVersionRespectsTheHeightCutoff(t *testing.T) {
+	app := testApp(false, true)
+	below := renderCase(app, newMenuScreen(app), 80, 23)
+	if !strings.Contains(below, texts.SmallTitle) {
+		t.Fatalf("23 rows must show the small terminal notice:\n%s", below)
+	}
+	if strings.Contains(below, "v"+testVersion) {
+		t.Fatalf("the small terminal notice must not show the version:\n%s", below)
+	}
+	at := renderCase(app, newMenuScreen(app), 80, 24)
+	if strings.Contains(at, texts.SmallTitle) {
+		t.Fatalf("24 rows must render the menu body:\n%s", at)
+	}
+	if !strings.Contains(at, "v"+testVersion) {
+		t.Fatalf("24 rows must show the version:\n%s", at)
+	}
+}
+
+func TestMenuUsesBuildVersionByDefault(t *testing.T) {
+	value := true
+	app := NewApp(AppOptions{
+		Home: "/Users/test", Cwd: "/Users/test/Projects/kamino",
+		Now: fixedNow, Unicode: &value, NoColor: true, ThemeName: "ansi-dark",
+		Catalog: fixtureCatalog(), PathValue: "/opt/homebrew/bin",
+	})
+	if app.version != version.Version {
+		t.Fatalf("default version must be the build version, got %q", app.version)
+	}
+	view := renderCase(app, newMenuScreen(app), 80, 24)
+	if !strings.Contains(view, "v"+version.Version) {
+		t.Fatalf("menu must show the build version:\n%s", view)
 	}
 }
 

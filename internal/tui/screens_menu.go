@@ -58,6 +58,9 @@ func (s *menuScreen) View(width, height int) string {
 			lines = append(lines, pad+s.app.theme.Styles.Wordmark.Render(line))
 		}
 	}
+	if s.app.version != "" {
+		lines = append(lines, pad+s.app.theme.Styles.Tertiary.Render(strings.ReplaceAll(texts.MenuVersion, "{version}", s.app.version)))
+	}
 	if showFull {
 		lines = append(lines, "", pad+s.app.theme.Styles.Secondary.Render(texts.MenuSubtitle))
 		if s.app.phrase != "" {

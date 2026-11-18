@@ -6,6 +6,7 @@ import (
 
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/clone"
+	"github.com/Gunmer/kamino/internal/config"
 	"github.com/Gunmer/kamino/internal/conflicts"
 	"github.com/Gunmer/kamino/internal/defaults"
 	"github.com/Gunmer/kamino/internal/deploy"
@@ -98,6 +99,7 @@ func ExecuteDeploy(cloneFile string, requested *[]string, dryRun bool, definitio
 		ApplicationDirs: applicationDirs,
 		Path:            pathValue,
 		SnapshotsDir:    snapshotsDir,
+		SnapshotsLimit:  snapshotsLimit(home),
 	})
 	if err != nil {
 		return DeployOutcome{}, err
@@ -139,6 +141,17 @@ func ExecuteDeploy(cloneFile string, requested *[]string, dryRun bool, definitio
 // ExecuteUpdate runs the text update flow.
 func ExecuteUpdate(currentVersion string, target string) (update.Result, error) {
 	return update.RunUpdate(currentVersion, target, nil, nil, nil)
+}
+
+// snapshotsLimit resolves the configured snapshot limit for the text flows.
+// A missing or invalid configuration keeps the default, so the CLI never fails
+// because of an unrelated configuration error.
+func snapshotsLimit(home string) int {
+	loaded := config.LoadConfig(home, "")
+	if loaded.Error != nil {
+		return config.DefaultSnapshotsLimit
+	}
+	return loaded.Config.SnapshotsLimit
 }
 
 // DeployableIDs returns the ids the manifest allows deploying here.

@@ -702,6 +702,41 @@ func TestSettingsEditSaveAndError(t *testing.T) {
 	}
 }
 
+func TestSettingsSnapshotsLimitField(t *testing.T) {
+	home := t.TempDir()
+	app := NewApp(AppOptions{Home: home, Cwd: home, Now: fixedNow, ThemeName: "ansi-dark"})
+	app.startSettings("")
+	screen := app.current.(*settingsScreen)
+	if screen.fields[3] != "5" {
+		t.Fatalf("the limit field must start at the default: %q", screen.fields[3])
+	}
+	screen.focus = 3
+	send(t, app, keyMsg("x"))
+	if screen.fields[3] != "5" {
+		t.Fatalf("the limit field must reject letters: %q", screen.fields[3])
+	}
+	screen.fields[3] = ""
+	send(t, app, keyMsg("2"))
+	if screen.fields[3] != "2" {
+		t.Fatalf("the limit field must accept digits: %q", screen.fields[3])
+	}
+	send(t, app, keyMsg("ctrl+s"))
+	if len(screen.messages) == 0 || screen.messages[len(screen.messages)-1].Kind != MessageInfo {
+		t.Fatalf("save must report INFO: %#v", screen.messages)
+	}
+	if loaded := config.LoadConfig(home, ""); loaded.Config.SnapshotsLimit != 2 {
+		t.Fatalf("limit not saved: %#v", loaded.Config)
+	}
+	screen.fields[3] = ""
+	send(t, app, keyMsg("ctrl+s"))
+	if len(screen.messages) == 0 || screen.messages[len(screen.messages)-1].Kind != MessageError {
+		t.Fatal("an empty limit must report ERROR")
+	}
+	if screen.errorIndex != 3 {
+		t.Fatalf("the error must point at the limit field: %d", screen.errorIndex)
+	}
+}
+
 func TestUpdateResultAndFinish(t *testing.T) {
 	app := NewApp(AppOptions{
 		MenuMode: true, Home: "/Users/test", Cwd: "/Users/test", Now: fixedNow, ThemeName: "ansi-dark",

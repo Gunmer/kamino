@@ -2,7 +2,7 @@ kamino · Configuración
 [2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 
     [1mConfiguración[0m
-    [2mEstos valores solo afectan a la TUI; la CLI usa los valores integrados.[0m
+    [2mLas rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.[0m
   
     ▌ Catálogo
       ~/.config/kamino/apps_
@@ -13,9 +13,9 @@ kamino · Configuración
       Holocrones
       ~/.config/kamino/vault/snapshot_
       [2mCopia del estado anterior antes de desplegar. Por defecto: ~/.config/kamino/vault/snapshot.[0m
-  
-  
-  
+      Holocrones a conservar
+      5_
+      [2mCuántos holocrones conservar; el resto se borra al crear uno nuevo. 0 = ilimitado.[0m
   
   
   

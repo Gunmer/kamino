@@ -178,6 +178,17 @@ usa `--output` para conservar la ruta anterior. Los holocrones nuevos se guardan
 `~/Library/Application Support/kamino/snapshots/` no se mueven ni se copian y siguen pudiéndose
 desplegar indicando su ruta.
 
+Cada despliegue crea su holocrón y después borra los más antiguos hasta dejar
+`deploy.snapshots_limit` (5 por defecto; `0` conserva todos). Solo se borran archivos regulares con
+nombre `<fecha>.tar.gz` o `<fecha>-N.tar.gz` del directorio de holocrones: cualquier otro archivo,
+directorio o enlace queda intacto. Si el holocrón nuevo no se pudo escribir no se borra ninguno, y
+si el excedente no se puede borrar el despliegue se detiene antes de escribir en los destinos.
+`--dry-run` no borra holocrones.
+
+Dos despliegues simultáneos que comparten el directorio de holocrones se serializan con un bloqueo
+exclusivo (`<directorio>/.snapshot.lock`), de modo que el que espera no puede borrar el holocrón de
+un despliegue en curso. El archivo de bloqueo nunca se poda.
+
 Con terminal interactiva, `clone` abre la TUI si no se definió `KAMINO_PLAIN`. `--apps` omite C1,
 `--output` omite C2 y ambos juntos pasan directamente a la revisión C3. Un valor inválido abre la
 pantalla correspondiente precargada con el error. `--dry-run` termina en C3 sin acción de clonar.
@@ -257,9 +268,10 @@ monocromo y cada estado conserva icono y palabra. El wordmark se oculta sin UTF-
 ### Configuración de la TUI
 
 La opción **Configuración** del menú, situada después de Actualizar, permite
-ver y editar las tres rutas en una pantalla. La pantalla se guarda con `Ctrl+S`; `Esc` vuelve sin
-escribir. El archivo solo lo lee y escribe la TUI: la vía no interactiva de la CLI no aplica estos
-valores y usa los defaults integrados.
+ver y editar las tres rutas y el límite de holocrones en una pantalla. La pantalla se guarda con
+`Ctrl+S`; `Esc` vuelve sin escribir. Las rutas solo las usa la TUI: la vía no interactiva de la CLI
+usa los defaults integrados. La CLI lee únicamente `deploy.snapshots_limit`, para aplicar el mismo
+límite de holocrones.
 
 ```toml
 [catalog]
@@ -270,16 +282,19 @@ output_dir = "~/.config/kamino/vault"
 
 [deploy]
 snapshots_dir = "~/.config/kamino/vault/snapshot"
+snapshots_limit = 5
 ```
 
-| Clave | Valor por defecto | Uso en la TUI |
+| Clave | Valor por defecto | Uso |
 | --- | --- | --- |
-| `catalog.dir` | `~/.config/kamino/apps` | Definiciones TOML de apps del usuario |
-| `clone.output_dir` | `~/.config/kamino/vault` | Directorio propuesto en C2 y destino del clon |
-| `deploy.snapshots_dir` | `~/.config/kamino/vault/snapshot` | Directorio de los holocrones |
+| `catalog.dir` | `~/.config/kamino/apps` | Definiciones TOML de apps del usuario en la TUI |
+| `clone.output_dir` | `~/.config/kamino/vault` | Directorio propuesto en C2 y destino del clon en la TUI |
+| `deploy.snapshots_dir` | `~/.config/kamino/vault/snapshot` | Directorio de los holocrones en la TUI |
+| `deploy.snapshots_limit` | `5` | Holocrones que se conservan; `0` no borra ninguno. Lo aplican la TUI y la CLI |
 
-El archivo es opcional y se crea solo al guardar desde la pantalla. Admite únicamente esas tres
-claves; un TOML inválido, una sección o clave desconocida, un tipo incorrecto, una ruta relativa,
+El archivo es opcional y se crea solo al guardar desde la pantalla. Admite únicamente esas cuatro
+claves: las tres rutas deben ser cadenas y `deploy.snapshots_limit` un entero mayor o igual que 0.
+Un TOML inválido, una sección o clave desconocida, un tipo incorrecto, una ruta relativa,
 `~usuario` o una ruta existente que no sea un directorio se rechazan. Si el archivo es inválido al
 arrancar, la TUI abre Configuración con el error y los valores legibles; no lo sobrescribe hasta
 que se guarde. Los directorios configurados se crean al clonar o desplegar, no al guardar. Los
@@ -438,4 +453,4 @@ internal/
 └── errors/            # errores propios
 ```
 
-Los diseños de referencia están en `docs/` (`Diseño funcional.md` y `Diseño técnico.md`).
+Los diseños de referencia están en `docs/` (`diseno-funcional.md` y `diseno-tecnico.md`).
