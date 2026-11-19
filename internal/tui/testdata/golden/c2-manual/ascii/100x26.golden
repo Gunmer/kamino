@@ -1,0 +1,26 @@
+kamino . Clonar . Destino                                                        Paso 2 de 3   [36m*[0m [36m*[0m [2mo[0m
+[2m----------------------------------------------------------------------------------------------------[0m
+
+                           [1mElige el destino del clon[0m
+  
+                           Carpeta de destino
+                           o Vault por defecto     [2m~/.config/kamino/vault/[0m
+                           o Carpeta actual        [2m~/Projects/kamino[0m
+                         [1m  * Indicar carpeta       [0m
+  
+                           [36;100m> [0m[1;100mDestino[0m[36;100m  [0m[36;100m/Users/test/Descargas[0m[7;36;100m [0m
+                             [2mNombre [0m  [2mclone-20261113.tar.gz[0m
+  
+                           Ruta: ~/Descargas/clone-20261113.tar.gz
+  
+  
+  
+  
+  
+  
+  
+  
+  
+[33m! AVISO[0m  El clon no está cifrado y puede contener secretos.
+[2m----------------------------------------------------------------------------------------------------[0m
+Enter [2mfijar[0m[2m   [0mEsc [2mvolver[0m[2m   [0m<> [2mcursor[0m[2m   [0mTab [2mcampo[0m[2m   [0mF1/? [2mayuda[0m

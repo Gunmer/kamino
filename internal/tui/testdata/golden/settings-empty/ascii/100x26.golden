@@ -1,0 +1,26 @@
+kamino . Configuración
+[2m----------------------------------------------------------------------------------------------------[0m
+
+          [1mConfiguración[0m
+          [2mLas rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.[0m
+  
+          [36;100m> [0m[1;100mCatálogo  [0m[36;100m  [0m[7;36;100m [0m[36;100mRuta absoluta o que empiece por ~[0m
+            [2mClones    [0m  [2mRuta absoluta o que empiece por ~[0m
+            [2mHolocrones[0m  [2mRuta absoluta o que empiece por ~[0m
+            [2mLímite    [0m  [2m[0m
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+[2m----------------------------------------------------------------------------------------------------[0m
+Tab/Mayus+Tab [2mmover[0m[2m   [0mCtrl+S [2mguardar[0m[2m   [0mEsc [2mvolver[0m[2m   [0mF1/? [2mayuda[0m

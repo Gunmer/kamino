@@ -86,6 +86,13 @@ type Styles struct {
 	Wordmark     lipgloss.Style
 	Chosen       lipgloss.Style
 	Discarded    lipgloss.Style
+
+	FieldFocus      lipgloss.Style
+	FieldIdle       lipgloss.Style
+	FieldLabelFocus lipgloss.Style
+	FieldLabelIdle  lipgloss.Style
+	FieldError      lipgloss.Style
+	FieldCaret      lipgloss.Style
 }
 
 // Theme is the injected presentation configuration.
@@ -132,6 +139,21 @@ func New(options Options) *Theme {
 		discarded = color(lipgloss.ANSIColor(8))
 	}
 
+	focusBackground := lipgloss.ANSIColor(8)
+	if name == "ansi-light" {
+		focusBackground = lipgloss.ANSIColor(7)
+	}
+	fieldFocus := color(lipgloss.ANSIColor(6))
+	fieldLabelFocus := style().Bold(true)
+	if !options.NoColor {
+		fieldFocus = fieldFocus.Background(focusBackground)
+		fieldLabelFocus = fieldLabelFocus.Background(focusBackground)
+	}
+	fieldIdle := tertiary
+	if options.NoColor {
+		fieldIdle = style().Faint(true)
+	}
+
 	symbols := UnicodeSymbols()
 	if !options.Unicode {
 		symbols = ASCIISymbols()
@@ -157,6 +179,13 @@ func New(options Options) *Theme {
 			Wordmark:     color(lipgloss.ANSIColor(6)).Bold(true),
 			Chosen:       style(),
 			Discarded:    discarded,
+
+			FieldFocus:      fieldFocus,
+			FieldIdle:       fieldIdle,
+			FieldLabelFocus: fieldLabelFocus,
+			FieldLabelIdle:  fieldIdle,
+			FieldError:      color(lipgloss.ANSIColor(1)),
+			FieldCaret:      fieldFocus.Reverse(true),
 		},
 	}
 }

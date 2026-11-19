@@ -14,6 +14,17 @@ func helpKey() key.Binding {
 	return bind([]string{"?"}, "?", texts.KeyHelp)
 }
 
+// fieldHelpKey is the shared help binding of a focused field. Using the same
+// "?" key stops the footer from appending a duplicated "? ayuda" suffix.
+func fieldHelpKey() key.Binding {
+	return bind([]string{"f1", "?"}, "F1/?", texts.KeyHelp)
+}
+
+// fieldCursorKey is the shared cursor binding of a focused field.
+func fieldCursorKey() key.Binding {
+	return bind([]string{"left", "right"}, "←→", texts.KeyCursor)
+}
+
 func globalKeys() []key.Binding {
 	return []key.Binding{
 		helpKey(),
@@ -28,12 +39,16 @@ func menuKeys() []key.Binding {
 	}
 }
 
-func cloneAppsKeys(filtering bool) []key.Binding {
+func cloneAppsKeys(filtering bool, valueLength int) []key.Binding {
 	if filtering {
-		return []key.Binding{
-			bind([]string{"enter"}, "Enter", "aplicar"),
-			bind([]string{"esc"}, "Esc", "cerrar"),
+		keys := []key.Binding{
+			bind([]string{"enter"}, "Enter", texts.KeyApply),
+			bind([]string{"esc"}, "Esc", texts.KeyClose),
 		}
+		if valueLength > 1 {
+			keys = append(keys, fieldCursorKey())
+		}
+		return append(keys, fieldHelpKey())
 	}
 	return []key.Binding{
 		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
@@ -45,7 +60,7 @@ func cloneAppsKeys(filtering bool) []key.Binding {
 	}
 }
 
-func cloneDestinationKeys(option int, focus int, dialog bool) []key.Binding {
+func cloneDestinationKeys(option int, focus int, dialog bool, valueLength int) []key.Binding {
 	if dialog {
 		return []key.Binding{
 			bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
@@ -53,8 +68,24 @@ func cloneDestinationKeys(option int, focus int, dialog bool) []key.Binding {
 			bind([]string{"esc"}, "Esc", texts.KeyBack),
 		}
 	}
+	if focus == 1 || focus == 2 {
+		keys := []key.Binding{}
+		if focus == 2 {
+			keys = append(keys, bind([]string{"enter"}, "Enter", texts.KeySet))
+		} else {
+			keys = append(keys, bind([]string{"enter"}, "Enter", texts.KeyContinue))
+		}
+		keys = append(keys, bind([]string{"esc"}, "Esc", texts.KeyBack))
+		if valueLength > 1 {
+			keys = append(keys, fieldCursorKey())
+		}
+		if option == 2 {
+			keys = append(keys, bind([]string{"tab", "shift+tab"}, "Tab", texts.KeyField))
+		}
+		return append(keys, fieldHelpKey())
+	}
 	keys := []key.Binding{bind([]string{"up", "k"}, "↑↓", texts.KeyMove)}
-	if option == 2 || focus > 0 {
+	if option == 2 {
 		keys = append(keys, bind([]string{"tab", "shift+tab"}, "Tab", texts.KeyField))
 	}
 	keys = append(keys,
@@ -89,12 +120,19 @@ func cloneReviewKeys(phase clonePhase, hasSkipped, canCopy bool) []key.Binding {
 	}
 }
 
-func deployFileKeys(manual, filtering bool) []key.Binding {
+func deployFileKeys(manual, filtering bool, valueLength int) []key.Binding {
 	if manual || filtering {
-		return []key.Binding{
-			bind([]string{"enter"}, "Enter", "abrir"),
-			bind([]string{"esc"}, "Esc", texts.KeyBack),
+		keys := []key.Binding{}
+		if manual {
+			keys = append(keys, bind([]string{"enter"}, "Enter", texts.KeyOpen))
+		} else {
+			keys = append(keys, bind([]string{"enter"}, "Enter", texts.KeyApply))
 		}
+		keys = append(keys, bind([]string{"esc"}, "Esc", texts.KeyBack))
+		if valueLength > 1 {
+			keys = append(keys, fieldCursorKey())
+		}
+		return append(keys, fieldHelpKey())
 	}
 	return []key.Binding{
 		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
@@ -177,12 +215,16 @@ func updateKeys(phase updatePhase) []key.Binding {
 	}
 }
 
-func settingsKeys() []key.Binding {
-	return []key.Binding{
+func settingsKeys(valueLength int) []key.Binding {
+	keys := []key.Binding{
 		bind([]string{"tab", "shift+tab"}, "Tab/Mayús+Tab", texts.KeyMove),
 		bind([]string{"ctrl+s"}, "Ctrl+S", texts.KeySave),
 		bind([]string{"esc"}, "Esc", texts.KeyBack),
 	}
+	if valueLength > 1 {
+		keys = append(keys, fieldCursorKey())
+	}
+	return append(keys, fieldHelpKey())
 }
 
 func helpKeys() []key.Binding {

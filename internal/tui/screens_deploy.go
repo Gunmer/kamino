@@ -28,15 +28,19 @@ type deployFileScreen struct {
 	screenBase
 	candidates []deployCandidate
 	index      int
-	filter     string
+	filter     field
 	filtering  bool
 	manual     bool
-	manualPath string
+	manualPath field
 	messages   []Message
 }
 
 func newDeployFileScreen(app *App, initialError string) *deployFileScreen {
-	screen := &deployFileScreen{screenBase: screenBase{app: app}}
+	screen := &deployFileScreen{
+		screenBase: screenBase{app: app},
+		filter:     field{Label: texts.FieldFilter, Placeholder: texts.FieldFilterPlaceholder},
+		manualPath: field{Label: texts.FieldPath, Placeholder: texts.FieldManualPlaceholder},
+	}
 	screen.candidates, screen.messages = discoverDeployCandidates(app.home, app.cwd)
 	if initialError != "" {
 		screen.messages = append(screen.messages, Message{Kind: MessageError, Text: initialError})
@@ -112,14 +116,22 @@ func (s *deployFileScreen) Step() (int, int) { return 1, 4 }
 
 func (s *deployFileScreen) Messages() []Message { return s.messages }
 
-func (s *deployFileScreen) Keys() []key.Binding { return deployFileKeys(s.manual, s.filtering) }
+func (s *deployFileScreen) Keys() []key.Binding {
+	length := 0
+	if s.manual {
+		length = len([]rune(s.manualPath.Value))
+	} else if s.filtering {
+		length = len([]rune(s.filter.Value))
+	}
+	return deployFileKeys(s.manual, s.filtering, length)
+}
 
 func (s *deployFileScreen) visible() []deployCandidate {
-	if s.filter == "" {
+	if s.filter.Value == "" {
 		return s.candidates
 	}
 	result := make([]deployCandidate, 0)
-	query := strings.ToLower(s.filter)
+	query := strings.ToLower(s.filter.Value)
 	for _, candidate := range s.candidates {
 		if strings.Contains(strings.ToLower(candidate.Path), query) || strings.Contains(strings.ToLower(candidate.Origin), query) {
 			result = append(result, candidate)
@@ -137,25 +149,31 @@ func (s *deployFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		switch keyMessage.String() {
 		case "esc":
 			s.manual = false
-			s.manualPath = ""
+			s.manualPath.SetValue("")
 		case "enter":
-			if strings.TrimSpace(s.manualPath) == "" {
+			path := strings.TrimSpace(s.manualPath.Value)
+			if path == "" {
+				s.manualPath.Invalid = true
 				s.messages = []Message{{Kind: MessageError, Text: texts.DeployNoFile}}
 				return s, nil
 			}
-			if info, err := os.Stat(s.manualPath); err != nil || !info.Mode().IsRegular() {
-				s.messages = []Message{{Kind: MessageError, Text: strings.ReplaceAll(texts.D0ManualError, "{path}", s.manualPath)}}
+			if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
+				s.manualPath.Invalid = true
+				s.messages = []Message{{Kind: MessageError, Text: strings.ReplaceAll(texts.D0ManualError, "{path}", path)}}
 				return s, nil
 			}
-			return s, pushScreen(newDeployAppsScreen(s.app, s.manualPath, true))
+			return s, pushScreen(newDeployAppsScreen(s.app, path, true))
+		case "left":
+			s.manualPath.MoveCursor(-1)
+		case "right":
+			s.manualPath.MoveCursor(1)
 		case "backspace":
-			runes := []rune(s.manualPath)
-			if len(runes) > 0 {
-				s.manualPath = string(runes[:len(runes)-1])
-			}
+			s.manualPath.Backspace()
+			s.clearManualError()
 		default:
 			if len(keyMessage.Runes) > 0 {
-				s.manualPath += string(keyMessage.Runes)
+				s.manualPath.Insert(string(keyMessage.Runes))
+				s.clearManualError()
 			}
 		}
 		return s, nil
@@ -164,17 +182,18 @@ func (s *deployFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		switch keyMessage.String() {
 		case "esc":
 			s.filtering = false
-			s.filter = ""
+			s.filter.SetValue("")
 		case "enter":
 			s.filtering = false
+		case "left":
+			s.filter.MoveCursor(-1)
+		case "right":
+			s.filter.MoveCursor(1)
 		case "backspace":
-			runes := []rune(s.filter)
-			if len(runes) > 0 {
-				s.filter = string(runes[:len(runes)-1])
-			}
+			s.filter.Backspace()
 		default:
 			if len(keyMessage.Runes) > 0 {
-				s.filter += string(keyMessage.Runes)
+				s.filter.Insert(string(keyMessage.Runes))
 			}
 		}
 		return s, nil
@@ -191,9 +210,11 @@ func (s *deployFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		}
 	case "/":
 		s.filtering = true
+		s.filter.Cursor = len([]rune(s.filter.Value))
 	case "o":
 		s.manual = true
-		s.manualPath = ""
+		s.manualPath.SetValue("")
+		s.manualPath.Invalid = false
 	case "enter":
 		if len(visible) == 0 {
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.DeployNoFile}}
@@ -206,14 +227,35 @@ func (s *deployFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	return s, nil
 }
 
+func (s *deployFileScreen) clearManualError() {
+	s.manualPath.Invalid = false
+	kept := make([]Message, 0, len(s.messages))
+	for _, message := range s.messages {
+		if message.Kind != MessageError {
+			kept = append(kept, message)
+		}
+	}
+	s.messages = kept
+}
+
 func (s *deployFileScreen) View(width, height int) string {
 	lines := []string{"  " + s.app.theme.Styles.Primary.Render(texts.D0Title)}
 	if s.manual {
-		lines = append(lines, "", "  "+texts.D0ManualHint, "  "+s.manualPath+"_")
+		options := fieldOptions{
+			Width:      max(1, width-2),
+			LabelWidth: fieldLabelWidth(s.app.theme, texts.FieldPath),
+			Focused:    true,
+		}
+		lines = append(lines, "", "  "+s.manualPath.Render(s.app.theme, options))
 		return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
 	}
-	if s.filter != "" || s.filtering {
-		lines = append(lines, "  "+strings.ReplaceAll(texts.C1FilterLine, "{value}", s.filter))
+	if s.filter.Value != "" || s.filtering {
+		options := fieldOptions{
+			Width:      max(1, width-2),
+			LabelWidth: fieldLabelWidth(s.app.theme, texts.FieldFilter),
+			Focused:    s.filtering,
+		}
+		lines = append(lines, "  "+s.filter.Render(s.app.theme, options))
 	}
 	lines = append(lines, "")
 	tableWidth := width

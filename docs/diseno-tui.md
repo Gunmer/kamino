@@ -203,8 +203,11 @@ recuento en segundo plano, preparación cancelable, progreso y Ctrl+C.
 ### 1.8 Golden files
 
 - Tamaños: `80x24`, `100x26`, `140x40`, `200x50`.
-- Variantes: color + Unicode en los cuatro tamaños; `NO_COLOR` y ASCII en
-  `100x26`; un golden de la zona de mensajes con `INFO`, `AVISO` y `ERROR`.
+- Variantes: color + Unicode en los tamaños de cada caso; `NO_COLOR` y ASCII en
+  `100x26` y, cuando el caso lo declara, en `80x24`. C1 con filtro, C2 con foco
+  en ruta y nombre, D0 con filtro y ruta manual, y Configuración vacía tienen
+  casos propios. Un golden de la zona de mensajes reúne `INFO`, `AVISO` y
+  `ERROR`.
 - La zona de mensajes se valida con las tres categorías a la vez; el test de
   contrato comprueba que está sobre el separador del footer y que no depende solo
   del color.
@@ -214,7 +217,7 @@ recuento en segundo plano, preparación cancelable, progreso y Ctrl+C.
   conflictos fijos. `View` no toca el disco.
 - Test de contrato: todas las pantallas, tamaños y modos; exactamente `h` líneas,
   ninguna línea supera `w`, sin `\r`, sin tabs, sin truecolor y solo SGR ANSI
-  permitidos.
+  permitidos. En `NO_COLOR` rechaza colores y fondos ANSI.
 - D3: benchmark con 20 000 líneas y comprobación de que solo se renderiza la
   ventana visible.
 - Tests de modelo: teclas, foco, selección, pila, mensajes asíncronos, cancelación
@@ -233,7 +236,8 @@ recuento en segundo plano, preparación cancelable, progreso y Ctrl+C.
 | `...`       | `…`        | truncado                                 |
 | `.`         | `·`        | cero                                     |
 | `^` `v`     | `▲` `▼`    | scroll arriba / abajo                    |
-| `<` `>`     | `◀` `▶`    | elegir versión original / clon           |
+| `<` `>`   | `◀` `▶`    | elegir versión original / clon           |
+| `|`         | vídeo inverso | cursor de edición sobre la celda     |
 | `i`         | `ℹ`        | mensaje informativo                      |
 | `!`         | `⚠`        | aviso                                    |
 | `x`         | `✕`        | error                                    |
@@ -319,12 +323,12 @@ kamino · Clonar · Apps                                       Paso 1 de 3   * o
   > [x] herdr                       12
     [x] ghostty                      8
     [ ] git                          4
-    [ ] zsh                          3
-    [-] vscode                       0
-    [ ] atuin                        6
+    [ ] bat                          3
+    [-] glow                         0
+    [ ] codex                        6
 
   ^ 0 arriba   v 3 abajo
-  No detectadas: iterm2, yazi
+  No detectadas: claude-code, yazi
 
 --------------------------------------------------------------------------------
 ^v mover  Espacio marcar  a/n todas/ninguna  / filtrar  Enter continuar  Esc volver  ? ayuda
@@ -334,13 +338,22 @@ Notas:
 
 - Solo aparecen apps instaladas. Las no detectadas van en una línea aparte y no
   son seleccionables.
-- `vscode` está instalada pero no tiene archivos: casilla `[-]` deshabilitada.
+- `glow` está instalada pero no tiene archivos: casilla `[-]` deshabilitada.
 - El contador es de selección total, no de filas visibles.
 - `Espacio` marca sin mover el cursor ni sacar el foco.
 - `a`/`n` actúan solo sobre las filas visibles del filtro.
 - Enter sin selección muestra un `AVISO` en la zona de mensajes y no avanza.
-- Variantes: filtro activo (línea `Filtro: ..._` bajo el título), lista vacía
-  (`No hay apps instaladas con archivos`) y lista desplazada con indicador.
+- Variantes: filtro activo, lista vacía (`No hay apps instaladas con archivos`) y
+  lista desplazada con indicador. El filtro es una fila de campo, no texto suelto.
+
+Variante: filtro con foco.
+
+```text
+  > Filtro    gh|
+```
+
+- El campo «Filtro» solo aparece mientras hay valor o foco. `Enter` aplica y
+  devuelve el foco a la tabla; `Esc` lo limpia y lo cierra.
 
 ### 4.3 C2 · Destino del clon
 
@@ -355,29 +368,30 @@ kamino · Clonar · Destino                                    Paso 2 de 3   * *
     o Carpeta actual           /Users/test/Projects/kamino
     o Indicar carpeta
 
-  Nombre del archivo
-    clone-20261113.tar.gz_
+    Nombre    clone-20261113.tar.gz
 
   Ruta: ~/.config/kamino/vault/clone-20261113.tar.gz
 
 AVISO  El clon no está cifrado y puede contener secretos.
 --------------------------------------------------------------------------------
-^v mover  Enter elegir  Tab campo  Esc volver  ? ayuda
+^v mover  Enter elegir  Esc volver  ? ayuda
 ```
 
-Variante: «Indicar carpeta» seleccionada. La opción se convierte en input.
+Variante: «Indicar carpeta» seleccionada. La opción abre el campo «Destino».
 
 ```text
   Carpeta de destino
     o Vault por defecto        ~/.config/kamino/vault/
     o Carpeta actual           /Users/test/Projects/kamino
     * Indicar carpeta
-  >   /Users/test/Descargas_
 
-  Nombre del archivo
-    clone-20261113.tar.gz_
+  > Destino   /Users/test/Descargas|
+    Nombre    clone-20261113.tar.gz
 
   Ruta: /Users/test/Descargas/clone-20261113.tar.gz
+
+--------------------------------------------------------------------------------
+Enter fijar  Esc volver  ←→ cursor  Tab campo  F1/? ayuda
 ```
 
 Variante: el clon ya existe.
@@ -399,28 +413,34 @@ Notas:
   configurado, o `~/.config/kamino/vault/`.
 - La segunda opción usa el directorio de trabajo actual (`pwd`), capturado al
   arrancar e inyectado; `View` no llama a `os.Getwd`.
-- «Indicar carpeta» se transforma en un input al seleccionarla. La carpeta puede
-  no existir; se crea recién al empezar a escribir, nunca al abrir C2.
-- El input de nombre se rellena con `clone-20261113.tar.gz` y es editable. La
+- «Indicar carpeta» abre el campo «Destino». La carpeta puede no existir; se crea
+  recién al empezar a escribir, nunca al abrir C2.
+- El campo «Nombre» se rellena con `clone-20261113.tar.gz` y es editable. La
   sugerencia conserva el prefijo `clone-`, la fecha local y la extensión
   `.tar.gz`.
-- `Enter` en el nombre fija el destino. Si el archivo existe, abre el diálogo;
-  si no, continúa a C3.
+- Los dos campos comparten una fila: marcador `▌`, etiqueta alineada y valor. El
+  foco añade fondo ANSI, etiqueta en negrita y el cursor en vídeo inverso; sin
+  foco, el valor queda atenuado. Una ruta vacía muestra un placeholder atenuado.
+- `Enter` en la ruta pasa al nombre; `Enter` en el nombre fija el destino. Si el
+  archivo existe, abre el diálogo; si no, continúa a C3.
 - El diálogo muestra ruta, fecha y tamaño. `Volver` está preseleccionada;
   `Sobrescribir` confirma el reemplazo y continúa a C3; `Cambiar nombre` enfoca
-  el input del nombre y propone el primer sufijo libre.
+  el campo «Nombre» y propone el primer sufijo libre.
 - `--force` omite el diálogo y muestra el aviso de reemplazo como `AVISO` en la
   zona de mensajes. `--output` omite C2; si el valor es inválido, C2 se abre con
-  «Indicar carpeta» y los inputs precargados, y un `ERROR` en la zona de
+  «Indicar carpeta» y los campos precargados, y un `ERROR` en la zona de
   mensajes.
 - La validación en vivo muestra un `ERROR` en la zona de mensajes y marca el
-  campo; no abre la pantalla de error común.
+  campo; no abre la pantalla de error común ni añade filas.
 - Las tres opciones sustituyen a `F2`, `F3` y `F4`. Esos atajos se retiran de C2
   y de su footer; el cambio se documenta en `clone-tui` y en la leyenda.
 - El footer cambia de contexto: en las opciones, `^v mover`/`Enter elegir`; en un
-  input, `Enter fijar`/`Tab campo`; en el diálogo, `^v mover`/`Enter aceptar`.
-- Las rutas largas se truncan conservando el final y abrevian el home con `~`.
-  En un input con foco, el contenido se desplaza para mantener el cursor visible.
+  campo, `Enter fijar` o `Enter continuar`, `Esc volver`, `←→ cursor`,
+  `Tab campo` cuando hay dos y `F1/? ayuda`; en el diálogo,
+  `^v mover`/`Enter aceptar`.
+- Las rutas largas se desplazan dentro del valor con `…` al inicio y al final
+  cuando corresponde, sin partir UTF-8 ni caracteres de doble ancho. El home se
+  abrevia con `~` en el preview de la ruta completa.
 
 ### 4.4 C3 · Revisión, progreso y resultado
 
@@ -558,12 +578,33 @@ kamino · Desplegar · Clon                                    Paso 1 de 4   * o
 ^v mover  / filtrar  o otro archivo  Enter continuar  Esc volver  ? ayuda
 ```
 
+Variante: filtro con foco.
+
+```text
+  > Filtro    clone|
+```
+
+Variante: ruta manual.
+
+```text
+  > Ruta    /Users/test/Descargas/clone-20261113.tar.gz|
+
+--------------------------------------------------------------------------------
+Enter abrir  Esc volver  ←→ cursor  F1/? ayuda
+```
+
 Notas:
 
 - La tabla combina el vault y el directorio actual, ordena por fecha y deduplica
   por ruta resuelta.
 - El preview de la fila enfocada muestra ruta, fecha y tamaño.
-- `o` abre el campo de ruta manual; `Esc` vuelve a la tabla.
+- `/` abre el campo «Filtro»: `Enter` lo aplica y devuelve el foco a la tabla;
+  `Esc` lo limpia y vuelve. Mientras tiene foco, el footer muestra
+  `Enter aplicar`, `Esc volver`, `←→ cursor` y `F1/? ayuda`.
+- `o` abre el campo «Ruta» con placeholder atenuado; `Enter` valida el manifiesto
+  y `Esc` vuelve a la tabla sin cancelar el flujo. Una ruta inválida conserva el
+  valor, marca el campo y muestra un `ERROR` en la zona de mensajes sin mover las
+  filas. Las rutas largas se desplazan con `…` manteniendo visible el cursor.
 - Si una fuente no existe o no se puede leer, se informa sin ocultar la otra.
 - Variantes: filtro activo, sin clones (`No hay clones disponibles`), ruta manual
   con error de manifiesto, y scroll si hay más filas que espacio.
@@ -581,10 +622,10 @@ kamino · Desplegar · Apps                                    Paso 2 de 4   * *
   > [ ] herdr                       12
     [ ] ghostty                      8
     [ ] git                          4
-    [ ] zsh                          3
+    [ ] bat                          3
 
   ^ 0 arriba   v 2 abajo
-  Sin base en este Mac: iterm2, yazi
+  Sin base en este Mac: claude-code, yazi
 
 AVISO  Cierra las apps antes de continuar: pueden sobrescribir los cambios al cerrarse.
 --------------------------------------------------------------------------------
@@ -622,7 +663,7 @@ kamino · Desplegar · Conflictos                              Paso 3 de 4   * *
   > ~/.config/herdr/config.toml         2      14  Revisar
     ~/.config/ghostty/config            1       3  Aplicar clon
     ~/.config/git/config                0       0  Conservar original
-    ~/.config/zsh/.zshrc                3       7  Revisar
+    ~/.config/bat/config                3       7  Revisar
 
   ^ 0 arriba   v 0 abajo
 
@@ -717,7 +758,7 @@ kamino · Desplegar · Confirmación                            Paso 4 de 4   * 
   herdr                  2           3         1              1            4
   ghostty                1           2         .              .            3
   git                    .           1         1              .            2
-  zsh                    .           .         .              1            5
+  bat                    .           .         .              1            5
   --------------------------------------------------------------------------
   TOTAL                  3           6         2              2           14
 
@@ -826,42 +867,35 @@ kamino · Configuración
   Configuración
   Las rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.
 
-  Catálogo
-  > ~/.config/kamino/apps_
-  Directorio de definiciones de apps.
-
-  Clones
-    ~/.config/kamino/vault_
-  Directorio donde se guardan los clones.
-
-  Holocrones
-    ~/.config/kamino/vault/snapshot_
-  Copia del estado anterior antes de desplegar.
-
-  Holocrones a conservar
-    5_
-  Cuántos holocrones conservar; el resto se borra al crear uno nuevo. 0 = ilimitado.
+  > Catálogo    ~/.config/kamino/apps|
+    Clones      ~/.config/kamino/vault
+    Holocrones  ~/.config/kamino/vault/snapshot
+    Límite      5
 
 --------------------------------------------------------------------------------
-Tab/Mayús+Tab mover  Ctrl+S guardar  Esc volver  ? ayuda
+Tab/Mayús+Tab mover  Ctrl+S guardar  Esc volver  ←→ cursor  F1/? ayuda
 ```
 
 Notas:
 
-- Las tres rutas y el límite son inputs editables, no una lista de solo lectura.
-  El foco se marca con `>` y el cursor de edición con `_`.
-- `Tab`/`Shift+Tab` mueve el foco entre los cuatro inputs; las etiquetas y ayudas
-  no son focusables. El foco empieza en Catálogo.
+- Las tres rutas y el límite son campos editables de una fila con etiqueta
+  alineada, no una lista de solo lectura. El foco añade marcador `▌`, fondo ANSI,
+  etiqueta en negrita y el cursor en vídeo inverso; los demás valores quedan
+  atenuados. El cursor solo aparece en el campo enfocado.
+- `Tab`/`Mayús+Tab` y `↑`/`↓` mueven el foco entre los cuatro campos; `←`/`→`
+  mueven el cursor dentro del valor y no cambian de campo. El foco empieza en
+  Catálogo.
 - El campo del límite solo admite dígitos; un valor vacío, negativo o fuera de
   rango se rechaza con `ERROR` al guardar.
 - `Ctrl+S` valida y guarda de forma atómica; `Esc` vuelve sin escribir.
-- Los paths largos se desplazan dentro del input para mantener el cursor visible;
-  sin foco, se abrevian con `~` y conservan el final. El límite se muestra como un
-  número, sin abreviar.
+- Los valores vacíos muestran un placeholder atenuado. Las rutas largas se
+  desplazan dentro del campo con `…` para mantener visible el cursor, sin partir
+  caracteres UTF-8 ni de doble ancho; sin foco conservan el estilo atenuado.
 - Si el archivo es inválido, la pantalla se abre con los valores legibles y los
-  defaults, muestra un `ERROR` en la zona de mensajes y marca el input afectado.
+  defaults, muestra un `ERROR` en la zona de mensajes y marca el campo afectado
+  sin desplazar las filas.
 - El aviso «Configuración guardada» va en la zona de mensajes como `INFO`.
-- `?` y `F1` abren la ayuda desde un input sin insertar caracteres.
+- `?` y `F1` abren la ayuda desde un campo sin insertar caracteres.
 
 ### 4.14 Ayuda contextual
 
@@ -892,7 +926,8 @@ Notas:
 - Los atajos salen de `Keys()`, no de una lista escrita a mano.
 - El flujo resalta el paso actual con `*` y acento; los pendientes van con `o`.
 - El aviso de secretos solo aparece en D2 y D3.
-- En campos de texto, `F1` abre esta pantalla; `?` se inserta como carácter.
+- En campos de texto, `F1` y `?` abren esta pantalla sin insertar caracteres; al
+  cerrarla, el campo conserva su valor, su foco y su cursor.
 - La ayuda se apila sobre la pantalla actual; al cerrar se recupera su estado.
 
 ### 4.15 Error común
@@ -971,7 +1006,7 @@ Notas:
 | D4       | `←→` mover; `Enter` aceptar; `Esc` retroceder |
 | D5       | `c` copiar holocrón; `Enter`/`Esc` continuar |
 | U1       | `Enter` continuar; `Esc` cancelar/salir |
-| Settings | `Tab`/`Shift+Tab` mover; `Ctrl+S` guardar; `Esc` volver; `F1` ayuda |
+| Settings | `Tab`/`Shift+Tab` mover; `←→` cursor; `Ctrl+S` guardar; `Esc` volver; `F1`/`?` ayuda |
 | Help     | `Enter`/`Esc`/`?` cerrar |
 | Error    | `t` detalle; `c` copiar; `Enter` aceptar; `Esc` volver |
 
@@ -1028,14 +1063,49 @@ ERROR  No se pudo copiar la ruta.
 - En D3 el scroll es por fila del archivo completo; en D4 la fila de totales
   queda fija.
 
-### 6.3 Filtros
+### 6.3 Campos de texto
+
+Todos los campos de C1, C2, D0 y Configuración usan el mismo componente de una
+fila. La maqueta usa `>` para `▌` y `|` para la celda en vídeo inverso.
+
+```text
+  > Destino   ~/.config/kamino/vault/clone-20261113.tar.gz|
+    Nombre    clone-20261113.tar.gz
+```
+
+- Marcador: `▌` y un espacio en el campo enfocado; dos espacios sin foco.
+- Etiqueta: alineada a la izquierda en la misma columna para toda la pantalla;
+  con foco en negrita, sin foco atenuada.
+- Valor: con foco, acento sobre fondo ANSI 8 (`ansi-dark`) o ANSI 7
+  (`ansi-light`); sin foco, atenuado; con error, color de error.
+- Cursor: solo en el campo enfocado, en vídeo inverso sobre el carácter de
+  inserción o sobre un espacio al final. No se usa el cursor real del terminal.
+- Placeholder: se muestra atenuado cuando el valor está vacío; si el campo tiene
+  foco, el cursor inverso va antes del placeholder.
+- Scroll: si el valor no cabe, la ventana se calcula en cada render y se
+  desplaza para mantener visible el cursor, con `…` en cada lado oculto. Nunca
+  parte UTF-8 ni caracteres de doble ancho; se reserva el ancho real de `…`, que
+  en ASCII vale `...`.
+- Error: va a la zona de mensajes y marca la etiqueta y el valor del campo sin
+  añadir ni mover filas. Al corregir el valor, el error desaparece.
+- `NO_COLOR`: sin color ni fondo; el foco se distingue por `▌`, la etiqueta en
+  negrita, el cursor inverso y «editando» junto a la etiqueta. El ancho de la
+  columna reserva ese sufijo para no desalinear los valores.
+- `F1` y `?` abren la ayuda sin insertar caracteres.
+
+### 6.4 Filtros
 
 - `/` activa el filtro en C1 y D0.
-- La línea de filtro aparece bajo el título con el cursor `_`.
-- Mientras el filtro tiene foco, el footer muestra `Enter aplicar` y `Esc cerrar`.
+- El campo «Filtro» aparece bajo el título como una fila única con marcador `▌`,
+  etiqueta alineada y valor; el cursor de edición se dibuja en vídeo inverso
+  sobre el carácter de inserción y solo mientras el campo tiene foco.
+- Escribir inserta en el cursor y `←`/`→` lo mueven; `Enter` aplica y devuelve el
+  foco a la tabla y `Esc` limpia y cierra. El footer muestra `Enter aplicar`,
+  `Esc cerrar` o `Esc volver`, `←→ cursor` y `F1/? ayuda`.
 - `a`/`n` en C1 y D1 actúan solo sobre las filas visibles.
+- Un filtro sin coincidencias no oculta la fila `Otro archivo...` de D0.
 
-### 6.4 Diálogos
+### 6.5 Diálogos
 
 - Los diálogos son subestados de la pantalla, no pantallas de la pila. Así el
   header y el footer siguen siendo los de la pantalla madre.
@@ -1044,12 +1114,15 @@ ERROR  No se pudo copiar la ruta.
 - El footer cambia a las teclas del diálogo; `Esc` vuelve a la pantalla madre.
 - El diálogo de C2 es el único diálogo modal del rediseño.
 
-### 6.5 NO_COLOR, ASCII y temas
+### 6.6 NO_COLOR, ASCII y temas
 
-- `NO_COLOR`: sin color; se conservan negrita y faint. La selección sigue usando
-  `▌` y los estados siguen usando icono y palabra.
+- `NO_COLOR`: sin color ni fondo; se conservan negrita, faint y vídeo inverso. La
+  selección sigue usando `▌` y los estados siguen usando icono y palabra. En un
+  campo enfocado, el foco se distingue por `▌`, el cursor inverso y la palabra
+  «editando» junto a la etiqueta; los demás campos siguen atenuados.
 - Sin UTF-8 o con `KAMINO_NO_LOGO`: se usan los símbolos ASCII de la tabla de
-  notación; `KAMINO_NO_LOGO` además oculta el wordmark.
+  notación (`>` y `...` en los campos) y se conserva el cursor en vídeo inverso;
+  `KAMINO_NO_LOGO` además oculta el wordmark.
 - `KAMINO_THEME=ansi-dark` es el valor por defecto. `ansi-light` evita `Faint` y
   usa ANSI 8 para el terciario. Cualquier otro valor cae a `ansi-dark`.
 
@@ -1059,7 +1132,7 @@ ERROR  No se pudo copiar la ruta.
 | --------- | ------ |
 | `tui-navigation` | Frame, pila, contrato `Screen`, footer/ayuda desde `Keys()`, altura, menú, terminal pequeña |
 | `tui-ansi-theme` | Solo ANSI, jerarquía, `theme.Styles`, `NO_COLOR`, ASCII, `ansi-light` |
-| `clone-tui` | C1 como tabla; C2 con tres opciones de carpeta, input de nombre y diálogo Sobrescribir/Cambiar nombre/Volver; C3 absorbe C4: revisión, progreso y resultado en la misma tabla; el flujo sigue en tres pasos |
+| `clone-tui` | C1 como tabla y campo de filtro; C2 con tres opciones de carpeta, campos «Destino» y «Nombre» y diálogo Sobrescribir/Cambiar nombre/Volver; C3 absorbe C4: revisión, progreso y resultado en la misma tabla; el flujo sigue en tres pasos |
 | `deploy-conflicts` | D2 como tabla, D3 con archivo completo, D4 por app y protegidos |
 | `docs/diseno-tecnico.md` | Sustituir «ANSI propio, sin framework» por Bubble Tea/Lip Gloss y el contrato de pantalla |
 | `docs/diseno-funcional.md` | Actualizar C1, C3/C4, D3 y D4 |
@@ -1106,6 +1179,5 @@ Conventional Commits (`feat(tui):`, `refactor(tui):`, `test(tui):`).
 10. **Mensajes:** la zona muestra hasta tres líneas, una por categoría, y el body
     se reduce. ¿Prefieres una sola línea con prioridad `ERROR` > `AVISO` > `INFO`?
     Los errores bloqueantes siguen usando la pantalla de error común.
-11. **C2:** las tres opciones de carpeta sustituyen a `F2`/`F3`/`F4`. ¿Se retiran
-    esos atajos o se conservan como alias? ¿La sugerencia del nombre incluye
-    `.tar.gz`?
+11. **C2 (resuelto):** las tres opciones de carpeta sustituyen a `F2`/`F3`/`F4`,
+    que se retiran. La sugerencia del nombre incluye `.tar.gz`.

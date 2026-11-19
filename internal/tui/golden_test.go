@@ -130,23 +130,49 @@ func goldenC1() goldenCase {
 	}
 }
 
+func goldenC1Filter() goldenCase {
+	return goldenCase{
+		name: "c1-filter", sizes: [][2]int{{100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			app.cloneApps = fixtureApps()
+			screen := newCloneAppsScreen(app, "")
+			screen.counting = false
+			screen.filtering = true
+			screen.filter.SetValue("gh")
+			screen.index = 1
+			return screen
+		},
+	}
+}
+
 func goldenC2() goldenCase {
 	return goldenCase{
-		name: "c2", sizes: [][2]int{{100, 26}}, variants: true,
+		name: "c2", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
 		build: func(app *App) Screen {
 			return newCloneDestinationScreen(app, "")
 		},
 	}
 }
 
+func goldenC2Name() goldenCase {
+	return goldenCase{
+		name: "c2-name", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			screen := newCloneDestinationScreen(app, "")
+			screen.focus = 1
+			return screen
+		},
+	}
+}
+
 func goldenC2Manual() goldenCase {
 	return goldenCase{
-		name: "c2-manual", sizes: [][2]int{{100, 26}},
+		name: "c2-manual", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
 		build: func(app *App) Screen {
 			screen := newCloneDestinationScreen(app, "")
 			screen.option = 2
 			screen.focus = 2
-			screen.path = "/Users/test/Descargas"
+			screen.path.SetValue("/Users/test/Descargas")
 			return screen
 		},
 	}
@@ -227,11 +253,37 @@ func goldenC3DryRun() goldenCase {
 
 func goldenD0() goldenCase {
 	return goldenCase{
-		name: "d0", sizes: [][2]int{{100, 26}}, variants: true,
+		name: "d0", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
 		build: func(app *App) Screen {
-			return &deployFileScreen{
-				screenBase: screenBase{app: app}, candidates: fixtureDeployCandidates(),
-			}
+			screen := newDeployFileScreen(app, "")
+			screen.candidates = fixtureDeployCandidates()
+			screen.messages = nil
+			return screen
+		},
+	}
+}
+
+func goldenD0Filter() goldenCase {
+	return goldenCase{
+		name: "d0-filter", sizes: [][2]int{{100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			screen := newDeployFileScreen(app, "")
+			screen.candidates = fixtureDeployCandidates()
+			screen.filtering = true
+			screen.filter.SetValue("clone")
+			return screen
+		},
+	}
+}
+
+func goldenD0Manual() goldenCase {
+	return goldenCase{
+		name: "d0-manual", sizes: [][2]int{{100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			screen := newDeployFileScreen(app, "")
+			screen.candidates = fixtureDeployCandidates()
+			screen.manual = true
+			return screen
 		},
 	}
 }
@@ -303,9 +355,22 @@ func goldenD5() goldenCase {
 
 func goldenSettings() goldenCase {
 	return goldenCase{
-		name: "settings", sizes: [][2]int{{100, 26}}, variants: true,
+		name: "settings", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
 		build: func(app *App) Screen {
 			return newSettingsScreen(app, "")
+		},
+	}
+}
+
+func goldenSettingsEmpty() goldenCase {
+	return goldenCase{
+		name: "settings-empty", sizes: [][2]int{{100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			screen := newSettingsScreen(app, "")
+			for index := range screen.fields {
+				screen.fields[index].SetValue("")
+			}
+			return screen
 		},
 	}
 }
@@ -349,6 +414,7 @@ func goldenSettingsError() goldenCase {
 		build: func(app *App) Screen {
 			screen := newSettingsScreen(app, "")
 			screen.focus = 0
+			screen.fields[1].Invalid = true
 			screen.messages = []Message{{Kind: MessageError, Text: "clone.output_dir: usa una ruta absoluta o que empiece por ~"}}
 			return screen
 		},
@@ -461,9 +527,13 @@ func goldenMessages() goldenCase {
 }
 
 func TestGoldenMenu(t *testing.T) { runGolden(t, goldenMenu()) }
-func TestGoldenC1(t *testing.T)   { runGolden(t, goldenC1()) }
+func TestGoldenC1(t *testing.T) {
+	runGolden(t, goldenC1())
+	runGolden(t, goldenC1Filter())
+}
 func TestGoldenC2(t *testing.T) {
 	runGolden(t, goldenC2())
+	runGolden(t, goldenC2Name())
 	runGolden(t, goldenC2Manual())
 	runGolden(t, goldenC2Dialog())
 }
@@ -475,6 +545,8 @@ func TestGoldenC3(t *testing.T) {
 }
 func TestGoldenD0D1D2(t *testing.T) {
 	runGolden(t, goldenD0())
+	runGolden(t, goldenD0Filter())
+	runGolden(t, goldenD0Manual())
 	runGolden(t, goldenD1())
 	runGolden(t, goldenD2())
 }
@@ -483,6 +555,7 @@ func TestGoldenD4(t *testing.T) { runGolden(t, goldenD4()) }
 func TestGoldenD5(t *testing.T) { runGolden(t, goldenD5()) }
 func TestGoldenSettings(t *testing.T) {
 	runGolden(t, goldenSettings())
+	runGolden(t, goldenSettingsEmpty())
 	runGolden(t, goldenSettingsFocusOne())
 	runGolden(t, goldenSettingsFocusTwo())
 	runGolden(t, goldenSettingsFocusThree())
@@ -500,10 +573,10 @@ func TestGoldenMessages(t *testing.T) { runGolden(t, goldenMessages()) }
 
 func TestContract(t *testing.T) {
 	cases := []goldenCase{
-		goldenMenu(), goldenC1(), goldenC2(), goldenC2Manual(), goldenC2Dialog(),
+		goldenMenu(), goldenC1(), goldenC1Filter(), goldenC2(), goldenC2Name(), goldenC2Manual(), goldenC2Dialog(),
 		goldenC3Review(), goldenC3Writing(), goldenC3Done(), goldenD3(), goldenD4(),
-		goldenD5(), goldenSettings(), goldenSettingsFocusOne(), goldenSettingsFocusTwo(), goldenSettingsFocusThree(),
-		goldenD0(), goldenD1(), goldenD2(),
+		goldenD5(), goldenSettings(), goldenSettingsEmpty(), goldenSettingsFocusOne(), goldenSettingsFocusTwo(), goldenSettingsFocusThree(),
+		goldenD0(), goldenD0Filter(), goldenD0Manual(), goldenD1(), goldenD2(),
 		goldenSettingsError(), goldenU1Query(), goldenU1Download(), goldenU1Result(),
 		goldenHelp(), goldenError(), goldenMessages(),
 	}
@@ -550,6 +623,10 @@ func assertContract(t *testing.T, name string, mode goldenMode, width, height in
 		colors := regexp.MustCompile(`\x1b\[(3[0-7]|9[0-7])(;[0-9;]*)?m`)
 		if colors.MatchString(view) {
 			t.Fatalf("%s: NO_COLOR view contains a color sequence", name)
+		}
+		backgrounds := regexp.MustCompile(`\x1b\[(4[0-7]|10[0-7])(;[0-9;]*)?m`)
+		if backgrounds.MatchString(view) {
+			t.Fatalf("%s: NO_COLOR view contains a background sequence", name)
 		}
 	}
 }

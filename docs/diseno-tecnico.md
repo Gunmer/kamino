@@ -82,7 +82,7 @@ paths = [
 - `bundle_id`: sirve para detectar si la app está instalada.
 - `command`: alternativa a `bundle_id` para herramientas de terminal sin `.app` (por ejemplo `git`, `yazi` o `herdr`); se detectan con `shutil.which`.
 - `search_paths`: rutas adicionales donde buscar el binario de `command` si no está en el PATH (por ejemplo `/opt/homebrew/bin`). Opcional.
-- `command_aliases`: nombres alternativos del ejecutable, como `cave` para Caveman. Opcional.
+- `command_aliases`: nombres alternativos del ejecutable, como `gsh` para Gentle Shell. Opcional.
 - `install_marker`: archivo relativo al home que también debe existir para considerar instalada la app, como `.oh-my-zsh/oh-my-zsh.sh`. Opcional.
 - `paths`: rutas obligatorias relativas al home, archivos o carpetas. Su ausencia se informa como omisión. Las rutas fuera del home no se admiten.
 - `optional_paths`: rutas que solo se incluyen si existen; su ausencia no es una omisión. Opcional.
@@ -104,12 +104,12 @@ paths = [
   "hostname": "mac-origen",
   "apps": [
     {
-      "id": "vscode",
-      "name": "Visual Studio Code",
-      "bundle_id": "com.microsoft.VSCode",
-      "version": "1.95.0",
+      "id": "ghostty",
+      "name": "Ghostty",
+      "bundle_id": "com.mitchellh.ghostty",
+      "version": "1.2.0",
       "files": [
-        {"path": "Library/Application Support/Code/User/settings.json", "sha256": "…", "size": 1432, "mode": "0644"}
+        {"path": ".config/ghostty/config", "sha256": "…", "size": 1432, "mode": "0644"}
       ]
     }
   ]
@@ -124,8 +124,8 @@ Los valores son ilustrativos. `format_version` permite evolucionar el formato: `
 clon.tar.gz
 ├── manifest.json
 └── apps/
-    └── vscode/
-        └── Library/Application Support/Code/User/settings.json
+    └── ghostty/
+        └── .config/ghostty/config
 ```
 
 Los checksums se calculan al construir el plan, así `manifest.json` puede escribirse primero y `inspect` (v2) lo lee sin recorrer todo el archivo.
@@ -137,8 +137,8 @@ Los checksums se calculan al construir el plan, así `manifest.json` puede escri
 1. Cargar el catálogo (embebido y directorio del usuario).
 2. Detectar las apps instaladas.
 3. C1 cuenta archivos en segundo plano con el mismo recorrido y exclusiones que el plan, sin hashear. `--apps` omite C1.
-4. C2 ofrece vault por defecto, carpeta actual e indicar carpeta, con un input de nombre editable;
-   `--output` omite C2. La ruta se valida en vivo y el destino se crea al escribir.
+4. C2 ofrece vault por defecto, carpeta actual e indicar carpeta, con los campos «Destino» y
+   «Nombre»; `--output` omite C2. La ruta se valida en vivo y el destino se crea al escribir.
 5. `plan_clone` expande `paths`, aplica `exclude` y construye el plan con tamaño y checksum.
    Las rutas ausentes se registran con su motivo. C3 puede cancelar durante la planificación.
 6. C3 muestra la revisión y `write_clone` escribe un temporal con progreso por archivos. La
@@ -188,17 +188,17 @@ Menú -> D0 clon -> D1 apps -> D2 conflictos -> D3 archivo -> D4 confirmación -
 Menú -> U1 actualización
 ```
 
-- **C1:** tabla `SEL`/`APP`/`ARCHIVOS`, contador de selección, filtro `/`, `a`/`n` sobre visibles,
-  casillas `[x]`/`[ ]`/`[-]`, `Espacio` sin perder el foco, `Enter`, línea de no detectadas y
-  recuento en segundo plano.
-- **C2:** tres opciones de carpeta, input de ruta manual, input de nombre editable, validación en
-  vivo y diálogo Sobrescribir/Cambiar nombre/Volver con Volver preseleccionada. Los antiguos atajos de directorio no existen.
+- **C1:** tabla `SEL`/`APP`/`ARCHIVOS`, contador de selección, filtro `/` como campo de una fila,
+  `a`/`n` sobre visibles, casillas `[x]`/`[ ]`/`[-]`, `Espacio` sin perder el foco, `Enter`, línea
+  de no detectadas y recuento en segundo plano.
+- **C2:** tres opciones de carpeta, campos «Destino» y «Nombre», placeholder y scroll con `…`,
+  validación en vivo y diálogo Sobrescribir/Cambiar nombre/Volver con Volver preseleccionada. Los antiguos atajos de directorio no existen.
 - **C3:** tabla única con Apps, Archivos, Tamaño, Ruta y Estado; planificando, revisión, escritura,
   completado, simulación o cancelado. `d` omitidos, `f` archivos incluidos, `c` copiar ruta al
   terminar y aviso de secretos en mensajes. C4 es el estado final de C3, no una pantalla.
 - **D0:** tabla `Archivo`/`Origen`/`Tamaño` con los clones de `clone.output_dir` y del directorio
-  actual, orden por fecha, deduplicación por ruta resuelta, preview con ruta/fecha/tamaño, filtro
-  `/`, ruta manual en `Otro archivo...` (`o`) y validación del manifiesto.
+  actual, orden por fecha, deduplicación por ruta resuelta, preview con ruta/fecha/tamaño, campos
+  «Filtro» y «Ruta», y validación del manifiesto.
 - **D1:** tabla `SEL`/`APP`/`ARCHIVOS`, no instaladas informativas y preparación cancelable.
 - **D2:** tabla de conflictos `ARCHIVO`/`BLOQUES`/`LÍNEAS`/`ACCIÓN`, cero `·`, conteos, scroll y
   acciones `r`/`c`/`o`/`C`/`O`.
@@ -251,19 +251,20 @@ certificados propios.
 - **Conflictos e híbridos.** `internal/conflicts` contiene el modelo y las funciones puras. La comparación decodifica UTF-8 y normaliza CRLF solo para comparar; un clon perfecto no se escribe. Un contenido con NUL o que no decodifica es binario; un texto de más de 5 MB o de más de 20 000 líneas se trata como grande para proteger el diff y la TUI. Los bloques se generan con un `SequenceMatcher` compatible y 3 líneas de contexto; dentro de cada bloque, las líneas iguales son contexto y cada par original/clon o línea de un solo lado es una fila decidible que empieza en el clon. `build_hunks` y `compose` comparten la misma generación de filas. La composición conserva las líneas iguales del original, adapta las del clon al estilo de final de línea original y, si una línea sin salto final queda en medio, le añade el EOL dominante; solo la última puede conservar la ausencia de salto final. El núcleo compone el archivo; la TUI nunca inyecta bytes arbitrarios y D3 renderiza un solo bloque con un `Static`, no miles de widgets.
 - **Validación de híbridos.** Se valida por extensión: TOML (`BurntSushi/toml`), JSON con detección de claves duplicadas, INI/CFG/Git config estricto y plist XML/binario (`internal/plist`, con detección de claves duplicadas en XML). Solo se bloquea si ambos originales parsean y el híbrido no; si alguno ya era inválido se avisa y se permite aplicar. YAML y shell no se validan. `apply` repite la validación como defensa del núcleo.
 - **TUI.** `internal/tui.App` es la raíz de Bubble Tea; una pila de `Screen` conserva el estado inferior y la app guarda frase, última misión, último código y modo. `Frame` posee cabecera, separadores, body, zona de mensajes y pie, y entrega a cada pantalla el ancho y alto del body; desde 100 columnas el bloque de contenido se centra dentro del body. `theme` centraliza tokens, símbolos y estilos ANSI; `layout` mide, trunca y garantiza exactamente `h` líneas. El pie y la ayuda salen de `Keys()`; no hay leyendas duplicadas. `Ctrl+C` se reparte por pantalla y respeta los puntos de no retorno. Las operaciones largas (recuento, planificación, escritura, despliegue y actualización) se ejecutan en `tea.Cmd` con progreso y cancelación. La app se abre solo con entrada y salida TTY y sin `KAMINO_PLAIN`; `deploy --yes` y `--dry-run` usan texto. La TUI muestra avisos de secretos en C2, C3, D2 y D3 y no persiste su contenido.
+- **Campos de texto de la TUI.** `internal/tui/field.go` es el único componente de entrada: `field` guarda etiqueta, valor, placeholder, cursor como índice de runas y el estado `Invalid`, y expone `SetValue`, `Insert`, `Backspace`, `MoveCursor` y un `Render` de una sola fila. C1, C2, D0 y Configuración guardan `field` y solo deciden qué campo recibe cada tecla, cuándo se abre o se cierra y qué validación aplica; `fieldOptions` lleva ancho, ancho de etiqueta y foco, y `fieldLabelWidth` reserva la columna de etiquetas (incluido « · editando» con `NO_COLOR`) para que los valores queden alineados. No se usa el cursor real del terminal: Bubble Tea v1.3.10 solo expone `tea.ShowCursor`/`tea.HideCursor` y su renderer devuelve el cursor al inicio de la última línea tras cada frame, así que el cursor de edición se dibuja con vídeo inverso sobre el carácter de inserción (o un espacio al final), y solo en el campo enfocado. La ventana horizontal no guarda estado: se calcula en cada `Render` a partir del valor, el cursor y el ancho, reserva el ancho real de `theme.Symbols.Ellipsis` en cada lado oculto y avanza runa a runa con `lipgloss.Width`, sin partir UTF-8 ni caracteres de doble ancho. Los errores siguen en la zona de mensajes del `Frame` y el campo se marca con `Invalid`; no se añaden filas de error. `?` y `F1` se interceptan en `App.Update`, abren la ayuda y no llegan al campo.
 - **Progreso y cancelación.** `internal/progress` define `Event` y `Callback`. La cancelación viaja como `context.Context` en el primer parámetro de los casos de uso (`archive`, `plan`, `snapshot`, `clone`, `deploy`, `update`); el núcleo emite fases y consulta `ctx.Err()` en los bucles largos, y una cancelación devuelve `OperationCancelled`. La CLI crea un contexto raíz por invocación y la TUI crea un hijo por operación, cuyo `cancel` se guarda bajo mutex y se llama desde `Esc` y `Ctrl+C`; las peticiones HTTP de la actualización usan `http.NewRequestWithContext`.
 - **Empaquetado de la TUI.** La TUI usa Bubble Tea, Lip Gloss y `bubbles` (`key`, `help`); el catálogo viaja embebido con `go:embed` y no hay recursos externos. Los golden files y el test de contrato viven en `internal/tui`.
 - **Referencias de Ghostty.** El descubrimiento es específico de `ghostty` y se limita a `config-file` y a la selección de temas. Resuelve cada candidato con el acceso seguro, aplica las exclusiones antes de leer, mantiene límites de tamaño, profundidad y cantidad, y deduplica por `(app_id, ruta relativa)`.
 - **Exclusiones y aviso.** Los clones nuevos excluyen credenciales independientes conocidas, historiales, sesiones, cachés y registros. El aviso de que el archivo no está cifrado se muestra siempre antes de clonar y no modifica los bytes de los ajustes. Las exclusiones no se aplican al despliegue de clones antiguos ni a la instantánea previa.
 - **Actualización del binario.** `internal/update` es un caso de uso independiente de la CLI. Solo actúa sobre binarios marcados como autocontenidos por `-ldflags`, resuelve el ejecutable real y consulta la API de GitHub. La versión se compara como `X.Y.Z`; no se degrada ni se descarga si la instalada es igual o superior. La integridad se basa en el tamaño y el digest SHA-256 del asset. El reemplazo usa un temporal en el mismo directorio y `os.Rename`, sin `sudo` y sin ejecutar el binario descargado. No hay comprobación automática ni rollback.
-- **Tema ANSI de la TUI.** `internal/tui/theme` usa `ansi-dark` por defecto para que fondo, texto, separadores, wordmark, cápsulas y estados salgan de la paleta ANSI del terminal. `KAMINO_THEME` admite `ansi-light`; otros valores caen a `ansi-dark`. `NO_COLOR` se inyecta antes de crear la app y todos los estados conservan icono y palabra. `◉`, `●`, `○`, `◀`, `▶`, `▌`, `▸`, `▾`, `─`, `·`, `⚠`, `ℹ` y `✕` tienen equivalentes ASCII cuando la codificación no es UTF-8 o se define `KAMINO_NO_LOGO`; esa variable además oculta el wordmark.
+- **Tema ANSI de la TUI.** `internal/tui/theme` usa `ansi-dark` por defecto para que fondo, texto, separadores, wordmark, cápsulas y estados salgan de la paleta ANSI del terminal. `KAMINO_THEME` admite `ansi-light`; otros valores caen a `ansi-dark`. `NO_COLOR` se inyecta antes de crear la app y todos los estados conservan icono y palabra. Los campos usan `FieldFocus` (acento sobre ANSI 8 en `ansi-dark`, ANSI 7 en `ansi-light`), `FieldLabelFocus` (negrita sobre el mismo fondo), `FieldIdle`, `FieldLabelIdle`, `FieldError` y `FieldCaret` (vídeo inverso); con `NO_COLOR` no emiten color ni fondo y el foco se distingue por `▌`, el cursor inverso y «editando». `◉`, `●`, `○`, `◀`, `▶`, `▌`, `▸`, `▾`, `─`, `·`, `⚠`, `ℹ` y `✕` tienen equivalentes ASCII cuando la codificación no es UTF-8 o se define `KAMINO_NO_LOGO`; esa variable además oculta el wordmark.
 
 ## 7. Pruebas
 
 - **Unitarias:** `internal/catalog` valida definiciones válidas e inválidas; `internal/paths` cubre expansión, normalización y rechazo de rutas fuera del HOME; `internal/archive` cubre el manifiesto y los checksums.
 - **Conflictos:** `internal/conflicts` cubre detección de texto, binario, grande y enlace; archivos nuevos, idénticos, solo modo, CRLF y cambios de tipo; generación de filas con contexto, emparejamiento e inserciones/eliminaciones; composición con híbridos dentro de un bloque, todo clon, todo original, CRLF, salvaguarda de salto final y longitud de decisiones; y validación de TOML, JSON, INI, plist, original inválido y formatos sin validar.
 - **Integración:** `internal/clone`, `internal/deploy` y `internal/snapshot` cubren el ciclo completo entre dos HOME falsos distintos, con apps instaladas simuladas mediante un `Info.plist` falso, comprobando que solo se despliegan las instaladas. Las pruebas de conflicto cubren híbridos, holocrón, undo, `--yes` y `--dry-run` con diffs.
-- **TUI:** `internal/tui` prueba el `Frame` a 80/100/140 columnas y 24/26/30 filas, la pila, la zona de mensajes, C1–C3, D0–D5, U1, ayuda, error de cuatro partes, copia, cancelación y despliegue parcial. Los goldens cubren 80×24, 100×26, 140×40 y 200×50, más `NO_COLOR` y ASCII; el test de contrato exige exactamente `h` líneas, ninguna línea más ancha que `w` y solo SGR ANSI. D3 usa un modelo de filas completo con benchmark de 20 000 líneas y solo renderiza la ventana visible. `View` no toca disco, reloj ni entorno.
+- **TUI:** `internal/tui` prueba el `Frame` a 80/100/140 columnas y 24/26/30 filas, la pila, la zona de mensajes, C1–C3, D0–D5, U1, ayuda, error de cuatro partes, copia, cancelación y despliegue parcial. `field_test.go` cubre inserción, retroceso, límites, UTF-8, runas de doble ancho, ventana horizontal con `…` a ambos lados, placeholder, error, alineación de etiquetas, `NO_COLOR` y ASCII; las pruebas de pantalla cubren el filtro y los campos de C1, C2, D0 y Configuración, el foco único, la ayuda sin inserción y un solo cursor de edición. Los goldens cubren 80×24, 100×26, 140×40 y 200×50, más `NO_COLOR` y ASCII; C1 con filtro, C2 con foco en ruta y nombre, D0 con filtro y ruta manual, y Configuración vacía tienen casos propios. El test de contrato exige exactamente `h` líneas, ninguna línea más ancha que `w`, solo SGR ANSI y, en `NO_COLOR`, ni colores ni fondos ANSI. D3 usa un modelo de filas completo con benchmark de 20 000 líneas y solo renderiza la ventana visible. `View` no toca disco, reloj ni entorno.
 - **Actualización:** `internal/update` cubre el parseo y la comparación de versiones, la consulta de la release, el asset ausente, el digest ausente o incorrecto, la descarga y el reemplazo atómico, los symlinks y la plataforma no soportada. Ninguna prueba accede a la red ni al HOME real.
 - **Releases:** `internal/release` cubre la política de versiones, el parseo de Conventional Commits, el renderizado e inserción del changelog, las notas únicas, la validación de tags y el build con smoke test en macOS ARM64.
 - **Seguridad:** archivos tar con rutas `..`, rutas absolutas y enlaces simbólicos maliciosos, y un checksum alterado. `internal/paths` cubre el rechazo de enlaces intermedios y la conservación de enlaces finales; `internal/deploy` cubre el rechazo antes de la instantánea, la sustitución de un directorio durante la aplicación y un destino cambiado entre plan y apply.

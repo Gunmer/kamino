@@ -8,8 +8,7 @@ kamino · Clonar · Destino                                                     
                           ○ Carpeta actual        [2m~/Projects/kamino[0m
                           ○ Indicar carpeta       
   
-                          Nombre del archivo
-                          ▌ clone-20261113.tar.gz_
+                            [2mNombre [0m  [2mclone-20261113.tar.gz[0m
   
                           Ruta: ~/.config/kamino/vault/clone-20261113.tar.gz
   
@@ -20,6 +19,7 @@ kamino · Clonar · Destino                                                     
                             Sobrescribir
                             Cambiar nombre
                           [1m▌ Volver[0m
+  
   
 [33m⚠ AVISO[0m  El clon no está cifrado y puede contener secretos.
 [2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
