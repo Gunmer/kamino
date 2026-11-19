@@ -1,6 +1,7 @@
 package deploy
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -57,7 +58,7 @@ func deployFixture(t *testing.T) (sourceHome, appBin, cloneFile string, definiti
 	manifest.Apps[0].Files[0].SHA256 = &digest
 	manifest.Apps[0].Files[0].Size = 8
 	cloneFile = filepath.Join(t.TempDir(), "clone.tar.gz")
-	if err := archive.WriteArchive(cloneFile, manifest, archive.WriteOptions{SourceRoot: sourceHome}); err != nil {
+	if err := archive.WriteArchive(context.Background(), cloneFile, manifest, archive.WriteOptions{SourceRoot: sourceHome}); err != nil {
 		t.Fatal(err)
 	}
 	return sourceHome, appBin, cloneFile, definitions
@@ -77,14 +78,14 @@ func TestDeployNewAndIdentical(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := session.Plan(nil, false, nil, nil, nil)
+	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(plan.Entries) != 1 || plan.Entries[0].Status != StatusNew {
 		t.Fatalf("expected new entry: %#v", plan.Entries)
 	}
-	result, err := session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil)
+	result, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +98,7 @@ func TestDeployNewAndIdentical(t *testing.T) {
 	session.Close()
 
 	session, _ = PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin})
-	plan, err = session.Plan(nil, false, nil, nil, nil)
+	plan, err = session.Plan(context.Background(), nil, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +122,7 @@ func conflictExecution(t *testing.T) (string, string, string, catalog.Catalog, *
 	if err != nil {
 		t.Fatal(err)
 	}
-	plan, err := session.Plan(nil, false, nil, nil, nil)
+	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +135,7 @@ func conflictExecution(t *testing.T) (string, string, string, catalog.Catalog, *
 func TestDeployConflictApply(t *testing.T) {
 	destination, _, _, _, session, plan := conflictExecution(t)
 	defer session.Close()
-	result, err := session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil)
+	result, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +150,7 @@ func TestDeployConflictApply(t *testing.T) {
 func TestDeployConflictOmit(t *testing.T) {
 	destination, _, _, _, session, plan := conflictExecution(t)
 	defer session.Close()
-	omitted, err := session.Apply(conflicts.OmitAll(plan.Conflicts), nil, nil)
+	omitted, err := session.Apply(context.Background(), conflicts.OmitAll(plan.Conflicts), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -165,9 +166,9 @@ func TestDeployConflictReview(t *testing.T) {
 	_, _, _, _, session, plan := conflictExecution(t)
 	defer session.Close()
 	review := conflicts.ReviewAll(plan.Conflicts[0], conflicts.RowClone)
-	merged, err := session.Apply(conflicts.ConflictDecisions{Decisions: map[string]conflicts.FileDecision{
+	merged, err := session.Apply(context.Background(), conflicts.ConflictDecisions{Decisions: map[string]conflicts.FileDecision{
 		plan.Conflicts[0].Path: review,
-	}}, nil, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +182,7 @@ func TestDeployDryRunDoesNotWrite(t *testing.T) {
 	destination := t.TempDir()
 	session, _ := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin})
 	defer session.Close()
-	plan, err := session.Plan(nil, true, nil, nil, nil)
+	plan, err := session.Plan(context.Background(), nil, true, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,14 +207,14 @@ func TestDeployConcurrentChange(t *testing.T) {
 	}
 	session, _ := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	defer session.Close()
-	plan, err := session.Plan(nil, false, nil, nil, nil)
+	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(target, []byte("changed=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err = session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil)
+	_, err = session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
 	var concurrent *kerrors.ConcurrentChangeError
 	if !errors.As(err, &concurrent) {
 		t.Fatalf("expected concurrent change, got %v", err)
@@ -236,11 +237,11 @@ func TestDeployPrunesSnapshotsByLimit(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		plan, err := session.Plan(nil, false, nil, nil, nil)
+		plan, err := session.Plan(context.Background(), nil, false, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		result, err := session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil)
+		result, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -288,7 +289,7 @@ func TestDeployDryRunDoesNotPrune(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer session.Close()
-	plan, err := session.Plan(nil, true, nil, nil, nil)
+	plan, err := session.Plan(context.Background(), nil, true, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -325,11 +326,11 @@ func TestDeploySnapshotFailureAbortsBeforeWriting(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer session.Close()
-	plan, err := session.Plan(nil, false, nil, nil, nil)
+	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil); err == nil {
+	if _, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil); err == nil {
 		t.Fatal("a failing snapshot must abort the deploy")
 	}
 	if data, err := os.ReadFile(target); err != nil || string(data) != "value=1\n" {
@@ -357,7 +358,7 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer session.Close()
-	plan, err := session.Plan(nil, false, nil, nil, nil)
+	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +368,7 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		result, err := session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil)
+		result, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
 		done <- outcome{result: result, err: err}
 	}()
 	select {
@@ -395,4 +396,25 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		t.Fatal("the deploy must continue once the lock is released")
 	}
+}
+
+func TestCancelledContextStopsPlanAndApply(t *testing.T) {
+	destination, _, _, _, session, plan := conflictExecution(t)
+	defer session.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := session.Plan(ctx, nil, false, nil, nil); !cancelledError(err) {
+		t.Fatalf("Plan must report the cancellation: %v", err)
+	}
+	if _, err := session.Apply(ctx, conflicts.ApplyAll(plan.Conflicts), nil); !cancelledError(err) {
+		t.Fatalf("Apply must report the cancellation: %v", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(destination, ".config/test/config")); err != nil || string(data) != "value=1\n" {
+		t.Fatalf("a cancelled apply must not write: %q %v", data, err)
+	}
+}
+
+func cancelledError(err error) bool {
+	var target *kerrors.OperationCancelled
+	return errors.As(err, &target)
 }

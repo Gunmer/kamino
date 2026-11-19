@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,7 +71,7 @@ func TestBuildPlanExpandsAndSkips(t *testing.T) {
 		OptionalPatterns: []string{".config/app/*.log"},
 		Exclude:          []string{"**/*.log", "**/.env"},
 	}
-	built, err := BuildPlan([]*catalog.AppDefinition{app}, home, nil, nil)
+	built, err := BuildPlan(context.Background(), []*catalog.AppDefinition{app}, home, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +106,7 @@ func TestRequiredMissingAndOptionalMissing(t *testing.T) {
 		ID: "app", Name: "App", Command: ptr("app"),
 		Paths: []string{".config/app/required"}, OptionalPaths: []string{".config/app/optional", ".config/app/absent"},
 	}
-	built, err := BuildPlan([]*catalog.AppDefinition{app}, home, nil, nil)
+	built, err := BuildPlan(context.Background(), []*catalog.AppDefinition{app}, home, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +116,7 @@ func TestRequiredMissingAndOptionalMissing(t *testing.T) {
 	if len(built.Skipped) != 1 || built.Skipped[0].Path != ".config/app/required" {
 		t.Fatalf("unexpected skips: %#v", built.Skipped)
 	}
-	count, err := CountFiles([]*catalog.AppDefinition{app}, home, nil)
+	count, err := CountFiles(context.Background(), []*catalog.AppDefinition{app}, home)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +135,7 @@ func TestEnvAndXDGPaths(t *testing.T) {
 		ID: "app", Name: "App", Command: ptr("app"),
 		EnvPaths: []string{"APP_CONFIG"}, XDGPaths: []string{"app/xdg"},
 	}
-	built, err := BuildPlan([]*catalog.AppDefinition{app}, home, nil, nil)
+	built, err := BuildPlan(context.Background(), []*catalog.AppDefinition{app}, home, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +153,7 @@ func TestGhosttyReferencesAndCycles(t *testing.T) {
 		ID: "ghostty", Name: "Ghostty", Command: ptr("ghostty"),
 		Paths: []string{".config/ghostty/config"},
 	}
-	built, err := BuildPlan([]*catalog.AppDefinition{app}, home, nil, nil)
+	built, err := BuildPlan(context.Background(), []*catalog.AppDefinition{app}, home, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

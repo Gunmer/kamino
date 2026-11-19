@@ -26,11 +26,20 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   `KAMINO_NO_LOGO` oculta el wordmark; por debajo de 24 filas el aviso de terminal pequeña
   reemplaza el cuerpo y la versión no aparece.
 - Configuración muestra y edita las rutas de catálogo, clones y holocrones y el límite de
-  holocrones como cuatro inputs; el del límite solo admite dígitos. `Tab` y `Mayús+Tab` mueven el
-  foco, `Ctrl+S` valida y guarda, y `Esc` vuelve sin escribir. El archivo
+  holocrones como cuatro campos de una fila; el del límite solo admite dígitos. `Tab` y `Mayús+Tab`
+  y las flechas verticales mueven el foco, `←`/`→` el cursor dentro del valor, `Ctrl+S` valida y
+  guarda, y `Esc` vuelve sin escribir. El archivo
   `~/.config/kamino/config.toml` solo lo lee y escribe la TUI; la vía no interactiva de la CLI usa
   los valores integrados para las rutas y lee únicamente `deploy.snapshots_limit`. El archivo se
   crea solo al guardar.
+- Todos los campos de texto comparten un único componente de una fila con marcador `▌`, etiqueta
+  alineada y valor. El foco añade fondo ANSI, etiqueta en negrita y un cursor de edición en vídeo
+  inverso; los demás campos quedan atenuados y solo el enfocado dibuja el cursor. Escribir inserta
+  en el cursor, `Retroceso` borra el carácter anterior y `←`/`→` lo mueven sin salir del valor. Los
+  valores largos se desplazan con `…` sin partir caracteres UTF-8 ni de doble ancho, y un valor vacío
+  muestra un placeholder atenuado. Con `NO_COLOR` el foco se distingue por `▌`, el cursor inverso y
+  la palabra «editando»; sin UTF-8 se usan `>` y `...`. Un error de validación va a la zona de
+  mensajes y marca el campo afectado sin añadir ni desplazar filas.
 - Entre el cuerpo y el pie hay una zona de mensajes `INFO`, `AVISO` y `ERROR`, con icono, palabra y
   color ANSI; no se reserva cuando está vacía y no sustituye a la pantalla de error común.
 - La ayuda contextual se abre con `?` y, en campos de texto, también con `F1`; se genera de los
@@ -49,15 +58,20 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 - Detecta las aplicaciones soportadas que están instaladas en el Mac.
 - C1 muestra solo las apps instaladas en una tabla `SEL | APP | ARCHIVOS`, con el contador
   `N de M marcadas`, casillas `[x]`, `[ ]` y `[-]` y cursor `▌`. El recuento se calcula en segundo
-  plano con las mismas exclusiones y el mismo confinamiento que el plan. Permite filtrar con `/`,
-  seleccionar todas o ninguna con `a` y `n` sobre las filas visibles, y deshabilita las apps sin
-  archivos. Las flechas recorren las apps, `Espacio` marca o desmarca sin perder el foco y `Enter`
-  continúa; sin selección, la zona de mensajes muestra un `AVISO`. Las apps no detectadas se
+  plano con las mismas exclusiones y el mismo confinamiento que el plan. El filtro `/` es un campo
+  de una fila con etiqueta «Filtro»: al abrirlo el cursor queda al final, escribir edita en esa
+  posición y `Enter` aplica el filtro y devuelve el foco a la tabla; `Esc` lo limpia y lo cierra.
+  Permite seleccionar todas o ninguna con `a` y `n` sobre las filas visibles, y deshabilita las apps
+  sin archivos. Las flechas recorren las apps, `Espacio` marca o desmarca sin perder el foco y
+  `Enter` continúa; sin selección, la zona de mensajes muestra un `AVISO`. Las apps no detectadas se
   informan en una línea aparte.
 - C2 ofrece tres opciones de carpeta: vault por defecto (o `clone.output_dir`), carpeta actual
-  (`pwd`) e indicar carpeta, que se convierte en un input. Debajo hay un input de nombre precargado
-  con `clone-<aaaammdd>.tar.gz` y editable. La ruta completa se actualiza y se valida en vivo; un
-  valor inválido muestra un `ERROR` sin crear nada. Si el clon existe, muestra un diálogo con ruta,
+  (`pwd`) e indicar carpeta, que abre el campo «Destino». Debajo hay un campo «Nombre» precargado
+  con `clone-<aaaammdd>.tar.gz` y editable. La ruta vacía muestra un placeholder atenuado y las
+  rutas largas se desplazan con `…` manteniendo visible el cursor; `Enter` en la ruta pasa al nombre
+  y `Enter` en el nombre valida el destino y continúa el flujo. La ruta completa se actualiza y se
+  valida en vivo; un valor inválido muestra un `ERROR` en la zona de mensajes y marca el campo sin
+  mover las filas. Si el clon existe, muestra un diálogo con ruta,
   fecha y tamaño y las acciones Sobrescribir, Cambiar nombre y Volver, con Volver preseleccionada.
   Cambiar nombre propone el primer sufijo libre. `--force` omite el diálogo y avisa con un `AVISO`; los antiguos atajos de directorio se
   retiran. El destino no se crea hasta que empieza la clonación.
@@ -74,7 +88,7 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   omitidos, `c` copia la ruta con OSC 52 si se creó el clon y `Enter`/`Esc` continúan. El código 3
   aparece como `AVISO` en la zona de mensajes; no hay una pantalla separada ni un paso adicional.
   `--dry-run` termina en Resultado sin escribir y sin ofrecer copiar la ruta.
-- Permite modo no interactivo: `clone --apps vscode,iterm2,git`.
+- Permite modo no interactivo: `clone --apps opencode,ghostty,git`.
 - Sin `--output`, el nombre por defecto es `clone-<aaaammdd>.tar.gz` en
   `~/.config/kamino/vault/`; el directorio se crea al escribir y no en simulación. Sin `--force`/`-f`,
   un clon existente es un error; con `--force` se reemplaza de forma atómica tras revalidar el
@@ -89,8 +103,11 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   subdirectorios. Los ordena por fecha de modificación descendente, deduplica por ruta resuelta y
   muestra el origen (`por defecto` o `este directorio`) y el tamaño. El preview de la fila resaltada
   muestra la ruta completa con `~`, la fecha y el tamaño; si una fuente no existe o no se puede
-  leer, se informa en la zona de mensajes sin ocultar la otra. `/` filtra, `o` abre la ruta manual y
-  `Esc` vuelve a la tabla, cierra el filtro o cancela según el foco.
+  leer, se informa en la zona de mensajes sin ocultar la otra. El filtro `/` es un campo de una fila
+  con etiqueta «Filtro» (`Enter` lo aplica y `Esc` lo limpia y vuelve a la tabla). La opción
+  `Otro archivo...` y la tecla `o` abren el campo «Ruta», con placeholder atenuado y scroll con `…`;
+  `Enter` valida la ruta y `Esc` vuelve a la tabla sin cancelar el flujo. Una ruta inválida conserva
+  el valor, marca el campo y muestra el `ERROR` en la zona de mensajes sin mover las filas.
 - D0 valida solo el manifiesto del clon: rechaza un `tar.gz` dañado, con más de un `manifest.json`,
   con un manifiesto de más de 4 MiB o con un formato más nuevo. Los avisos de arquitectura o macOS
   no bloquean. Un manifiesto válido no implica que la integridad esté verificada.

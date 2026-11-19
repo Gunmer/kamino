@@ -1,6 +1,7 @@
 package clone
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,7 +39,7 @@ func TestPlanAndWriteClone(t *testing.T) {
 	output := filepath.Join(t.TempDir(), "clone.tar.gz")
 	selected := []string{"test"}
 	now := time.Date(2026, 11, 12, 0, 0, 0, 0, time.UTC)
-	planned, err := PlanClone(PlanOptions{
+	planned, err := PlanClone(context.Background(), PlanOptions{
 		Home: home, Selected: &selected, Output: output, Catalog: definitions,
 		Path: bin, Now: now,
 	})
@@ -48,7 +49,7 @@ func TestPlanAndWriteClone(t *testing.T) {
 	if planned.FileCount() != 1 || planned.Output != output {
 		t.Fatalf("unexpected plan: %#v", planned)
 	}
-	result, err := WriteClone(planned, home, false, nil, nil, nil)
+	result, err := WriteClone(context.Background(), planned, home, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,10 +63,10 @@ func TestPlanAndWriteClone(t *testing.T) {
 	if len(manifest.Apps) != 1 || manifest.Apps[0].ID != "test" {
 		t.Fatalf("unexpected manifest: %#v", manifest)
 	}
-	if _, err := WriteClone(planned, home, false, nil, nil, nil); err == nil {
+	if _, err := WriteClone(context.Background(), planned, home, false, nil, nil); err == nil {
 		t.Fatal("expected overwrite refusal")
 	}
-	if _, err := WriteClone(planned, home, true, nil, nil, nil); err != nil {
+	if _, err := WriteClone(context.Background(), planned, home, true, nil, nil); err != nil {
 		t.Fatalf("expected forced overwrite: %v", err)
 	}
 }
@@ -74,7 +75,7 @@ func TestRunCloneDryRunDoesNotWrite(t *testing.T) {
 	home, bin, definitions := fixture(t)
 	output := filepath.Join(t.TempDir(), "clone.tar.gz")
 	selected := []string{"test"}
-	result, err := RunClone(PlanOptions{
+	result, err := RunClone(context.Background(), PlanOptions{
 		Home: home, Selected: &selected, Output: output, Catalog: definitions, Path: bin,
 	}, true, false)
 	if err != nil {

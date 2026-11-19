@@ -58,7 +58,7 @@ func TestSafeHomeRejectsIntermediateSymlink(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	if _, err := safe.ReadBytes("sub/file"); err != nil {
 		t.Fatalf("expected safe read: %v", err)
 	}
@@ -76,7 +76,7 @@ func TestSafeHomeFinalSymlink(t *testing.T) {
 		t.Fatal(err)
 	}
 	safe, _ := NewSafeHome(home, false)
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	info, err := safe.Lstat("link")
 	if err != nil || info.Kind != KindLink {
 		t.Fatalf("expected final symlink: %v %v", info.Kind, err)
@@ -93,7 +93,7 @@ func TestSafeHomeFinalSymlink(t *testing.T) {
 func TestSafeHomeWritesAndWalk(t *testing.T) {
 	home := t.TempDir()
 	safe, _ := NewSafeHome(home, false)
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	if err := safe.WriteFile("a/b/file", []byte("hello"), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestSafeHomeWriteRejectsSymlinkParent(t *testing.T) {
 		t.Fatal(err)
 	}
 	safe, _ := NewSafeHome(home, false)
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	err := safe.WriteFile("linkdir/file", []byte("x"), 0o644)
 	if err == nil {
 		t.Fatal("expected write rejection through symlink")

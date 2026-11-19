@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"errors"
 	"strings"
 
@@ -73,12 +74,14 @@ func (s *updateScreen) Init() tea.Cmd {
 func queryUpdateCmd(app *App) tea.Cmd {
 	query := app.updateQuery
 	if query == nil {
-		query = func() (update.Check, error) {
-			return update.QueryUpdate(version.Version, "", nil)
+		query = func(ctx context.Context) (update.Check, error) {
+			return update.QueryUpdate(ctx, version.Version, "", nil)
 		}
 	}
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
-		check, err := query()
+		defer done()
+		check, err := query(ctx)
 		return updateQueryDoneMsg{check: check, err: err}
 	}
 }
@@ -113,7 +116,7 @@ func (s *updateScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	case "esc", "ctrl+c":
 		switch s.phase {
 		case updatePhaseDownloading, updatePhaseVerifying:
-			s.app.updateCancel.Store(true)
+			s.app.cancelOperation()
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.UpdateCancelled}}
 		case updatePhaseReplacing:
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.UpdateCannotCancel}}
@@ -158,7 +161,7 @@ func (s *updateScreen) handleEvent(event operationEvent) (Screen, tea.Cmd) {
 		return s, nil
 	}
 	if event.err != nil {
-		if s.app.updateCancel.Load() {
+		if cancelled(event.err) {
 			s.phase = updatePhaseResult
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.UpdateCancelled}}
 			return s, nil
@@ -171,22 +174,23 @@ func (s *updateScreen) handleEvent(event operationEvent) (Screen, tea.Cmd) {
 }
 
 func startUpdateRun(app *App, release *update.ReleaseInfo) tea.Cmd {
-	app.updateCancel.Store(false)
 	run := app.updateRun
 	if run == nil {
-		run = func(callback progress.Callback, cancelled progress.Cancel) (update.Result, error) {
-			return update.RunUpdate(version.Version, "", release, callback, cancelled)
+		run = func(ctx context.Context, callback progress.Callback) (update.Result, error) {
+			return update.RunUpdate(ctx, version.Version, "", release, callback)
 		}
 	}
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
 		events := make(chan operationEvent, 64)
 		go func() {
-			result, err := run(func(event progress.Event) {
+			defer done()
+			result, err := run(ctx, func(event progress.Event) {
 				select {
 				case events <- operationEvent{progress: event}:
 				default:
 				}
-			}, func() bool { return app.updateCancel.Load() })
+			})
 			if err == nil {
 				events <- operationEvent{update: &result}
 			}

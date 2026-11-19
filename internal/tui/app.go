@@ -1,12 +1,14 @@
 package tui
 
 import (
+	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -17,6 +19,8 @@ import (
 	"github.com/Gunmer/kamino/internal/defaults"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
+	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/progress"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/tui/theme"
@@ -27,6 +31,9 @@ import (
 // AppOptions injects every environment dependency so tests never touch the
 // developer's HOME, clock, terminal or network.
 type AppOptions struct {
+	// Context is the parent context of every cancellable operation. The TUI
+	// entrypoint creates it once; a nil value means context.Background().
+	Context         context.Context
 	Home            string
 	Catalog         catalog.Catalog
 	ApplicationDirs []string
@@ -41,8 +48,8 @@ type AppOptions struct {
 	MenuMode        bool
 	Clone           CloneFlowOptions
 	Deploy          DeployFlowOptions
-	UpdateQuery     func() (update.Check, error)
-	UpdateRun       func(progress.Callback, progress.Cancel) (update.Result, error)
+	UpdateQuery     func(context.Context) (update.Check, error)
+	UpdateRun       func(context.Context, progress.Callback) (update.Result, error)
 }
 
 // App is the Bubble Tea root: it owns the navigation stack, the shared flow
@@ -77,24 +84,26 @@ type App struct {
 	cloneForce   bool
 	cloneDryRun  bool
 	cloneVerbose bool
-	cloneCancel  atomic.Bool
 
 	deployOptions DeployFlowOptions
 	deploySession *deploy.DeploySession
 	deployPlan    *deploy.DeployPlan
 	deployResult  *deploy.DeployResult
-	deployCancel  atomic.Bool
 	conflicts     []*conflictState
 	conflictIndex int
 
-	updateQuery  func() (update.Check, error)
-	updateRun    func(progress.Callback, progress.Cancel) (update.Result, error)
-	updateCancel atomic.Bool
+	updateQuery func(context.Context) (update.Check, error)
+	updateRun   func(context.Context, progress.Callback) (update.Result, error)
 
 	settings     config.AppConfig
 	settingsLoad config.LoadResult
 
 	snapshotTimestamp string
+
+	parent       context.Context
+	cancelMu     sync.Mutex
+	cancelOp     context.CancelFunc
+	cancelSerial int
 }
 
 type startCloneMsg struct{}
@@ -119,9 +128,12 @@ type operationEvent struct {
 
 // NewApp builds the root model with injected dependencies.
 func NewApp(options AppOptions) *App {
-	home := options.Home
-	if home == "" {
-		home, _ = os.UserHomeDir()
+	// An unresolvable home leaves the field empty: every operation that needs it
+	// propagates the resolution error instead of resolving against the cwd.
+	home, _ := paths.ResolveHome(options.Home)
+	parent := options.Context
+	if parent == nil {
+		parent = context.Background()
 	}
 	now := options.Now
 	if now == nil {
@@ -157,12 +169,52 @@ func NewApp(options AppOptions) *App {
 		cloneForce: options.Clone.Force, cloneDryRun: options.Clone.DryRun,
 		cloneVerbose: options.Clone.Verbose, cloneOutput: options.Clone.Output,
 		updateQuery: options.UpdateQuery, updateRun: options.UpdateRun,
-		snapshotTimestamp: now().UTC().Format("2006-01-02T15:04:05Z"),
+		snapshotTimestamp: now().UTC().Format("2006-01-02T15:04:05Z"), parent: parent,
 	}
 	app.menu = newMenuScreen(app)
 	app.current = app.menu
 	app.layout()
 	return app
+}
+
+// beginOperation creates the cancellable context of one operation and returns
+// the function that releases it. The cancel function is stored so Esc and
+// ctrl+c can stop the work from any screen.
+func (a *App) beginOperation() (context.Context, func()) {
+	ctx, cancel := context.WithCancel(a.parent)
+	a.cancelMu.Lock()
+	previous := a.cancelOp
+	a.cancelSerial++
+	serial := a.cancelSerial
+	a.cancelOp = cancel
+	a.cancelMu.Unlock()
+	if previous != nil {
+		previous()
+	}
+	return ctx, func() {
+		a.cancelMu.Lock()
+		if a.cancelSerial == serial {
+			a.cancelOp = nil
+		}
+		a.cancelMu.Unlock()
+		cancel()
+	}
+}
+
+// cancelOperation asks the running operation to stop.
+func (a *App) cancelOperation() {
+	a.cancelMu.Lock()
+	cancel := a.cancelOp
+	a.cancelMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// cancelled reports whether err is a cooperative cancellation.
+func cancelled(err error) bool {
+	var target *kerrors.OperationCancelled
+	return errors.As(err, &target)
 }
 
 func detectUnicode() bool {
@@ -209,10 +261,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		}
 		return a, nil
-	case replaceMsg:
-		a.replace(value.screen)
-		a.layout()
-		return a, value.screen.Init()
 	case quitMsg:
 		a.exitCode = value.code
 		return a, tea.Quit
@@ -301,10 +349,6 @@ func (a *App) pop() {
 	}
 	a.current = a.stack[len(a.stack)-1]
 	a.stack = a.stack[:len(a.stack)-1]
-}
-
-func (a *App) replace(screen Screen) {
-	a.current = screen
 }
 
 func (a *App) resetToMenu() {
@@ -401,15 +445,15 @@ func (a *App) startClone() {
 	a.cloneVerbose = a.cloneOptions.Verbose
 	a.cloneResult = nil
 	a.clonePlan = nil
-	a.cloneCancel.Store(false)
 	a.cloneOutput = a.cloneOptions.Output
 	destinationError := a.cloneOptions.OutputError
 	if a.cloneOutput == "" && destinationError == "" {
 		loaded := config.LoadConfig(a.home, "")
-		a.cloneOutput = defaultCloneOutput(a.home, loaded.Config, a.now())
-	}
-	if a.cloneOutput == "" {
-		a.cloneOutput = defaultCloneOutput(a.home, config.AppConfig{}, a.now())
+		name, err := defaultCloneOutput(a.home, loaded.Config, a.now())
+		if err != nil {
+			destinationError = err.Error()
+		}
+		a.cloneOutput = name
 	}
 	appsScreen := newCloneAppsScreen(a, destinationError)
 	destination := newCloneDestinationScreen(a, destinationError)
@@ -430,7 +474,6 @@ func (a *App) startDeploy() {
 	if !a.loadCatalog() {
 		return
 	}
-	a.deployCancel.Store(false)
 	a.deploySession = nil
 	a.deployPlan = nil
 	a.deployResult = nil
@@ -447,7 +490,6 @@ func (a *App) startDeploy() {
 }
 
 func (a *App) startUpdate() {
-	a.updateCancel.Store(false)
 	a.begin(newUpdateScreen(a))
 }
 
@@ -466,7 +508,12 @@ func (a *App) loadCatalog() bool {
 	if a.catalog != nil {
 		return true
 	}
-	loaded, err := catalog.LoadCatalog(defaults.CatalogDir(a.home))
+	directory, err := defaults.CatalogDir(a.home)
+	if err != nil {
+		a.push(newErrorScreen(a, "no se pudo cargar el catálogo", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
+		return false
+	}
+	loaded, err := catalog.LoadCatalog(directory)
 	if err != nil {
 		a.push(newErrorScreen(a, "no se pudo cargar el catálogo", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
 		return false
@@ -516,12 +563,16 @@ func (a *App) finish(code int, mission string) {
 	}
 }
 
-func defaultCloneOutput(home string, value config.AppConfig, now time.Time) string {
+func defaultCloneOutput(home string, value config.AppConfig, now time.Time) (string, error) {
 	directory := value.CloneOutputDir
 	if directory == "" {
-		directory = defaults.VaultDir(home)
+		resolved, err := defaults.VaultDir(home)
+		if err != nil {
+			return "", err
+		}
+		directory = resolved
 	}
-	return filepath.Join(directory, defaultCloneName(now))
+	return filepath.Join(directory, defaultCloneName(now)), nil
 }
 
 func defaultCloneName(now time.Time) string {
@@ -532,10 +583,20 @@ func (a *App) formatDate(value time.Time) string {
 	return value.Format("2006-01-02 15:04")
 }
 
-func (a *App) snapshotPath() string {
-	directory := defaults.SnapshotsDir(a.home)
+func (a *App) snapshotPath() (string, error) {
+	directory := ""
 	if a.deploySession != nil {
-		directory = a.deploySession.SnapshotDirectory()
+		resolved, err := a.deploySession.SnapshotDirectory()
+		if err != nil {
+			return "", err
+		}
+		directory = resolved
+	} else {
+		resolved, err := defaults.SnapshotsDir(a.home)
+		if err != nil {
+			return "", err
+		}
+		directory = resolved
 	}
 	base := filepath.Join(directory, a.snapshotTimestamp)
 	for index := 0; index <= 1000; index++ {
@@ -544,10 +605,10 @@ func (a *App) snapshotPath() string {
 			candidate = base + "-" + fmt.Sprintf("%d", index) + ".tar.gz"
 		}
 		if _, err := os.Lstat(candidate); os.IsNotExist(err) {
-			return candidate
+			return candidate, nil
 		}
 	}
-	return base + ".tar.gz"
+	return base + ".tar.gz", nil
 }
 
 func waitOperation(events <-chan operationEvent) tea.Cmd {

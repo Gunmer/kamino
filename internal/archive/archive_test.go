@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -63,7 +64,7 @@ func TestRoundTrip(t *testing.T) {
 	writeSource(t, home, files)
 	manifest := manifestFor(files)
 	output := filepath.Join(t.TempDir(), "clone.tar.gz")
-	if err := WriteArchive(output, manifest, WriteOptions{SourceRoot: home}); err != nil {
+	if err := WriteArchive(context.Background(), output, manifest, WriteOptions{SourceRoot: home}); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := ReadManifest(output)
@@ -73,11 +74,11 @@ func TestRoundTrip(t *testing.T) {
 	if loaded.FormatVersion != 1 || len(loaded.Apps) != 1 || len(loaded.Apps[0].Files) != 2 {
 		t.Fatalf("unexpected manifest: %#v", loaded)
 	}
-	if err := VerifyArchive(output, loaded, nil, nil); err != nil {
+	if err := VerifyArchive(context.Background(), output, loaded, nil); err != nil {
 		t.Fatal(err)
 	}
 	destination := t.TempDir()
-	if err := ExtractArchive(output, destination, nil, nil); err != nil {
+	if err := ExtractArchive(context.Background(), output, destination, nil); err != nil {
 		t.Fatal(err)
 	}
 	data, err := os.ReadFile(filepath.Join(destination, "apps", "git", "dir", "b.txt"))
@@ -91,10 +92,10 @@ func TestWriteRefusesOverwrite(t *testing.T) {
 	files := map[string][]byte{"a": []byte("a")}
 	writeSource(t, home, files)
 	output := filepath.Join(t.TempDir(), "clone.tar.gz")
-	if err := WriteArchive(output, manifestFor(files), WriteOptions{SourceRoot: home}); err != nil {
+	if err := WriteArchive(context.Background(), output, manifestFor(files), WriteOptions{SourceRoot: home}); err != nil {
 		t.Fatal(err)
 	}
-	if err := WriteArchive(output, manifestFor(files), WriteOptions{SourceRoot: home}); err == nil {
+	if err := WriteArchive(context.Background(), output, manifestFor(files), WriteOptions{SourceRoot: home}); err == nil {
 		t.Fatal("expected overwrite refusal")
 	}
 }
@@ -104,7 +105,7 @@ func TestOverwriteRevalidatesDestination(t *testing.T) {
 	files := map[string][]byte{"a": []byte("a")}
 	writeSource(t, home, files)
 	output := filepath.Join(t.TempDir(), "clone.tar.gz")
-	if err := WriteArchive(output, manifestFor(files), WriteOptions{SourceRoot: home}); err != nil {
+	if err := WriteArchive(context.Background(), output, manifestFor(files), WriteOptions{SourceRoot: home}); err != nil {
 		t.Fatal(err)
 	}
 	state := DestinationState(output)
@@ -112,7 +113,7 @@ func TestOverwriteRevalidatesDestination(t *testing.T) {
 		t.Fatal("expected state")
 	}
 	state.Ino++
-	if err := WriteArchive(output, manifestFor(files), WriteOptions{SourceRoot: home, Overwrite: true, ExpectedState: state}); err == nil {
+	if err := WriteArchive(context.Background(), output, manifestFor(files), WriteOptions{SourceRoot: home, Overwrite: true, ExpectedState: state}); err == nil {
 		t.Fatal("expected revalidation failure")
 	}
 }
@@ -131,18 +132,18 @@ func TestSymlinkRoundTrip(t *testing.T) {
 		Apps: []AppEntry{{ID: "git", Name: "Git", Files: []FileEntry{{Path: "link", Link: &link, Mode: "0777"}}}},
 	}
 	output := filepath.Join(t.TempDir(), "clone.tar.gz")
-	if err := WriteArchive(output, manifest, WriteOptions{SourceRoot: home}); err != nil {
+	if err := WriteArchive(context.Background(), output, manifest, WriteOptions{SourceRoot: home}); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := ReadManifest(output)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := VerifyArchive(output, loaded, nil, nil); err != nil {
+	if err := VerifyArchive(context.Background(), output, loaded, nil); err != nil {
 		t.Fatal(err)
 	}
 	destination := t.TempDir()
-	if err := ExtractArchive(output, destination, nil, nil); err != nil {
+	if err := ExtractArchive(context.Background(), output, destination, nil); err != nil {
 		t.Fatal(err)
 	}
 	target, err := os.Readlink(filepath.Join(destination, "apps", "git", "link"))
@@ -157,13 +158,13 @@ func TestVerifyDetectsChecksumMismatch(t *testing.T) {
 	writeSource(t, home, files)
 	manifest := manifestFor(files)
 	output := filepath.Join(t.TempDir(), "clone.tar.gz")
-	if err := WriteArchive(output, manifest, WriteOptions{SourceRoot: home}); err != nil {
+	if err := WriteArchive(context.Background(), output, manifest, WriteOptions{SourceRoot: home}); err != nil {
 		t.Fatal(err)
 	}
 	loaded, _ := ReadManifest(output)
 	bad := "0" + (*loaded.Apps[0].Files[0].SHA256)[1:]
 	loaded.Apps[0].Files[0].SHA256 = &bad
-	if err := VerifyArchive(output, loaded, nil, nil); err == nil {
+	if err := VerifyArchive(context.Background(), output, loaded, nil); err == nil {
 		t.Fatal("expected checksum failure")
 	}
 }
@@ -247,7 +248,7 @@ func TestExtractRejectsUnsafeMembers(t *testing.T) {
 			data []byte
 			link string
 		}{{testCase.name, []byte("x"), testCase.link}})
-		if err := ExtractArchive(archivePath, t.TempDir(), nil, nil); err == nil {
+		if err := ExtractArchive(context.Background(), archivePath, t.TempDir(), nil); err == nil {
 			t.Fatalf("expected rejection for %q", testCase.name)
 		}
 	}

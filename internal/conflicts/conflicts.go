@@ -481,7 +481,7 @@ func parserFor(rel string) (func(string) error, bool) {
 func parseTOML(text string) error {
 	var value map[string]any
 	if _, err := toml.Decode(text, &value); err != nil {
-		return fmt.Errorf("TOML inválido: %v", err)
+		return fmt.Errorf("TOML inválido: %w", err)
 	}
 	return nil
 }
@@ -490,7 +490,7 @@ func parseJSON(text string) error {
 	decoder := json.NewDecoder(strings.NewReader(text))
 	decoder.UseNumber()
 	if err := parseJSONValue(decoder); err != nil {
-		return fmt.Errorf("JSON inválido: %v", err)
+		return fmt.Errorf("JSON inválido: %w", err)
 	}
 	if _, err := decoder.Token(); err == nil {
 		return fmt.Errorf("JSON inválido: datos extra")
@@ -597,13 +597,10 @@ func parseINI(text string) error {
 func parsePlistText(text string) error {
 	data := []byte(text)
 	if _, err := plist.Parse(data); err != nil {
-		return fmt.Errorf("plist inválido: %v", err)
+		return fmt.Errorf("plist inválido: %w", err)
 	}
 	if duplicate := plist.DuplicateKey(data); duplicate != "" {
 		return fmt.Errorf("plist inválido: clave duplicada: %q", duplicate)
 	}
 	return nil
 }
-
-// BuildHunks exposes the hunk builder for integration tests.
-func BuildHunks(localText, cloneText string) []Hunk { return buildHunks(localText, cloneText) }

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,7 @@ func TestCloneCommandParsesFlagsAndAliases(t *testing.T) {
 	var requested *[]string
 	var output string
 	var dryRun, force bool
-	executeClone = func(sel *[]string, out string, dry, f bool, _ catalog.Catalog, _ string, _ []string, _ string) (app.CloneOutcome, error) {
+	executeClone = func(_ context.Context, sel *[]string, out string, dry, f bool, _ catalog.Catalog, _ string, _ []string, _ string) (app.CloneOutcome, error) {
 		requested = sel
 		output = out
 		dryRun = dry
@@ -64,7 +65,7 @@ func TestCloneCommandParsesFlagsAndAliases(t *testing.T) {
 
 func TestCloneExitCodeAndMissingWarning(t *testing.T) {
 	original := executeClone
-	executeClone = func(*[]string, string, bool, bool, catalog.Catalog, string, []string, string) (app.CloneOutcome, error) {
+	executeClone = func(context.Context, *[]string, string, bool, bool, catalog.Catalog, string, []string, string) (app.CloneOutcome, error) {
 		return app.CloneOutcome{Result: clone.CloneResult{Plan: plan.Plan{}, Manifest: &archive.Manifest{}}, Code: 3, Missing: []string{"nope"}}, nil
 	}
 	defer func() { executeClone = original }()
@@ -76,7 +77,7 @@ func TestCloneExitCodeAndMissingWarning(t *testing.T) {
 
 func TestCloneErrorExitsOne(t *testing.T) {
 	original := executeClone
-	executeClone = func(*[]string, string, bool, bool, catalog.Catalog, string, []string, string) (app.CloneOutcome, error) {
+	executeClone = func(context.Context, *[]string, string, bool, bool, catalog.Catalog, string, []string, string) (app.CloneOutcome, error) {
 		return app.CloneOutcome{}, &testError{"fallo de clon"}
 	}
 	defer func() { executeClone = original }()
@@ -100,7 +101,7 @@ func TestDeployRequiresYes(t *testing.T) {
 func TestDeployYesAndDryRun(t *testing.T) {
 	original := executeDeploy
 	calls := 0
-	executeDeploy = func(string, *[]string, bool, catalog.Catalog, string, []string, string, string) (app.DeployOutcome, error) {
+	executeDeploy = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string) (app.DeployOutcome, error) {
 		calls++
 		return app.DeployOutcome{Result: deploy.DeployResult{Plan: &deploy.DeployPlan{}, Manifest: &archive.Manifest{}}, Code: 0}, nil
 	}
@@ -173,7 +174,7 @@ func TestKaminoPlainForcesTextMode(t *testing.T) {
 
 func TestUpdateCommand(t *testing.T) {
 	original := executeUpdate
-	executeUpdate = func(string, string) (update.Result, error) {
+	executeUpdate = func(context.Context, string, string) (update.Result, error) {
 		return update.Result{CurrentVersion: "0.8.0", LatestVersion: "0.9.0", Target: "/tmp/kamino", Updated: true, Outcome: update.OutcomeUpdated}, nil
 	}
 	defer func() { executeUpdate = original }()

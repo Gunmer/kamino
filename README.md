@@ -162,8 +162,8 @@ En `clone`, `-a` equivale a `--apps`, `-o` a `--output`, `-n` a `--dry-run`, `-v
 y `-f` a `--force`:
 
 ```bash
-kamino clone -a vscode,iterm2,git -o clon.tar.gz -v
-kamino clone -a vscode,iterm2,git -o clon.tar.gz -n   # simulación: no crea el archivo
+kamino clone -a opencode,ghostty,git -o clon.tar.gz -v
+kamino clone -a opencode,ghostty,git -o clon.tar.gz -n   # simulación: no crea el archivo
 kamino clone -f                                      # reemplaza clone-<aaaammdd>.tar.gz
 ```
 
@@ -197,7 +197,7 @@ En `deploy`, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes` y `-v`
 
 ```bash
 kamino deploy clone-20261109.tar.gz            # TUI: apps, conflictos, confirmación
-kamino deploy clone-20261109.tar.gz -a git,zsh # sin selección de apps
+kamino deploy clone-20261109.tar.gz -a git,bat # sin selección de apps
 kamino deploy clone-20261109.tar.gz -y -v      # aplica todo sin preguntar
 kamino deploy clone-20261109.tar.gz -n         # simulación: imprime diffs, no escribe
 ```
@@ -244,17 +244,26 @@ misión aparece tras el primer flujo de la sesión y no se persiste.
 
 Todas las pantallas se manejan con teclado y muestran al pie una leyenda de las teclas activas, sin
 botoneras inferiores: `Esc` retrocede, `Enter` continúa o acepta y las flechas mueven el foco. C1 es
-una tabla `SEL | APP | ARCHIVOS` con contador, filtro y casillas; C2 ofrece tres opciones de carpeta
-y un nombre editable; C3 usa una tabla única para revisión, progreso y resultado, de modo que C4 es
-su estado final. D2 es una tabla de conflictos, D3 muestra el archivo completo en dos columnas y D4
-resume por app con los protegidos y el holocrón.
+una tabla `SEL | APP | ARCHIVOS` con contador y casillas, y el filtro `/` es un campo de una fila;
+C2 ofrece tres opciones de carpeta y los campos «Destino» y «Nombre»; D0 filtra con `/` y abre la
+ruta manual «Ruta» con `o`; C3 usa una tabla única para revisión, progreso y resultado, de modo que
+C4 es su estado final. D2 es una tabla de conflictos, D3 muestra el archivo completo en dos columnas
+y D4 resume por app con los protegidos y el holocrón.
+
+Todos los campos de texto comparten una sola fila con marcador `▌`, etiqueta alineada y valor. El
+foco añade fondo ANSI, etiqueta en negrita y un cursor de edición en vídeo inverso; el resto de
+campos queda atenuado. `←`/`→` mueven el cursor dentro del valor, `Retroceso` borra en esa posición
+y las rutas largas se desplazan con `…` sin partir caracteres UTF-8 ni de doble ancho. Un valor
+vacío muestra un placeholder atenuado. Con `NO_COLOR` el foco se distingue por `▌`, el cursor
+inverso y la palabra «editando»; sin UTF-8 se usan `>` y `...`. Los errores de validación van a la
+zona de mensajes y marcan el campo sin añadir ni mover filas.
 
 Cada flujo muestra el paso actual y el total visible. Los argumentos reducen el total cuando omiten
-pantallas. La ayuda contextual se abre con `?` y, en campos de texto, también con `F1`. Todo error
-usa cuatro partes —qué pasó, estado de seguridad, qué hacer y acciones— con el detalle plegado
-(`t`) y copiable (`c`). Por debajo de 80×24 aparece un aviso que conserva el estado y bloquea la
-salida; al redimensionar de vuelta se recupera la pantalla. La zona de mensajes `INFO`/`AVISO`/`ERROR`
-vive sobre el pie y no reserva filas cuando está vacía.
+pantallas. La ayuda contextual se abre con `?` y, en campos de texto, también con `F1`, sin insertar
+caracteres en el valor. Todo error usa cuatro partes —qué pasó, estado de seguridad, qué hacer y
+acciones— con el detalle plegado (`t`) y copiable (`c`). Por debajo de 80×24 aparece un aviso que
+conserva el estado y bloquea la salida; al redimensionar de vuelta se recupera la pantalla. La zona
+de mensajes `INFO`/`AVISO`/`ERROR` vive sobre el pie y no reserva filas cuando está vacía.
 
 `Ctrl+C` cancela antes del punto de no retorno: en clonar, antes de renombrar el temporal; en
 desplegar, antes de crear el holocrón; en actualizar, antes de `os.replace`. Después de ese punto
@@ -268,10 +277,12 @@ monocromo y cada estado conserva icono y palabra. El wordmark se oculta sin UTF-
 ### Configuración de la TUI
 
 La opción **Configuración** del menú, situada después de Actualizar, permite
-ver y editar las tres rutas y el límite de holocrones en una pantalla. La pantalla se guarda con
-`Ctrl+S`; `Esc` vuelve sin escribir. Las rutas solo las usa la TUI: la vía no interactiva de la CLI
-usa los defaults integrados. La CLI lee únicamente `deploy.snapshots_limit`, para aplicar el mismo
-límite de holocrones.
+ver y editar las tres rutas y el límite de holocrones en una pantalla. Cada valor ocupa una fila con
+etiqueta alineada: `Tab`/`Mayús+Tab` y `↑`/`↓` mueven el foco, `←`/`→` el cursor dentro del valor y
+el límite solo admite dígitos. La pantalla se guarda con `Ctrl+S`; `Esc` vuelve sin escribir. Un
+valor inválido marca su campo y muestra el `ERROR` en la zona de mensajes sin desplazar las filas.
+Las rutas solo las usa la TUI: la vía no interactiva de la CLI usa los defaults integrados. La CLI
+lee únicamente `deploy.snapshots_limit`, para aplicar el mismo límite de holocrones.
 
 ```toml
 [catalog]
@@ -353,8 +364,8 @@ el identificador de la aplicación; nunca ejecuta la herramienta.
 
 | Grupo | Ids |
 | --- | --- |
-| Agentes y asistentes | `opencode`, `claude-code`, `codex`, `gemini-cli`, `copilot-cli`, `pi`, `aider`, `goose`, `gentle-shell`, `gentle-ai`, `gga`, `openspec`, `caveman` |
-| Terminales y utilidades | `lazygit`, `micro`, `navi`, `glow`, `bat`, `eza`, `fd`, `github-cli`, `git`, `herdr`, `yazi`, `ghostty`, `oh-my-zsh` |
+| Agentes y asistentes | `opencode`, `claude-code`, `codex`, `gemini-cli`, `copilot-cli`, `pi`, `gentle-shell`, `openspec` |
+| Terminales y utilidades | `lazygit`, `micro`, `glow`, `bat`, `github-cli`, `git`, `herdr`, `yazi`, `ghostty`, `oh-my-zsh` |
 
 Ejemplo:
 

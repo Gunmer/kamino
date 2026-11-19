@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -83,7 +84,7 @@ func TestStackPreservesCursorAndFilter(t *testing.T) {
 	first := newCloneAppsScreen(app, "")
 	first.counting = false
 	first.index = 3
-	first.filter = "git"
+	first.filter.SetValue("git")
 	app.begin(first)
 	second := newCloneDestinationScreen(app, "")
 	app.push(second)
@@ -91,8 +92,8 @@ func TestStackPreservesCursorAndFilter(t *testing.T) {
 	if app.current != first {
 		t.Fatal("pop must restore the same screen")
 	}
-	if first.index != 3 || first.filter != "git" {
-		t.Fatalf("cursor/filter lost: %d %q", first.index, first.filter)
+	if first.index != 3 || first.filter.Value != "git" {
+		t.Fatalf("cursor/filter lost: %d %q", first.index, first.filter.Value)
 	}
 }
 
@@ -122,7 +123,7 @@ func TestSmallTerminalKeepsState(t *testing.T) {
 	screen := newCloneAppsScreen(app, "")
 	screen.counting = false
 	screen.index = 4
-	screen.filter = "git"
+	screen.filter.SetValue("git")
 	app.begin(screen)
 	app.width, app.height = 79, 23
 	if view := app.View(); !strings.Contains(view, texts.SmallTitle) {
@@ -133,7 +134,7 @@ func TestSmallTerminalKeepsState(t *testing.T) {
 	if strings.Contains(view, texts.SmallTitle) {
 		t.Fatal("guard must disappear after resize")
 	}
-	if screen.index != 4 || screen.filter != "git" {
+	if screen.index != 4 || screen.filter.Value != "git" {
 		t.Fatal("resize must not touch screen state")
 	}
 }
@@ -216,8 +217,8 @@ func TestC1SelectionFilterAndWarnings(t *testing.T) {
 	send(t, app, keyMsg("g"))
 	send(t, app, keyMsg("h"))
 	send(t, app, keyMsg("enter"))
-	if screen.filter != "gh" || screen.filtering {
-		t.Fatalf("filter not applied: %q %v", screen.filter, screen.filtering)
+	if screen.filter.Value != "gh" || screen.filtering {
+		t.Fatalf("filter not applied: %q %v", screen.filter.Value, screen.filtering)
 	}
 	send(t, app, keyMsg("a"))
 	if !app.cloneApps[1].Selected {
@@ -248,14 +249,14 @@ func TestC2OptionsFocusAndValidation(t *testing.T) {
 		t.Fatalf("tab must return to the options, got %d", screen.focus)
 	}
 	screen.option = 2
-	screen.path = filepath.Join(home, "Destino")
+	screen.path.SetValue(filepath.Join(home, "Destino"))
 	screen.focus = 2
 	send(t, app, keyMsg("tab"))
 	if screen.focus == 2 {
 		t.Fatalf("tab must move the focus away from the path, got %d", screen.focus)
 	}
 	screen.focus = 1
-	screen.name = ""
+	screen.name.SetValue("")
 	command := send(t, app, keyMsg("enter"))
 	if command != nil || len(screen.messages) == 0 {
 		t.Fatal("invalid name must keep the screen and show an error")
@@ -274,9 +275,9 @@ func TestC2ExistingDialogAndFreeSuffix(t *testing.T) {
 	}
 	screen := newCloneDestinationScreen(app, "")
 	screen.option = 2
-	screen.path = home
+	screen.path.SetValue(home)
 	screen.focus = 1
-	screen.name = "clone-20261113.tar.gz"
+	screen.name.SetValue("clone-20261113.tar.gz")
 	screen.accept()
 	if !screen.dialog || screen.dialogIndex != 2 {
 		t.Fatalf("expected dialog with Volver selected: %#v", screen)
@@ -286,8 +287,8 @@ func TestC2ExistingDialogAndFreeSuffix(t *testing.T) {
 	if screen.dialog {
 		t.Fatal("Cambiar nombre must close the dialog")
 	}
-	if screen.name != "clone-20261113-1.tar.gz" {
-		t.Fatalf("unexpected free suffix: %q", screen.name)
+	if screen.name.Value != "clone-20261113-1.tar.gz" {
+		t.Fatalf("unexpected free suffix: %q", screen.name.Value)
 	}
 }
 
@@ -300,9 +301,9 @@ func TestC2OverwriteConfirmsReplacement(t *testing.T) {
 	}
 	screen := newCloneDestinationScreen(app, "")
 	screen.option = 2
-	screen.path = home
+	screen.path.SetValue(home)
 	screen.focus = 1
-	screen.name = "clone-20261113.tar.gz"
+	screen.name.SetValue("clone-20261113.tar.gz")
 	screen.accept()
 	screen.updateDialog(keyMsg("up"))
 	screen.updateDialog(keyMsg("up"))
@@ -322,8 +323,8 @@ func TestC2InvalidOutputPrefill(t *testing.T) {
 	if screen.option != 2 || screen.focus != 2 {
 		t.Fatalf("invalid --output must open manual folder input: %d %d", screen.option, screen.focus)
 	}
-	if screen.name != "x.tar.gz" {
-		t.Fatalf("name must be prefilled, got %q", screen.name)
+	if screen.name.Value != "x.tar.gz" {
+		t.Fatalf("name must be prefilled, got %q", screen.name.Value)
 	}
 }
 
@@ -339,9 +340,9 @@ func TestC2ForceSkipsDialog(t *testing.T) {
 	}
 	screen := newCloneDestinationScreen(app, "")
 	screen.option = 2
-	screen.path = home
+	screen.path.SetValue(home)
 	screen.focus = 1
-	screen.name = "clone-20261113.tar.gz"
+	screen.name.SetValue("clone-20261113.tar.gz")
 	_, command := screen.accept()
 	if screen.dialog {
 		t.Fatal("--force must skip the dialog")
@@ -686,7 +687,7 @@ func TestSettingsEditSaveAndError(t *testing.T) {
 	app.startSettings("")
 	screen := app.current.(*settingsScreen)
 	target := filepath.Join(home, "catalog")
-	screen.fields[0] = target
+	screen.fields[0].SetValue(target)
 	send(t, app, keyMsg("ctrl+s"))
 	if len(screen.messages) == 0 || screen.messages[len(screen.messages)-1].Kind != MessageInfo {
 		t.Fatalf("save must report INFO: %#v", screen.messages)
@@ -695,7 +696,7 @@ func TestSettingsEditSaveAndError(t *testing.T) {
 	if loaded.Config.CatalogDir != target {
 		t.Fatalf("config not saved: %#v", loaded.Config)
 	}
-	screen.fields[0] = "relative/path"
+	screen.fields[0].SetValue("relative/path")
 	send(t, app, keyMsg("ctrl+s"))
 	if len(screen.messages) == 0 || screen.messages[len(screen.messages)-1].Kind != MessageError {
 		t.Fatal("invalid path must report ERROR")
@@ -707,18 +708,18 @@ func TestSettingsSnapshotsLimitField(t *testing.T) {
 	app := NewApp(AppOptions{Home: home, Cwd: home, Now: fixedNow, ThemeName: "ansi-dark"})
 	app.startSettings("")
 	screen := app.current.(*settingsScreen)
-	if screen.fields[3] != "5" {
-		t.Fatalf("the limit field must start at the default: %q", screen.fields[3])
+	if screen.fields[3].Value != "5" {
+		t.Fatalf("the limit field must start at the default: %q", screen.fields[3].Value)
 	}
 	screen.focus = 3
 	send(t, app, keyMsg("x"))
-	if screen.fields[3] != "5" {
-		t.Fatalf("the limit field must reject letters: %q", screen.fields[3])
+	if screen.fields[3].Value != "5" {
+		t.Fatalf("the limit field must reject letters: %q", screen.fields[3].Value)
 	}
-	screen.fields[3] = ""
+	screen.fields[3].SetValue("")
 	send(t, app, keyMsg("2"))
-	if screen.fields[3] != "2" {
-		t.Fatalf("the limit field must accept digits: %q", screen.fields[3])
+	if screen.fields[3].Value != "2" {
+		t.Fatalf("the limit field must accept digits: %q", screen.fields[3].Value)
 	}
 	send(t, app, keyMsg("ctrl+s"))
 	if len(screen.messages) == 0 || screen.messages[len(screen.messages)-1].Kind != MessageInfo {
@@ -727,7 +728,7 @@ func TestSettingsSnapshotsLimitField(t *testing.T) {
 	if loaded := config.LoadConfig(home, ""); loaded.Config.SnapshotsLimit != 2 {
 		t.Fatalf("limit not saved: %#v", loaded.Config)
 	}
-	screen.fields[3] = ""
+	screen.fields[3].SetValue("")
 	send(t, app, keyMsg("ctrl+s"))
 	if len(screen.messages) == 0 || screen.messages[len(screen.messages)-1].Kind != MessageError {
 		t.Fatal("an empty limit must report ERROR")
@@ -740,7 +741,7 @@ func TestSettingsSnapshotsLimitField(t *testing.T) {
 func TestUpdateResultAndFinish(t *testing.T) {
 	app := NewApp(AppOptions{
 		MenuMode: true, Home: "/Users/test", Cwd: "/Users/test", Now: fixedNow, ThemeName: "ansi-dark",
-		UpdateQuery: func() (update.Check, error) {
+		UpdateQuery: func(context.Context) (update.Check, error) {
 			check := fixtureUpdateCheck()
 			check.ShouldUpdate = false
 			return check, nil
@@ -761,12 +762,12 @@ func TestUpdateResultAndFinish(t *testing.T) {
 func TestUpdateProgressAndCancellation(t *testing.T) {
 	app := NewApp(AppOptions{
 		MenuMode: true, Home: "/Users/test", Cwd: "/Users/test", Now: fixedNow, ThemeName: "ansi-dark",
-		UpdateQuery: func() (update.Check, error) {
+		UpdateQuery: func(context.Context) (update.Check, error) {
 			return fixtureUpdateCheck(), nil
 		},
-		UpdateRun: func(callback progress.Callback, cancelled progress.Cancel) (update.Result, error) {
+		UpdateRun: func(ctx context.Context, callback progress.Callback) (update.Result, error) {
 			progress.Emit(callback, progress.Downloading, 5, 10, "")
-			if cancelled() {
+			if ctx.Err() != nil {
 				return update.Result{}, errors.New("cancelada")
 			}
 			progress.Emit(callback, progress.Replacing, 0, 1, "")
@@ -800,8 +801,9 @@ func TestCtrlCAfterNoReturnIsIgnored(t *testing.T) {
 	screen.current = 10
 	screen.total = 20
 	app.begin(screen)
+	ctx, _ := app.beginOperation()
 	send(t, app, keyMsg("ctrl+c"))
-	if !app.cloneCancel.Load() {
+	if ctx.Err() == nil {
 		t.Fatal("Ctrl+C must request cancellation while writing")
 	}
 	send(t, app, operationEvent{err: nil, done: true, clone: fixtureCloneResult()})
@@ -829,7 +831,7 @@ func TestDeployAggregationWithSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	selected := []string{"test"}
-	plan, err := session.Plan(&selected, true, selected, nil, nil)
+	plan, err := session.Plan(context.Background(), &selected, true, selected, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -949,7 +951,7 @@ func buildClone(t *testing.T, home, cloneFile string) {
 	if err := os.WriteFile(filepath.Join(home, ".config", "test", "config"), data, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := archive.WriteArchive(cloneFile, manifest, archive.WriteOptions{SourceRoot: home}); err != nil {
+	if err := archive.WriteArchive(context.Background(), cloneFile, manifest, archive.WriteOptions{SourceRoot: home}); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -53,6 +53,22 @@ const (
 	KeyCopy          = "copiar"
 	KeyClose         = "cerrar"
 	KeyStep          = "bloque"
+	KeyCursor        = "cursor"
+	KeyApply         = "aplicar"
+	KeySet           = "fijar"
+	KeyOpen          = "abrir"
+
+	FieldDestination       = "Destino"
+	FieldName              = "Nombre"
+	FieldFilter            = "Filtro"
+	FieldPath              = "Ruta"
+	FieldLimit             = "Límite"
+	FieldEditing           = "editando"
+	FieldEditingSuffix     = " · " + FieldEditing
+	FieldFilterPlaceholder = "Nombre de la app"
+	FieldPathPlaceholder   = "Ruta absoluta o que empiece por ~"
+	FieldNamePlaceholder   = "Nombre del archivo"
+	FieldManualPlaceholder = "Ruta del clon (.tar.gz)"
 
 	SmallTitle   = "La terminal es demasiado pequeña"
 	TTYRequired  = "la TUI requiere una terminal interactiva"
@@ -77,7 +93,6 @@ const (
 	C1CountError   = "No se pudieron contar los archivos: {message}"
 	C1ScrollUp     = "^ {count} arriba"
 	C1ScrollDown   = "v {count} abajo"
-	C1FilterLine   = "Filtro: {value}_"
 
 	C2FolderTitle   = "Carpeta de destino"
 	C2VaultOption   = "Vault por defecto"
@@ -94,7 +109,6 @@ const (
 	C2EmptyPath     = "Escribe una ruta para el clon."
 	C2InvalidPath   = "La ruta del clon no es válida."
 	C2ForceNotice   = "El clon existente se reemplazará al final."
-	C2InputHint     = "Enter fijar · Tab campo"
 	C2Secrets       = PrivacyWarning
 
 	C3TitleReview    = "Clonación"
@@ -135,7 +149,6 @@ const (
 	D0Preview      = "Ruta: {path}"
 	D0PreviewDate  = "Fecha: {date}   Tamaño: {size}"
 	D0NoClones     = "No hay clones disponibles"
-	D0ManualHint   = "Ruta del clon (.tar.gz)"
 	D0ManualError  = "No existe el archivo: {path}"
 	D0ScrollUp     = "^ {count} arriba"
 	D0ScrollDown   = "v {count} abajo"

@@ -34,14 +34,17 @@ type appsCountedMsg struct {
 type cloneAppsScreen struct {
 	screenBase
 	index     int
-	filter    string
+	filter    field
 	filtering bool
 	counting  bool
 	messages  []Message
 }
 
 func newCloneAppsScreen(app *App, destinationError string) *cloneAppsScreen {
-	screen := &cloneAppsScreen{screenBase: screenBase{app: app}, counting: true}
+	screen := &cloneAppsScreen{
+		screenBase: screenBase{app: app}, counting: true,
+		filter: field{Label: texts.FieldFilter, Placeholder: texts.FieldFilterPlaceholder},
+	}
 	if destinationError != "" {
 		screen.messages = append(screen.messages, Message{Kind: MessageError, Text: destinationError})
 	}
@@ -52,7 +55,9 @@ func (s *cloneAppsScreen) Flow() string        { return texts.FlowClone }
 func (s *cloneAppsScreen) Title() string       { return texts.TitleApps }
 func (s *cloneAppsScreen) Step() (int, int)    { return 1, 3 }
 func (s *cloneAppsScreen) Messages() []Message { return s.messages }
-func (s *cloneAppsScreen) Keys() []key.Binding { return cloneAppsKeys(s.filtering) }
+func (s *cloneAppsScreen) Keys() []key.Binding {
+	return cloneAppsKeys(s.filtering, len([]rune(s.filter.Value)))
+}
 
 func (s *cloneAppsScreen) Init() tea.Cmd {
 	if !s.counting {
@@ -79,8 +84,10 @@ func countAppsCmd(app *App) tea.Cmd {
 		}
 	}
 	home := app.home
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
-		counted, err := plan.CountFiles(definitions, home, nil)
+		defer done()
+		counted, err := plan.CountFiles(ctx, definitions, home)
 		if err != nil {
 			return appsCountedMsg{err: err}
 		}
@@ -114,17 +121,18 @@ func (s *cloneAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		switch keyMessage.String() {
 		case "esc":
 			s.filtering = false
-			s.filter = ""
+			s.filter.SetValue("")
 		case "enter":
 			s.filtering = false
 		case "backspace":
-			runes := []rune(s.filter)
-			if len(runes) > 0 {
-				s.filter = string(runes[:len(runes)-1])
-			}
+			s.filter.Backspace()
+		case "left":
+			s.filter.MoveCursor(-1)
+		case "right":
+			s.filter.MoveCursor(1)
 		default:
 			if len(keyMessage.Runes) > 0 {
-				s.filter += string(keyMessage.Runes)
+				s.filter.Insert(string(keyMessage.Runes))
 			}
 		}
 		return s, nil
@@ -141,6 +149,7 @@ func (s *cloneAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		}
 	case "/":
 		s.filtering = true
+		s.filter.Cursor = len([]rune(s.filter.Value))
 	case " ":
 		s.toggle(visible)
 	case "a":
@@ -183,10 +192,10 @@ func (s *cloneAppsScreen) visibleApps() []appChoice {
 }
 
 func (s *cloneAppsScreen) matches(choice appChoice) bool {
-	if s.filter == "" {
+	if s.filter.Value == "" {
 		return true
 	}
-	query := strings.ToLower(s.filter)
+	query := strings.ToLower(s.filter.Value)
 	return strings.Contains(strings.ToLower(choice.ID), query) || strings.Contains(strings.ToLower(choice.Name), query)
 }
 
@@ -238,8 +247,13 @@ func (s *cloneAppsScreen) View(width, height int) string {
 	lines := []string{
 		"  " + s.app.theme.Styles.Primary.Render(title) + "    " + s.app.theme.Styles.Tertiary.Render(counter),
 	}
-	if s.filter != "" || s.filtering {
-		lines = append(lines, "  "+strings.ReplaceAll(texts.C1FilterLine, "{value}", s.filter))
+	if s.filter.Value != "" || s.filtering {
+		options := fieldOptions{
+			Width:      max(1, width-2),
+			LabelWidth: fieldLabelWidth(s.app.theme, texts.FieldFilter),
+			Focused:    s.filtering,
+		}
+		lines = append(lines, "  "+s.filter.Render(s.app.theme, options))
 	}
 	lines = append(lines, "")
 	tableWidth := width
@@ -308,8 +322,8 @@ type cloneDestinationScreen struct {
 	screenBase
 	option       int
 	focus        int
-	path         string
-	name         string
+	path         field
+	name         field
 	vault        string
 	dialog       bool
 	dialogIndex  int
@@ -323,25 +337,31 @@ func newCloneDestinationScreen(app *App, outputError string) *cloneDestinationSc
 	configValue := config.LoadConfig(app.home, "").Config
 	vault := configValue.CloneOutputDir
 	if vault == "" {
-		vault = defaults.VaultDir(app.home)
+		resolved, err := defaults.VaultDir(app.home)
+		if err != nil {
+			outputError = err.Error()
+		}
+		vault = resolved
 	}
 	screen := &cloneDestinationScreen{
 		screenBase: screenBase{app: app},
-		name:       defaultCloneName(app.now()),
-		path:       vault,
 		vault:      vault,
+		path:       field{Label: texts.FieldDestination, Placeholder: texts.FieldPathPlaceholder},
+		name:       field{Label: texts.FieldName, Placeholder: texts.FieldNamePlaceholder},
 	}
+	screen.name.SetValue(defaultCloneName(app.now()))
+	screen.path.SetValue(vault)
 	if app.cloneOptions.Output != "" {
 		output := app.cloneOptions.Output
 		if outputError != "" {
 			screen.option = 2
 			screen.focus = 2
-			screen.path = filepath.Dir(output)
-			screen.name = filepath.Base(output)
+			screen.path.SetValue(filepath.Dir(output))
+			screen.name.SetValue(filepath.Base(output))
 			screen.messages = []Message{{Kind: MessageError, Text: outputError}}
 		} else {
-			screen.path = filepath.Dir(output)
-			screen.name = filepath.Base(output)
+			screen.path.SetValue(filepath.Dir(output))
+			screen.name.SetValue(filepath.Base(output))
 			screen.option = 2
 		}
 	}
@@ -356,7 +376,14 @@ func (s *cloneDestinationScreen) Title() string       { return texts.TitleDestin
 func (s *cloneDestinationScreen) Step() (int, int)    { return 2, 3 }
 func (s *cloneDestinationScreen) Messages() []Message { return s.messages }
 func (s *cloneDestinationScreen) Keys() []key.Binding {
-	return cloneDestinationKeys(s.option, s.focus, s.dialog)
+	length := 0
+	if s.focus == 1 {
+		length = len([]rune(s.name.Value))
+	}
+	if s.focus == 2 {
+		length = len([]rune(s.path.Value))
+	}
+	return cloneDestinationKeys(s.option, s.focus, s.dialog, length)
 }
 
 func (s *cloneDestinationScreen) directory() string {
@@ -364,7 +391,7 @@ func (s *cloneDestinationScreen) directory() string {
 		return s.app.cwd
 	}
 	if s.option == 2 {
-		return s.path
+		return s.path.Value
 	}
 	return s.vault
 }
@@ -374,7 +401,7 @@ func (s *cloneDestinationScreen) fullPath() string {
 	if directory == "" {
 		return ""
 	}
-	return filepath.Join(directory, s.name)
+	return filepath.Join(directory, s.name.Value)
 }
 
 func (s *cloneDestinationScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
@@ -402,8 +429,12 @@ func (s *cloneDestinationScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		return s, popScreen()
 	case "enter":
 		return s.accept()
+	case "left":
+		s.moveCursor(-1)
+	case "right":
+		s.moveCursor(1)
 	case "backspace":
-		s.deleteRune()
+		s.backspace()
 	default:
 		if len(keyMessage.Runes) > 0 {
 			s.insert(string(keyMessage.Runes))
@@ -422,27 +453,29 @@ func (s *cloneDestinationScreen) cycleFocus(direction int) {
 }
 
 func (s *cloneDestinationScreen) insert(value string) {
-	if s.focus == 1 {
-		s.name += value
-	}
-	if s.focus == 2 {
-		s.path += value
+	switch s.focus {
+	case 1:
+		s.name.Insert(value)
+	case 2:
+		s.path.Insert(value)
 	}
 }
 
-func (s *cloneDestinationScreen) deleteRune() {
-	remove := func(value string) string {
-		runes := []rune(value)
-		if len(runes) == 0 {
-			return value
-		}
-		return string(runes[:len(runes)-1])
+func (s *cloneDestinationScreen) backspace() {
+	switch s.focus {
+	case 1:
+		s.name.Backspace()
+	case 2:
+		s.path.Backspace()
 	}
-	if s.focus == 1 {
-		s.name = remove(s.name)
-	}
-	if s.focus == 2 {
-		s.path = remove(s.path)
+}
+
+func (s *cloneDestinationScreen) moveCursor(delta int) {
+	switch s.focus {
+	case 1:
+		s.name.MoveCursor(delta)
+	case 2:
+		s.path.MoveCursor(delta)
 	}
 }
 
@@ -457,22 +490,27 @@ func (s *cloneDestinationScreen) accept() (Screen, tea.Cmd) {
 		return s, nil
 	}
 	if s.focus == 2 {
-		if strings.TrimSpace(s.path) == "" {
+		if strings.TrimSpace(s.path.Value) == "" {
+			s.path.Invalid = true
 			s.messages = append(s.persistentMessages(), Message{Kind: MessageError, Text: texts.C2EmptyPath})
 			return s, nil
 		}
+		s.path.Invalid = false
 		s.focus = 1
 		return s, nil
 	}
 	full := s.fullPath()
-	if full == "" || strings.TrimSpace(s.name) == "" {
+	if full == "" || strings.TrimSpace(s.name.Value) == "" {
+		s.name.Invalid = true
 		s.messages = append(s.persistentMessages(), Message{Kind: MessageError, Text: texts.C2EmptyPath})
 		return s, nil
 	}
 	if message := clone.ValidateDestination(full, true); message != "" {
+		s.name.Invalid = true
 		s.messages = append(s.persistentMessages(), Message{Kind: MessageError, Text: message})
 		return s, nil
 	}
+	s.name.Invalid = false
 	if !s.app.cloneForce {
 		if info, err := os.Lstat(full); err == nil && !info.IsDir() {
 			s.dialog = true
@@ -505,7 +543,7 @@ func (s *cloneDestinationScreen) updateDialog(keyMessage tea.KeyMsg) (Screen, te
 			return s, pushScreen(newCloneReviewScreen(s.app))
 		case 1:
 			if free, err := clone.FreeSuffix(s.fullPath()); err == nil {
-				s.name = filepath.Base(free)
+				s.name.SetValue(filepath.Base(free))
 			}
 			s.dialog = false
 			s.focus = 1
@@ -521,9 +559,16 @@ func (s *cloneDestinationScreen) validate() {
 	if s.focus == 0 {
 		return
 	}
+	s.path.Invalid = false
+	s.name.Invalid = false
 	s.messages = s.persistentMessages()
 	full := s.fullPath()
 	if value := clone.ValidateDestination(full, true); value != "" {
+		if s.focus == 2 {
+			s.path.Invalid = true
+		} else {
+			s.name.Invalid = true
+		}
 		s.messages = append(s.messages, Message{Kind: MessageError, Text: value})
 	}
 }
@@ -562,19 +607,17 @@ func (s *cloneDestinationScreen) View(width, height int) string {
 		}
 		lines = append(lines, style.Render(line))
 	}
+	fieldOpts := fieldOptions{
+		Width:      max(1, width-2),
+		LabelWidth: fieldLabelWidth(s.app.theme, texts.FieldDestination, texts.FieldName),
+	}
+	lines = append(lines, "")
 	if s.option == 2 {
-		cursor := "    "
-		if s.focus == 2 {
-			cursor = "  " + s.app.theme.Symbols.Cursor + " "
-		}
-		lines = append(lines, cursor+s.path+"_")
+		fieldOpts.Focused = s.focus == 2 && !s.dialog
+		lines = append(lines, "  "+s.path.Render(s.app.theme, fieldOpts))
 	}
-	lines = append(lines, "", "  "+s.app.theme.Styles.Secondary.Render(texts.C2NameTitle))
-	cursor := "    "
-	if s.focus == 1 {
-		cursor = "  " + s.app.theme.Symbols.Cursor + " "
-	}
-	lines = append(lines, cursor+s.name+"_")
+	fieldOpts.Focused = s.focus == 1 && !s.dialog
+	lines = append(lines, "  "+s.name.Render(s.app.theme, fieldOpts))
 	lines = append(lines, "", "  "+strings.ReplaceAll(texts.C2PathLine, "{path}", s.app.displayPath(s.fullPath())))
 	if s.dialog {
 		lines = append(lines, "", "  "+s.app.theme.Styles.Warning.Render(texts.C2ExistingTitle))
@@ -671,15 +714,15 @@ func (s *cloneReviewScreen) Init() tea.Cmd {
 }
 
 func planCloneCmd(app *App) tea.Cmd {
-	app.cloneCancel.Store(false)
 	selected := app.selectedCloneIDs()
 	options := clone.PlanOptions{
 		Home: app.home, Selected: &selected, Output: app.cloneOutput, Catalog: app.catalog,
 		ApplicationDirs: app.applicationDirs, Path: app.pathValue, Now: app.now(),
-		Cancelled: func() bool { return app.cloneCancel.Load() },
 	}
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
-		planned, err := clone.PlanClone(options)
+		defer done()
+		planned, err := clone.PlanClone(ctx, options)
 		return clonePlanDoneMsg{plan: planned, err: err}
 	}
 }
@@ -690,7 +733,7 @@ func (s *cloneReviewScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		return s.updateKey(value)
 	case clonePlanDoneMsg:
 		if value.err != nil {
-			if s.app.cloneCancel.Load() {
+			if cancelled(value.err) {
 				s.phase = clonePhaseCancelled
 				s.messages = []Message{{Kind: MessageWarning, Text: texts.C3CancelledInfo}}
 				return s, nil
@@ -716,13 +759,13 @@ func (s *cloneReviewScreen) updateKey(keyMessage tea.KeyMsg) (Screen, tea.Cmd) {
 	case "ctrl+c":
 		switch s.phase {
 		case clonePhasePlanning:
-			s.app.cloneCancel.Store(true)
+			s.app.cancelOperation()
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.CloneCancelling}}
 		case clonePhaseReady:
 			s.phase = clonePhaseCancelled
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.C3CancelledInfo}}
 		case clonePhaseWriting:
-			s.app.cloneCancel.Store(true)
+			s.app.cancelOperation()
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.CloneCancelling}}
 		}
 		return s, nil
@@ -770,7 +813,7 @@ func (s *cloneReviewScreen) updateKey(keyMessage tea.KeyMsg) (Screen, tea.Cmd) {
 		}
 	case clonePhasePlanning:
 		if keyMessage.String() == "esc" {
-			s.app.cloneCancel.Store(true)
+			s.app.cancelOperation()
 			return s, popScreen()
 		}
 	}
@@ -794,7 +837,7 @@ func (s *cloneReviewScreen) handleOperation(event operationEvent) (Screen, tea.C
 	}
 	s.phase = clonePhaseDone
 	if event.err != nil {
-		if s.app.cloneCancel.Load() {
+		if cancelled(event.err) {
 			s.phase = clonePhaseCancelled
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.C3CancelledInfo}}
 			return s, nil
@@ -812,16 +855,17 @@ func (s *cloneReviewScreen) handleOperation(event operationEvent) (Screen, tea.C
 }
 
 func startCloneWrite(app *App, plan *clone.ClonePlan) tea.Cmd {
-	app.cloneCancel.Store(false)
+	ctx, done := app.beginOperation()
 	return func() tea.Msg {
 		events := make(chan operationEvent, 64)
 		go func() {
-			result, err := clone.WriteClone(plan, app.home, app.cloneForce, nil, func(event progress.Event) {
+			defer done()
+			result, err := clone.WriteClone(ctx, plan, app.home, app.cloneForce, nil, func(event progress.Event) {
 				select {
 				case events <- operationEvent{progress: event}:
 				default:
 				}
-			}, func() bool { return app.cloneCancel.Load() })
+			})
 			if err == nil {
 				events <- operationEvent{clone: &result}
 			}

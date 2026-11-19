@@ -2,10 +2,10 @@
 package clone
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
@@ -34,7 +34,6 @@ type PlanOptions struct {
 	Metadata        map[string]string
 	Now             time.Time
 	Progress        progress.Callback
-	Cancelled       progress.Cancel
 }
 
 // ClonePlan is a complete clone plan that has not written anything yet.
@@ -76,16 +75,19 @@ func (c CloneResult) Size() int64 {
 }
 
 // PlanClone builds the plan, manifest and destination without writing.
-func PlanClone(options PlanOptions) (*ClonePlan, error) {
-	root := options.Home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+func PlanClone(ctx context.Context, options PlanOptions) (*ClonePlan, error) {
+	root, err := paths.ResolveHome(options.Home)
+	if err != nil {
+		return nil, err
 	}
 	definitions := options.Catalog
 	if definitions == nil {
 		directory := options.CatalogDir
 		if directory == "" {
-			directory = defaults.CatalogDir(root)
+			directory, err = defaults.CatalogDir(root)
+			if err != nil {
+				return nil, err
+			}
 		}
 		loaded, err := catalog.LoadCatalog(directory)
 		if err != nil {
@@ -94,7 +96,7 @@ func PlanClone(options PlanOptions) (*ClonePlan, error) {
 		definitions = loaded
 	}
 	apps := selectInstalled(definitions, options.Selected, options.ApplicationDirs, options.Path, root)
-	built, err := plan.BuildPlan(apps, root, options.Progress, options.Cancelled)
+	built, err := plan.BuildPlan(ctx, apps, root, options.Progress)
 	if err != nil {
 		return nil, err
 	}
@@ -107,17 +109,16 @@ func PlanClone(options PlanOptions) (*ClonePlan, error) {
 }
 
 // WriteClone writes the planned archive atomically.
-func WriteClone(planned *ClonePlan, home string, force bool, expectedState *archive.DestState, progressCallback progress.Callback, cancelled progress.Cancel) (CloneResult, error) {
-	root := home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+func WriteClone(ctx context.Context, planned *ClonePlan, home string, force bool, expectedState *archive.DestState, progressCallback progress.Callback) (CloneResult, error) {
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return CloneResult{}, err
 	}
-	if err := archive.WriteArchive(planned.Output, planned.Manifest, archive.WriteOptions{
+	if err := archive.WriteArchive(ctx, planned.Output, planned.Manifest, archive.WriteOptions{
 		SourceRoot:    root,
 		Overwrite:     force,
 		ExpectedState: expectedState,
 		Progress:      progressCallback,
-		Cancelled:     cancelled,
 	}); err != nil {
 		return CloneResult{}, err
 	}
@@ -131,8 +132,8 @@ func WriteClone(planned *ClonePlan, home string, force bool, expectedState *arch
 }
 
 // RunClone is the CLI facade: plan and, unless dry-run, write.
-func RunClone(options PlanOptions, dryRun, force bool) (CloneResult, error) {
-	planned, err := PlanClone(options)
+func RunClone(ctx context.Context, options PlanOptions, dryRun, force bool) (CloneResult, error) {
+	planned, err := PlanClone(ctx, options)
 	if err != nil {
 		return CloneResult{}, err
 	}
@@ -145,7 +146,7 @@ func RunClone(options PlanOptions, dryRun, force bool) (CloneResult, error) {
 			PlanOutput: planned.Output,
 		}, nil
 	}
-	return WriteClone(planned, options.Home, force, nil, options.Progress, options.Cancelled)
+	return WriteClone(ctx, planned, options.Home, force, nil, options.Progress)
 }
 
 func selectInstalled(definitions catalog.Catalog, selected *[]string, applicationDirs []string, pathValue, home string) []*catalog.AppDefinition {
@@ -229,7 +230,11 @@ func destination(output, outputDir, root string, now time.Time) (string, error) 
 	}
 	directory := outputDir
 	if directory == "" {
-		directory = defaults.VaultDir(root)
+		resolved, err := defaults.VaultDir(root)
+		if err != nil {
+			return "", err
+		}
+		directory = resolved
 	}
 	if info, err := os.Stat(directory); err == nil && !info.IsDir() {
 		return "", &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
@@ -281,15 +286,3 @@ func ValidateDestination(output string, allowMissingParent bool) string {
 	}
 	return ""
 }
-
-// RelativeSources returns the plan operations ordered by app and path.
-func RelativeSources(operations []plan.Operation) []string {
-	result := make([]string, 0, len(operations))
-	for _, operation := range operations {
-		result = append(result, operation.Path)
-	}
-	sort.Strings(result)
-	return result
-}
-
-var _ = paths.ToAbsolute

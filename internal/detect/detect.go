@@ -22,9 +22,11 @@ type Options struct {
 
 // IsInstalled reports whether the app is installed by bundle id or command.
 func IsInstalled(app *catalog.AppDefinition, options Options) bool {
-	home := options.Home
-	if home == "" {
-		home, _ = os.UserHomeDir()
+	// Without a home the answer is "unknown"; reporting not installed keeps the
+	// caller from touching a path it cannot resolve.
+	home, err := paths.ResolveHome(options.Home)
+	if err != nil {
+		return false
 	}
 	if app.InstallMarker != nil {
 		if !markerExists(*app.InstallMarker, home) {
@@ -58,9 +60,9 @@ func DetectVersion(app *catalog.AppDefinition, options Options) string {
 	if app.BundleID == nil {
 		return ""
 	}
-	home := options.Home
-	if home == "" {
-		home, _ = os.UserHomeDir()
+	home, err := paths.ResolveHome(options.Home)
+	if err != nil {
+		return ""
 	}
 	bundle := findAppBundle(*app.BundleID, applicationDirs(options, home))
 	if bundle == "" {
@@ -91,7 +93,7 @@ func markerExists(marker, home string) bool {
 	if err != nil {
 		return false
 	}
-	defer safe.Close()
+	defer func() { _ = safe.Close() }()
 	info, err := safe.Lstat(marker)
 	if err != nil {
 		return false

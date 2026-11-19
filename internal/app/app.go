@@ -2,7 +2,7 @@
 package app
 
 import (
-	"os"
+	"context"
 
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/clone"
@@ -11,6 +11,7 @@ import (
 	"github.com/Gunmer/kamino/internal/defaults"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
+	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/update"
 )
 
@@ -41,13 +42,17 @@ func InstalledApps(definitions catalog.Catalog, home string, applicationDirs []s
 }
 
 // ExecuteClone runs the text clone flow.
-func ExecuteClone(requested *[]string, output string, dryRun, force bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue string) (CloneOutcome, error) {
+func ExecuteClone(ctx context.Context, requested *[]string, output string, dryRun, force bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue string) (CloneOutcome, error) {
 	if definitions == nil {
-		root := home
-		if root == "" {
-			root, _ = userHome()
+		root, err := paths.ResolveHome(home)
+		if err != nil {
+			return CloneOutcome{}, err
 		}
-		loaded, err := catalog.LoadCatalog(defaults.CatalogDir(root))
+		directory, err := defaults.CatalogDir(root)
+		if err != nil {
+			return CloneOutcome{}, err
+		}
+		loaded, err := catalog.LoadCatalog(directory)
 		if err != nil {
 			return CloneOutcome{}, err
 		}
@@ -73,7 +78,7 @@ func ExecuteClone(requested *[]string, output string, dryRun, force bool, defini
 			}
 		}
 	}
-	result, err := clone.RunClone(clone.PlanOptions{
+	result, err := clone.RunClone(ctx, clone.PlanOptions{
 		Home:            home,
 		Selected:        &selected,
 		Output:          output,
@@ -92,7 +97,7 @@ func ExecuteClone(requested *[]string, output string, dryRun, force bool, defini
 }
 
 // ExecuteDeploy runs the text deploy flow.
-func ExecuteDeploy(cloneFile string, requested *[]string, dryRun bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue, snapshotsDir string) (DeployOutcome, error) {
+func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, dryRun bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue, snapshotsDir string) (DeployOutcome, error) {
 	session, err := deploy.PrepareDeploy(cloneFile, deploy.Options{
 		Home:            home,
 		Catalog:         definitions,
@@ -122,7 +127,7 @@ func ExecuteDeploy(cloneFile string, requested *[]string, dryRun bool, definitio
 		}
 		selected = &chosen
 	}
-	plan, err := session.Plan(selected, dryRun, ptrValue(requested), nil, nil)
+	plan, err := session.Plan(ctx, selected, dryRun, ptrValue(requested), nil)
 	if err != nil {
 		return DeployOutcome{}, err
 	}
@@ -130,7 +135,7 @@ func ExecuteDeploy(cloneFile string, requested *[]string, dryRun bool, definitio
 	if dryRun {
 		result = session.DryRunResult(plan)
 	} else {
-		result, err = session.Apply(conflicts.ApplyAll(plan.Conflicts), nil, nil)
+		result, err = session.Apply(ctx, conflicts.ApplyAll(plan.Conflicts), nil)
 		if err != nil {
 			return DeployOutcome{}, err
 		}
@@ -139,8 +144,8 @@ func ExecuteDeploy(cloneFile string, requested *[]string, dryRun bool, definitio
 }
 
 // ExecuteUpdate runs the text update flow.
-func ExecuteUpdate(currentVersion string, target string) (update.Result, error) {
-	return update.RunUpdate(currentVersion, target, nil, nil, nil)
+func ExecuteUpdate(ctx context.Context, currentVersion string, target string) (update.Result, error) {
+	return update.RunUpdate(ctx, currentVersion, target, nil, nil)
 }
 
 // snapshotsLimit resolves the configured snapshot limit for the text flows.
@@ -154,22 +159,9 @@ func snapshotsLimit(home string) int {
 	return loaded.Config.SnapshotsLimit
 }
 
-// DeployableIDs returns the ids the manifest allows deploying here.
-func DeployableIDs(session *deploy.DeploySession) map[string]bool {
-	result := map[string]bool{}
-	for _, item := range session.DeployableApps {
-		result[item.ID] = true
-	}
-	return result
-}
-
 func ptrValue(value *[]string) []string {
 	if value == nil {
 		return nil
 	}
 	return *value
-}
-
-func userHome() (string, error) {
-	return os.UserHomeDir()
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/Gunmer/kamino/internal/defaults"
 	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/paths"
 )
 
 const (
@@ -49,29 +50,57 @@ type LoadResult struct {
 }
 
 // ConfigPath returns the fixed TUI configuration path.
-func ConfigPath(home string) string {
-	return filepath.Join(homeOrUser(home), ".config", "kamino", "config.toml")
+func ConfigPath(home string) (string, error) {
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(root, ".config", "kamino", "config.toml"), nil
 }
 
 // DefaultConfig returns the built-in paths.
-func DefaultConfig(home string) AppConfig {
-	root := homeOrUser(home)
-	return AppConfig{
-		CatalogDir:     defaults.CatalogDir(root),
-		CloneOutputDir: defaults.VaultDir(root),
-		SnapshotsDir:   defaults.SnapshotsDir(root),
-		SnapshotsLimit: DefaultSnapshotsLimit,
+func DefaultConfig(home string) (AppConfig, error) {
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return AppConfig{}, err
 	}
+	catalogDir, err := defaults.CatalogDir(root)
+	if err != nil {
+		return AppConfig{}, err
+	}
+	cloneOutputDir, err := defaults.VaultDir(root)
+	if err != nil {
+		return AppConfig{}, err
+	}
+	snapshotsDir, err := defaults.SnapshotsDir(root)
+	if err != nil {
+		return AppConfig{}, err
+	}
+	return AppConfig{
+		CatalogDir:     catalogDir,
+		CloneOutputDir: cloneOutputDir,
+		SnapshotsDir:   snapshotsDir,
+		SnapshotsLimit: DefaultSnapshotsLimit,
+	}, nil
 }
 
 // LoadConfig loads the TUI configuration, keeping readable values on failure.
 func LoadConfig(home, path string) LoadResult {
-	root := homeOrUser(home)
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return LoadResult{Config: AppConfig{SnapshotsLimit: DefaultSnapshotsLimit}, Error: err, Raw: map[string]string{}}
+	}
 	target := path
 	if target == "" {
-		target = ConfigPath(root)
+		target, err = ConfigPath(root)
+		if err != nil {
+			return LoadResult{Config: AppConfig{SnapshotsLimit: DefaultSnapshotsLimit}, Error: err, Raw: map[string]string{}}
+		}
 	}
-	defaultsValue := DefaultConfig(root)
+	defaultsValue, err := DefaultConfig(root)
+	if err != nil {
+		return LoadResult{Config: AppConfig{SnapshotsLimit: DefaultSnapshotsLimit}, Error: err, Raw: map[string]string{}}
+	}
 	if _, err := os.Lstat(target); err != nil {
 		return LoadResult{Config: defaultsValue, Raw: map[string]string{}}
 	}
@@ -156,7 +185,10 @@ func fallback(value, fallbackValue string) string {
 
 // ResolvePath validates and expands a configured path against the home.
 func ResolvePath(value, home, key string) (string, error) {
-	root := homeOrUser(home)
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return "", err
+	}
 	text := strings.TrimSpace(value)
 	if text == "" {
 		return "", configError(key + " no puede estar vacía")
@@ -187,10 +219,16 @@ func ResolvePath(value, home, key string) (string, error) {
 
 // SaveConfig writes the configuration atomically and returns the file path.
 func SaveConfig(config AppConfig, home, path string) (string, error) {
-	root := homeOrUser(home)
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return "", err
+	}
 	target := path
 	if target == "" {
-		target = ConfigPath(root)
+		target, err = ConfigPath(root)
+		if err != nil {
+			return "", err
+		}
 	}
 	if err := validateConfig(config); err != nil {
 		return "", err
@@ -277,14 +315,6 @@ func invalid(target, detail string) error {
 
 func configError(message string) error {
 	return &kerrors.ConfigError{KaminoError: kerrors.KaminoError{Msg: message}}
-}
-
-func homeOrUser(home string) string {
-	if home != "" {
-		return home
-	}
-	value, _ := os.UserHomeDir()
-	return value
 }
 
 func randomSuffix() string {

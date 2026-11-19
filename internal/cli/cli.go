@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -12,14 +13,12 @@ import (
 	"github.com/Gunmer/kamino/internal/app"
 	"github.com/Gunmer/kamino/internal/clone"
 	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/tui"
 	"github.com/Gunmer/kamino/internal/ui"
 	"github.com/Gunmer/kamino/internal/version"
 )
-
-// Version is the CLI version.
-const Version = "0.8.0"
 
 var (
 	executeClone  = app.ExecuteClone
@@ -47,6 +46,8 @@ func Execute(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 
 // Run runs the CLI with injectable streams.
 func Run(args []string, options Options) int {
+	// The process context: one per invocation, cancelled when the CLI exits.
+	ctx := context.Background()
 	if options.Stdout == nil {
 		options.Stdout = os.Stdout
 	}
@@ -87,11 +88,11 @@ func Run(args []string, options Options) int {
 		fmt.Fprintln(options.Stdout, "Completion installed. Restart your shell to use it.")
 		return 0
 	case "clone":
-		return runCloneCommand(args[1:], options, interactive)
+		return runCloneCommand(ctx, args[1:], options, interactive)
 	case "deploy":
-		return runDeployCommand(args[1:], options, interactive)
+		return runDeployCommand(ctx, args[1:], options, interactive)
 	case "update":
-		return runUpdateCommand(args[1:], options, interactive)
+		return runUpdateCommand(ctx, args[1:], options, interactive)
 	default:
 		fmt.Fprintf(options.Stderr, "Error: No such command %q.\n", args[0])
 		printMainHelp(options.Stderr)
@@ -151,7 +152,7 @@ func parseFlags(args []string, valueFlags, boolFlags map[string]string) (parsedF
 			if canonical, ok := valueFlags[name]; ok {
 				if !hasValue {
 					if index+1 >= len(args) {
-						return result, fmt.Errorf("Option %q requires an argument.", name)
+						return result, fmt.Errorf("la opción %q requiere un argumento", name)
 					}
 					index++
 					value = args[index]
@@ -159,14 +160,14 @@ func parseFlags(args []string, valueFlags, boolFlags map[string]string) (parsedF
 				result.values[canonical] = value
 				continue
 			}
-			return result, fmt.Errorf("No such option: %s", name)
+			return result, fmt.Errorf("opción desconocida: %s", name)
 		}
 		result.positionals = append(result.positionals, arg)
 	}
 	return result, nil
 }
 
-func runCloneCommand(args []string, options Options, interactive func() bool) int {
+func runCloneCommand(ctx context.Context, args []string, options Options, interactive func() bool) int {
 	flags, err := parseFlags(args,
 		map[string]string{"--apps": "apps", "-a": "apps", "--output": "output", "-o": "output"},
 		map[string]string{"--dry-run": "dry_run", "-n": "dry_run", "--verbose": "verbose", "-v": "verbose", "--force": "force", "-f": "force"},
@@ -189,7 +190,12 @@ func runCloneCommand(args []string, options Options, interactive func() bool) in
 		outputPath := ""
 		outputError := ""
 		if outputValue != "" {
-			outputPath = resolveUserPath(outputValue)
+			resolved, err := resolveUserPath(outputValue)
+			if err != nil {
+				fmt.Fprintln(options.Stderr, "Error: "+err.Error())
+				return 2
+			}
+			outputPath = resolved
 			outputError = clone.ValidateDestination(outputPath, false)
 		}
 		return runCloneFlow(tui.CloneFlowOptions{
@@ -199,7 +205,7 @@ func runCloneCommand(args []string, options Options, interactive func() bool) in
 	}
 
 	ui.PrintPrivacyWarning(options.Stdout)
-	outcome, err := executeClone(requested, outputValue, dryRun, force, nil, "", nil, "")
+	outcome, err := executeClone(ctx, requested, outputValue, dryRun, force, nil, "", nil, "")
 	if err != nil {
 		fmt.Fprintln(options.Stderr, err.Error())
 		return 1
@@ -211,7 +217,7 @@ func runCloneCommand(args []string, options Options, interactive func() bool) in
 	return outcome.Code
 }
 
-func runDeployCommand(args []string, options Options, interactive func() bool) int {
+func runDeployCommand(ctx context.Context, args []string, options Options, interactive func() bool) int {
 	flags, err := parseFlags(args,
 		map[string]string{"--apps": "apps", "-a": "apps"},
 		map[string]string{
@@ -229,7 +235,7 @@ func runDeployCommand(args []string, options Options, interactive func() bool) i
 		return 0
 	}
 	if len(flags.positionals) != 1 {
-		fmt.Fprintln(options.Stderr, "Error: Missing argument 'CLONE_FILE'.")
+		fmt.Fprintln(options.Stderr, "Error: falta el argumento 'CLONE_FILE'.")
 		return 2
 	}
 	cloneFile := flags.positionals[0]
@@ -251,7 +257,7 @@ func runDeployCommand(args []string, options Options, interactive func() bool) i
 		fmt.Fprintln(options.Stderr, texts.RequiresYes)
 		return 1
 	}
-	outcome, err := executeDeploy(cloneFile, requested, dryRun, nil, "", nil, "", "")
+	outcome, err := executeDeploy(ctx, cloneFile, requested, dryRun, nil, "", nil, "", "")
 	if err != nil {
 		var partial *kerrors.PartialApplyError
 		if errors.As(err, &partial) {
@@ -274,7 +280,7 @@ func runDeployCommand(args []string, options Options, interactive func() bool) i
 	return outcome.Code
 }
 
-func runUpdateCommand(args []string, options Options, interactive func() bool) int {
+func runUpdateCommand(ctx context.Context, args []string, options Options, interactive func() bool) int {
 	flags, err := parseFlags(args, map[string]string{}, map[string]string{})
 	if err != nil {
 		fmt.Fprintln(options.Stderr, "Error: "+err.Error())
@@ -288,7 +294,7 @@ func runUpdateCommand(args []string, options Options, interactive func() bool) i
 		return runUpdateFlow()
 	}
 	ui.PrintUpdateStart(options.Stdout)
-	result, err := executeUpdate(version.Version, "")
+	result, err := executeUpdate(ctx, version.Version, "")
 	if err != nil {
 		fmt.Fprintln(options.Stderr, err.Error())
 		return 1
@@ -313,9 +319,12 @@ func parseApps(value string) *[]string {
 	return &result
 }
 
-func resolveUserPath(value string) string {
+func resolveUserPath(value string) (string, error) {
 	if strings.HasPrefix(value, "~") {
-		home, _ := os.UserHomeDir()
+		home, err := paths.ResolveHome("")
+		if err != nil {
+			return "", err
+		}
 		if value == "~" {
 			value = home
 		} else if strings.HasPrefix(value, "~/") {
@@ -324,9 +333,9 @@ func resolveUserPath(value string) string {
 	}
 	absolute, err := filepath.Abs(value)
 	if err != nil {
-		return value
+		return "", err
 	}
-	return absolute
+	return absolute, nil
 }
 
 func printMainHelp(w io.Writer) {

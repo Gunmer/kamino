@@ -28,7 +28,7 @@ fmt:
 	fi
 
 bench-startup:
-	$(GO) test ./internal/performance -run Startup -v
+	$(GO) test ./cmd/kamino -run Startup -v
 
 release-snapshot:
 	CGO_ENABLED=0 $(GO) build -trimpath -ldflags "-s -w $(LDFLAGS)" -o dist/kamino-arm64 ./cmd/kamino

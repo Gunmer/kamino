@@ -7,10 +7,9 @@ kamino · Clonar · Destino                                                     
                            ○ Vault por defecto     [2m~/.config/kamino/vault/[0m
                            ○ Carpeta actual        [2m~/Projects/kamino[0m
                          [1m  ● Indicar carpeta       [0m
-                           ▌ /Users/test/Descargas_
   
-                           Nombre del archivo
-                             clone-20261113.tar.gz_
+                           [36;100m▌ [0m[1;100mDestino[0m[36;100m  [0m[36;100m/Users/test/Descargas[0m[7;36;100m [0m
+                             [2mNombre [0m  [2mclone-20261113.tar.gz[0m
   
                            Ruta: ~/Descargas/clone-20261113.tar.gz
   
@@ -21,6 +20,7 @@ kamino · Clonar · Destino                                                     
   
   
   
+  
 [33m⚠ AVISO[0m  El clon no está cifrado y puede contener secretos.
 [2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
-↑↓ [2mmover[0m[2m   [0mTab [2mcampo[0m[2m   [0mEnter [2melegir[0m[2m   [0mEsc [2mvolver[0m                                             ? [2mayuda[0m
+Enter [2mfijar[0m[2m   [0mEsc [2mvolver[0m[2m   [0m←→ [2mcursor[0m[2m   [0mTab [2mcampo[0m[2m   [0mF1/? [2mayuda[0m

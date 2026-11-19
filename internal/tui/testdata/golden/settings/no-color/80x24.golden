@@ -1,0 +1,24 @@
+kamino · Configuración
+────────────────────────────────────────────────────────────────────────────────
+    [1mConfiguración[0m
+    Las rutas solo afectan a la TUI; el límite de holocrones también lo aplic…
+  
+    ▌ [1mCatálogo · editando  [0m  ~/.config/kamino/apps[7m [0m
+      [2mClones               [0m  [2m~/.config/kamino/vault[0m
+      [2mHolocrones           [0m  [2m~/.config/kamino/vault/snapshot[0m
+      [2mLímite               [0m  [2m5[0m
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+────────────────────────────────────────────────────────────────────────────────
+Tab/Mayús+Tab mover   Ctrl+S guardar   Esc volver   ←→ cursor   F1/? ayuda

@@ -40,10 +40,6 @@ const (
 	MarkerNotChosen      = "○"
 	MarkerChosenASCII    = "*"
 	MarkerNotChosenASCII = "."
-	FlowMarker           = "◉"
-	FlowMarkerASCII      = "o"
-	HelpStepMarker       = "○"
-	HelpStepMarkerASCII  = "."
 )
 
 const (
@@ -256,11 +252,6 @@ const (
 	ErrorCopyUnsupported = "Este terminal no admite copia OSC 52; copia el detalle a mano."
 	ErrorSmallTitle      = "La terminal es demasiado pequeña"
 	ErrorSmallBody       = "Amplía la terminal a 80×24 o más para continuar.\nEl estado del flujo se conserva mientras redimensionas."
-	HelpTitle            = "Ayuda"
-	HelpGlobal           = "Global: ? ayuda · F1 ayuda en campos · Esc volver · Ctrl+C cancelar si se permite"
-	HelpFlows            = "Flujo"
-	HelpSecrets          = DiffWarning
-	HelpClose            = "Cerrar"
 )
 
 // ShortcutLine composes a key legend joined by middle dots.
@@ -317,9 +308,6 @@ func SizeLabel(size int64) string {
 	return fmt.Sprintf("%d B", size)
 }
 
-// CountLines returns the number of entries.
-func CountLines(paths []string) int { return len(paths) }
-
 const (
 	ButtonCancel              = "Cancelar"
 	ButtonContinue            = "Continuar"
@@ -353,9 +341,6 @@ const (
 	LabelDefaultName          = "Nombre por defecto: {name}"
 	LabelPathPlaceholder      = "Ruta absoluta del clon"
 	LabelCloneFilePlaceholder = "Ruta del clon (.tar.gz)"
-	LabelScreen               = "Pantalla: {screen}"
-	LabelShortcuts            = "Atajos de esta pantalla:"
-	LabelFlow                 = "Flujo:"
 )
 
 const (
@@ -365,11 +350,6 @@ const (
 	SettingsCatalogLabel         = "Catálogo de aplicaciones"
 	SettingsCloneLabel           = "Destino de los clones"
 	SettingsSnapshotsLabel       = "Directorio de holocrones"
-	SettingsCatalogHint          = "Definiciones TOML de apps del usuario. Por defecto: ~/.config/kamino/apps."
-	SettingsCloneHint            = "Carpeta de clone-AAAAMMDD.tar.gz. Por defecto: ~/.config/kamino/vault."
-	SettingsSnapshotsHint        = "Copia del estado anterior antes de desplegar. Por defecto: ~/.config/kamino/vault/snapshot."
-	SettingsSnapshotsLimitHint   = "Cuántos holocrones conservar; el resto se borra al crear uno nuevo. 0 = ilimitado."
-	SettingsPathPlaceholder      = "Ruta absoluta o que empiece por ~"
 	SettingsWarnCatalogMissing   = "no existe; se usarán solo las definiciones integradas"
 	SettingsWarnCloneMissing     = "no existe; se creará al clonar"
 	SettingsWarnSnapshotsMissing = "no existe; se creará al desplegar"
@@ -412,43 +392,6 @@ var (
 	HelpU1       = [][2]string{{"Enter", "continuar al terminar"}, {"Esc", "cancelar antes del reemplazo o salir al terminar"}}
 	HelpMenu     = [][2]string{{"↑↓", "mover la selección, incluida Configuración"}, {"Enter", "aceptar la opción seleccionada"}}
 )
-
-// HelpTexts composes the help body from a screen and its shortcuts.
-func HelpTexts(screen string, shortcuts [][2]string, flowSteps []string, currentStep string, secrets bool, unicode bool) string {
-	lines := []string{strings.ReplaceAll(LabelScreen, "{screen}", screen), ""}
-	if len(shortcuts) > 0 {
-		lines = append(lines, LabelShortcuts)
-		for _, shortcut := range shortcuts {
-			lines = append(lines, "  "+shortcut[0]+"  "+shortcut[1])
-		}
-		lines = append(lines, "")
-	}
-	lines = append(lines, HelpGlobal)
-	if len(flowSteps) > 0 {
-		lines = append(lines, "", LabelFlow)
-		current := FlowMarker
-		pending := HelpStepMarker
-		if !unicode {
-			current = FlowMarkerASCII
-			pending = HelpStepMarkerASCII
-		}
-		for _, step := range flowSteps {
-			marker := pending
-			if step == currentStep {
-				marker = current
-			}
-			title := StepTitles[step]
-			if title == "" {
-				title = step
-			}
-			lines = append(lines, "  "+marker+" "+title)
-		}
-	}
-	if secrets {
-		lines = append(lines, "", HelpSecrets)
-	}
-	return strings.Join(lines, "\n")
-}
 
 const (
 	ScreenD0       = "D0 · clon"

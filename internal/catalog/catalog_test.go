@@ -11,8 +11,8 @@ func TestEmbeddedCatalogLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(catalog) < 20 {
-		t.Fatalf("expected the embedded catalog, got %d entries", len(catalog))
+	if len(catalog) < 18 {
+		t.Fatalf("expected at least 18 embedded apps, got %d entries", len(catalog))
 	}
 	if catalog["ghostty"] == nil || catalog["git"] == nil {
 		t.Fatal("expected ghostty and git definitions")

@@ -1,3 +1,4 @@
+// Command release builds, tags and publishes a kamino release.
 package main
 
 import (

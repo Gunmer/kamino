@@ -1,4 +1,4 @@
-package performance
+package main
 
 import (
 	"os"
@@ -14,7 +14,7 @@ import (
 func buildBinary(t *testing.T) string {
 	t.Helper()
 	output := filepath.Join(t.TempDir(), "kamino")
-	command := exec.Command("go", "build", "-trimpath", "-o", output, "../../cmd/kamino")
+	command := exec.Command("go", "build", "-trimpath", "-o", output, ".")
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" {
 		command.Env = append(command.Environ(), "CGO_ENABLED=0")
 	}

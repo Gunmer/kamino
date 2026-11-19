@@ -1,3 +1,4 @@
+// Package plist parses the XML and binary property lists of macOS bundles.
 package plist
 
 import (

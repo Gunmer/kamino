@@ -2,6 +2,7 @@
 package snapshot
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,16 +43,16 @@ type snapshotFile struct {
 // CreateSnapshot stores the current state of paths in a snapshot archive and
 // prunes the oldest snapshots so that at most limit remain. A limit of zero
 // keeps every snapshot.
-func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limit int) (string, error) {
+func CreateSnapshot(ctx context.Context, targets []string, home, snapshotsDir, timestamp string, limit int) (string, error) {
 	if limit < 0 {
 		return "", negativeLimitError(limit)
 	}
 	if len(targets) == 0 {
 		return "", nil
 	}
-	root := home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return "", err
 	}
 	when := timestamp
 	if when == "" {
@@ -64,7 +65,7 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 	if err != nil {
 		return "", err
 	}
-	built, err := plan.BuildPlan([]*catalog.AppDefinition{definition}, root, nil, nil)
+	built, err := plan.BuildPlan(ctx, []*catalog.AppDefinition{definition}, root, nil)
 	if err != nil {
 		return "", err
 	}
@@ -96,13 +97,16 @@ func CreateSnapshot(targets []string, home, snapshotsDir, timestamp string, limi
 	}
 	directory := snapshotsDir
 	if directory == "" {
-		directory = defaults.SnapshotsDir(root)
+		directory, err = defaults.SnapshotsDir(root)
+		if err != nil {
+			return "", err
+		}
 	}
 	output, err := outputPath(directory, when)
 	if err != nil {
 		return "", err
 	}
-	if err := archive.WriteArchive(output, manifest, archive.WriteOptions{SourceRoot: root}); err != nil {
+	if err := archive.WriteArchive(ctx, output, manifest, archive.WriteOptions{SourceRoot: root}); err != nil {
 		return "", err
 	}
 	if _, err := PruneSnapshots(directory, limit, output); err != nil {
@@ -195,23 +199,23 @@ func PruneSnapshots(directory string, limit int, keep string) ([]string, error) 
 }
 
 // SnapshotFiles counts the files a snapshot would protect without writing.
-func SnapshotFiles(targets []string, home string) int {
+func SnapshotFiles(ctx context.Context, targets []string, home string) (int, error) {
 	if len(targets) == 0 {
-		return 0
+		return 0, nil
 	}
-	root := home
-	if root == "" {
-		root, _ = os.UserHomeDir()
+	root, err := paths.ResolveHome(home)
+	if err != nil {
+		return 0, err
 	}
 	definition, err := snapshotDefinition(targets, root)
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	built, err := plan.BuildPlan([]*catalog.AppDefinition{definition}, root, nil, nil)
+	built, err := plan.BuildPlan(ctx, []*catalog.AppDefinition{definition}, root, nil)
 	if err != nil {
-		return 0
+		return 0, err
 	}
-	return len(built.Operations)
+	return len(built.Operations), nil
 }
 
 func negativeLimitError(limit int) error {

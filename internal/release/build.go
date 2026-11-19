@@ -36,7 +36,7 @@ func Build(root, version, output string) error {
 	var stderr bytes.Buffer
 	command.Stderr = &stderr
 	if err := command.Run(); err != nil {
-		return fmt.Errorf("go build: %v\n%s", err, stderr.String())
+		return fmt.Errorf("go build: %w\n%s", err, stderr.String())
 	}
 	return nil
 }
@@ -47,7 +47,7 @@ func Smoke(binary, version string) error {
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(directory)
+	defer func() { _ = os.RemoveAll(directory) }()
 
 	environment := []string{"HOME=" + directory, "KAMINO_PLAIN=1"}
 	if _, err := runBinary(binary, environment, "--help"); err != nil {
@@ -105,7 +105,7 @@ func runBinary(binary string, environment []string, arguments ...string) (string
 	command.Stderr = &stderr
 	output, err := command.Output()
 	if err != nil {
-		return "", fmt.Errorf("%s %v: %v\n%s", binary, arguments, err, stderr.String())
+		return "", fmt.Errorf("%s %v: %w\n%s", binary, arguments, err, stderr.String())
 	}
 	return string(output), nil
 }

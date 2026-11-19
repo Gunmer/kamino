@@ -1,0 +1,26 @@
+kamino · Configuración
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+          [1mConfiguración[0m
+          Las rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.
+  
+          ▌ [1mCatálogo · editando  [0m  [7m [0mRuta absoluta o que empiece por ~
+            [2mClones               [0m  [2mRuta absoluta o que empiece por ~[0m
+            [2mHolocrones           [0m  [2mRuta absoluta o que empiece por ~[0m
+            [2mLímite               [0m  [2m[0m
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+────────────────────────────────────────────────────────────────────────────────────────────────────
+Tab/Mayús+Tab mover   Ctrl+S guardar   Esc volver   F1/? ayuda

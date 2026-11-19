@@ -173,7 +173,7 @@ func (m *sequenceMatcher) GetGroupedOpcodes(n int) [][]Opcode {
 		}
 		group = append(group, code)
 	}
-	if len(group) > 0 && !(len(group) == 1 && group[0].Tag == "equal") {
+	if len(group) > 0 && (len(group) != 1 || group[0].Tag != "equal") {
 		groups = append(groups, group)
 	}
 	return groups
