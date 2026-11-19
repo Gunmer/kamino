@@ -2,6 +2,30 @@
 
 <!-- version list -->
 
+## v0.13.0 (2026-11-19)
+
+### Correcciones
+
+- propagate home and close errors and tighten lint ([`02886ce`](https://github.com/Gunmer/kamino/commit/02886ce60ac5359ed7dbc7f3917030589c1107c3))
+
+### Documentación
+
+- describe the context-based cancellation contract ([`6ba4a82`](https://github.com/Gunmer/kamino/commit/6ba4a82728b391040eaaeb9e457bd42323f0b387))
+
+### Funcionalidades
+
+- add shared field component and migrate text inputs ([`49c9f2c`](https://github.com/Gunmer/kamino/commit/49c9f2c10c7f7e81dc517d3f14dca77482ee8d56))
+
+### Refactorización
+
+- remove apps ([`c05fc66`](https://github.com/Gunmer/kamino/commit/c05fc6677a9afd5f9659ee83e61fa62b2a8d21fa))
+- remove unreachable helpers and constants ([`ab30a69`](https://github.com/Gunmer/kamino/commit/ab30a69758900405402115a03ada2689d5e83ef0))
+- reuse paths.EnsureRelative for manifests ([`01b754a`](https://github.com/Gunmer/kamino/commit/01b754a7bfd3dc36bca1002a33265ee8b29e01c4))
+- move startup test to cmd/kamino ([`fee6c57`](https://github.com/Gunmer/kamino/commit/fee6c57ecd5b5e09d75c820326e64e1ffc26e3b1))
+- split screens_deploy.go into selection, plan, apply and summary files ([`3bef0fd`](https://github.com/Gunmer/kamino/commit/3bef0fde6c68717e9be6e3fbf1b0747dff87637e))
+- split deploy.go into session, plan, apply and fingerprint files ([`e1e9d9c`](https://github.com/Gunmer/kamino/commit/e1e9d9c8f98b0a593076983f2ad0d15fe17f4786))
+- replace the cancel callbacks with context.Context ([`784a6bf`](https://github.com/Gunmer/kamino/commit/784a6bfc5073726d7008eadbbcaa6e335ab5ea24))
+
 ## v0.12.0 (2026-11-18)
 
 ### Correcciones
@@ -196,5 +220,6 @@
 ## v0.1.0 (2026-10-31)
 
 - Versión inicial
+
 
 
