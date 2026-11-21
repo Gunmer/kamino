@@ -51,7 +51,11 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 			_ = safe.Close()
 			return DeployResult{}, err
 		}
-		current := fingerprintOf(safe, item.path)
+		current, err := fingerprintOf(safe, item.path)
+		if err != nil {
+			_ = safe.Close()
+			return DeployResult{}, err
+		}
 		expected, ok := s.fingerprints[item.path]
 		if !ok || current != expected {
 			_ = safe.Close()

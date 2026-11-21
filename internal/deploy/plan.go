@@ -124,7 +124,12 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 		}
 		if (status == StatusNew || status == StatusDifferent) && safe != nil {
 			if _, ok := fingerprints[file.Path]; !ok {
-				fingerprints[file.Path] = fingerprintOf(safe, file.Path)
+				current, err := fingerprintOf(safe, file.Path)
+				if err != nil {
+					s.clearStaging()
+					return nil, err
+				}
+				fingerprints[file.Path] = current
 			}
 		} else if status == StatusNew {
 			if _, ok := fingerprints[file.Path]; !ok {
