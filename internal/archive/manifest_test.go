@@ -60,3 +60,31 @@ func TestManifestValidateRejectsInvalidMode(t *testing.T) {
 		}
 	}
 }
+
+func TestManifestValidateRejectsCaseInsensitiveCollisions(t *testing.T) {
+	first, second := sha([]byte("a")), sha([]byte("b"))
+	manifest := &Manifest{
+		FormatVersion: FormatVersion,
+		Apps: []AppEntry{
+			{ID: "git", Name: "Git", Files: []FileEntry{{Path: ".config/Tool/config", SHA256: &first}}},
+			{ID: "other", Name: "Other", Files: []FileEntry{{Path: ".config/tool/config", SHA256: &second}}},
+		},
+	}
+	if err := manifest.Validate(); err == nil {
+		t.Fatal("Validate accepted two paths that collide on a case-insensitive volume")
+	}
+}
+
+func TestManifestValidateAcceptsTheSamePathInTwoApps(t *testing.T) {
+	hash := sha([]byte("a"))
+	manifest := &Manifest{
+		FormatVersion: FormatVersion,
+		Apps: []AppEntry{
+			{ID: "git", Name: "Git", Files: []FileEntry{{Path: ".config/shared", SHA256: &hash}}},
+			{ID: "other", Name: "Other", Files: []FileEntry{{Path: ".config/shared", SHA256: &hash}}},
+		},
+	}
+	if err := manifest.Validate(); err != nil {
+		t.Fatalf("Validate rejected a repeated identical path: %v", err)
+	}
+}

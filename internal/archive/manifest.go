@@ -118,12 +118,21 @@ func (m *Manifest) Validate() error {
 	if m.FormatVersion < 1 {
 		return fmt.Errorf("'format_version' debe ser positivo")
 	}
+	// macOS volumes are case-insensitive by default: two paths that differ only
+	// in case would overwrite each other when deployed.
+	folded := map[string]string{}
 	for index := range m.Apps {
 		app := &m.Apps[index]
 		for fileIndex := range app.Files {
-			if err := app.Files[fileIndex].validate(); err != nil {
+			file := &app.Files[fileIndex]
+			if err := file.validate(); err != nil {
 				return fmt.Errorf("app %q: %w", app.ID, err)
 			}
+			key := strings.ToLower(file.Path)
+			if previous, seen := folded[key]; seen && previous != file.Path {
+				return fmt.Errorf("app %q: las rutas %q y %q solo difieren en mayúsculas y colisionan en un volumen que no distingue mayúsculas", app.ID, previous, file.Path)
+			}
+			folded[key] = file.Path
 		}
 	}
 	return nil

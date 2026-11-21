@@ -116,7 +116,7 @@ paths = [
 }
 ```
 
-Los valores son ilustrativos. `format_version` permite evolucionar el formato: `deploy` rechaza un archivo con una versión mayor que la que entiende. `mode` es un permiso octal entre `0000` y `0777`; un valor distinto invalida el manifiesto en lugar de sustituirse por `0644`.
+Los valores son ilustrativos. `format_version` permite evolucionar el formato: `deploy` rechaza un archivo con una versión mayor que la que entiende. `mode` es un permiso octal entre `0000` y `0777`; un valor distinto invalida el manifiesto en lugar de sustituirse por `0644`. Dos rutas distintas que solo difieren en mayúsculas también invalidan el manifiesto, porque colisionarían en un volumen APFS que no distingue mayúsculas.
 
 ### 4.3 Estructura del archivo
 
