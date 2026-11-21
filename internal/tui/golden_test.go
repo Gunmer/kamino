@@ -13,6 +13,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/Gunmer/kamino/internal/archive"
+	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/conflicts"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/texts"
@@ -353,6 +354,55 @@ func goldenD5() goldenCase {
 	}
 }
 
+func goldenA1Intro() goldenCase {
+	return goldenCase{
+		name: "a1-intro", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			return newAppAuthoringScreen(
+				app,
+				"/Users/test/.config/kamino/apps",
+				"/Users/test/.config/kamino/apps/.kamino-draft-123.toml.tmp",
+			)
+		},
+	}
+}
+
+func goldenA1Confirm() goldenCase {
+	return goldenCase{
+		name: "a1-confirm", sizes: [][2]int{{100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			screen := newAppAuthoringScreen(
+				app,
+				"/Users/test/.config/kamino/apps",
+				"/Users/test/.config/kamino/apps/.kamino-draft-123.toml.tmp",
+			)
+			screen.phase = authoringPhaseConfirm
+			screen.definition = &catalog.AppDefinition{ID: "git", Name: "Git propio"}
+			screen.override = true
+			screen.overwrite = true
+			return screen
+		},
+	}
+}
+
+func goldenA1Done() goldenCase {
+	return goldenCase{
+		name: "a1-done", sizes: [][2]int{{100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			screen := newAppAuthoringScreen(
+				app,
+				"/Users/test/.config/kamino/apps",
+				"/Users/test/.config/kamino/apps/.kamino-draft-123.toml.tmp",
+			)
+			screen.phase = authoringPhaseDone
+			screen.createdPath = "/Users/test/.config/kamino/apps/git.toml"
+			screen.definition = &catalog.AppDefinition{ID: "git", Name: "Git propio"}
+			screen.detected = true
+			return screen
+		},
+	}
+}
+
 func goldenSettings() goldenCase {
 	return goldenCase{
 		name: "settings", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
@@ -553,6 +603,11 @@ func TestGoldenD0D1D2(t *testing.T) {
 func TestGoldenD3(t *testing.T) { runGolden(t, goldenD3()) }
 func TestGoldenD4(t *testing.T) { runGolden(t, goldenD4()) }
 func TestGoldenD5(t *testing.T) { runGolden(t, goldenD5()) }
+func TestGoldenA1(t *testing.T) {
+	runGolden(t, goldenA1Intro())
+	runGolden(t, goldenA1Confirm())
+	runGolden(t, goldenA1Done())
+}
 func TestGoldenSettings(t *testing.T) {
 	runGolden(t, goldenSettings())
 	runGolden(t, goldenSettingsEmpty())

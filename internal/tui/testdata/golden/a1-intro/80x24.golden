@@ -1,0 +1,24 @@
+kamino · Configuración · Añadir app
+[2m────────────────────────────────────────────────────────────────────────────────[0m
+    [1mNueva definición[0m
+    [2mSe creará un borrador y se abrirá tu editor.[0m
+  
+    Catálogo: ~/.config/kamino/apps
+    [2mBorrador: ~/.config/kamino/apps/.kamino-draft-123.toml.tmp[0m
+  
+    [2mUsa rutas relativas al HOME, sin ".." ni rutas absolutas.[0m
+    [2mEl borrador no se guardará hasta que sea válido.[0m
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+[2m────────────────────────────────────────────────────────────────────────────────[0m
+Enter/e [2meditar[0m[2m   [0mEsc [2mdescartar[0m                                           ? [2mayuda[0m

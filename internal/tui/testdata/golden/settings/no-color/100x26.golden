@@ -1,15 +1,15 @@
 kamino · Configuración
 ────────────────────────────────────────────────────────────────────────────────────────────────────
 
-          [1mConfiguración[0m
-          Las rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.
+            [1mConfiguración[0m
+            El catálogo y el límite de holocrones también los aplica la CLI.
   
-          ▌ [1mCatálogo · editando  [0m  ~/.config/kamino/apps[7m [0m
-            [2mClones               [0m  [2m~/.config/kamino/vault[0m
-            [2mHolocrones           [0m  [2m~/.config/kamino/vault/snapshot[0m
-            [2mLímite               [0m  [2m5[0m
+            ▌ [1mCatálogo · editando  [0m  ~/.config/kamino/apps[7m [0m
+              [2mClones               [0m  [2m~/.config/kamino/vault[0m
+              [2mHolocrones           [0m  [2m~/.config/kamino/vault/snapshot[0m
+              [2mLímite               [0m  [2m5[0m
   
-  
+              Añadir app             Crea una definición TOML en el catálogo del usuario.
   
   
   

@@ -11,7 +11,6 @@ import (
 	"github.com/Gunmer/kamino/internal/defaults"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
-	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/update"
 )
 
@@ -44,11 +43,7 @@ func InstalledApps(definitions catalog.Catalog, home string, applicationDirs []s
 // ExecuteClone runs the text clone flow.
 func ExecuteClone(ctx context.Context, requested *[]string, output string, dryRun, force bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue string) (CloneOutcome, error) {
 	if definitions == nil {
-		root, err := paths.ResolveHome(home)
-		if err != nil {
-			return CloneOutcome{}, err
-		}
-		directory, err := defaults.CatalogDir(root)
+		directory, err := CatalogDir(home)
 		if err != nil {
 			return CloneOutcome{}, err
 		}
@@ -98,9 +93,14 @@ func ExecuteClone(ctx context.Context, requested *[]string, output string, dryRu
 
 // ExecuteDeploy runs the text deploy flow.
 func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, dryRun bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue, snapshotsDir string) (DeployOutcome, error) {
+	directory, err := CatalogDir(home)
+	if err != nil {
+		return DeployOutcome{}, err
+	}
 	session, err := deploy.PrepareDeploy(cloneFile, deploy.Options{
 		Home:            home,
 		Catalog:         definitions,
+		CatalogDir:      directory,
 		ApplicationDirs: applicationDirs,
 		Path:            pathValue,
 		SnapshotsDir:    snapshotsDir,
@@ -146,6 +146,23 @@ func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, d
 // ExecuteUpdate runs the text update flow.
 func ExecuteUpdate(ctx context.Context, currentVersion string, target string) (update.Result, error) {
 	return update.RunUpdate(ctx, currentVersion, target, nil, nil)
+}
+
+// CatalogDir resolves the effective user catalog directory. A missing or
+// invalid configuration keeps the built-in directory, so the CLI never fails
+// because of an unrelated configuration error.
+func CatalogDir(home string) (string, error) {
+	directory, _, err := catalogResolution(home)
+	return directory, err
+}
+
+func catalogResolution(home string) (string, config.LoadResult, error) {
+	loaded := config.LoadConfig(home, "")
+	if loaded.Error != nil {
+		directory, err := defaults.CatalogDir(home)
+		return directory, loaded, err
+	}
+	return loaded.Config.CatalogDir, loaded, nil
 }
 
 // snapshotsLimit resolves the configured snapshot limit for the text flows.

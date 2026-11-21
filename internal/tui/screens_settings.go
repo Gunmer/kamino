@@ -16,6 +16,9 @@ const (
 	// limitField is the index of the snapshot limit, after the paths.
 	limitField = pathFieldCount
 	fieldCount = pathFieldCount + 1
+	// authoringRow is the action row after the editable fields.
+	authoringRow = fieldCount
+	rowCount     = fieldCount + 1
 )
 
 type settingsScreen struct {
@@ -71,6 +74,9 @@ func (s *settingsScreen) Title() string       { return texts.FlowSettings }
 func (s *settingsScreen) Step() (int, int)    { return 0, 0 }
 func (s *settingsScreen) Messages() []Message { return s.messages }
 func (s *settingsScreen) Keys() []key.Binding {
+	if s.focus == authoringRow {
+		return settingsAuthoringKeys()
+	}
 	return settingsKeys(len([]rune(s.fields[s.focus].Value)))
 }
 
@@ -81,21 +87,34 @@ func (s *settingsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	}
 	switch keyMessage.String() {
 	case "tab", "down":
-		s.focus = (s.focus + 1) % fieldCount
+		s.focus = (s.focus + 1) % rowCount
 	case "shift+tab", "up":
-		s.focus = (s.focus + fieldCount - 1) % fieldCount
+		s.focus = (s.focus + rowCount - 1) % rowCount
 	case "esc":
 		return s, popScreen()
 	case "ctrl+s":
 		s.save()
+	case "enter":
+		if s.focus == authoringRow {
+			return s, func() tea.Msg { return startAuthoringMsg{} }
+		}
 	case "left":
-		s.fields[s.focus].MoveCursor(-1)
+		if s.focus < fieldCount {
+			s.fields[s.focus].MoveCursor(-1)
+		}
 	case "right":
-		s.fields[s.focus].MoveCursor(1)
+		if s.focus < fieldCount {
+			s.fields[s.focus].MoveCursor(1)
+		}
 	case "backspace":
-		s.fields[s.focus].Backspace()
-		s.fields[s.focus].Invalid = false
+		if s.focus < fieldCount {
+			s.fields[s.focus].Backspace()
+			s.fields[s.focus].Invalid = false
+		}
 	default:
+		if s.focus >= fieldCount {
+			break
+		}
 		runes := keyMessage.Runes
 		if s.focus == limitField {
 			digits := make([]rune, 0, len(runes))
@@ -139,9 +158,13 @@ func (s *settingsScreen) save() {
 		return
 	}
 	value := config.AppConfig{CatalogDir: values[0], CloneOutputDir: values[1], SnapshotsDir: values[2], SnapshotsLimit: limit}
+	previousCatalog := s.app.settings.CatalogDir
 	if _, err := config.SaveConfig(value, s.app.home, ""); err != nil {
 		s.messages = []Message{{Kind: MessageError, Text: err.Error()}}
 		return
+	}
+	if previousCatalog != value.CatalogDir {
+		s.app.catalog = nil
 	}
 	s.errorIndex = -1
 	s.fields[limitField].SetValue(strconv.Itoa(limit))
@@ -156,10 +179,11 @@ func (s *settingsScreen) View(width, height int) string {
 		"  " + s.app.theme.Styles.Tertiary.Render(texts.SettingsSubtitleTUI),
 		"",
 	}
-	labels := make([]string, 0, fieldCount)
+	labels := make([]string, 0, fieldCount+1)
 	for index := range s.fields {
 		labels = append(labels, s.fields[index].Label)
 	}
+	labels = append(labels, texts.SettingsAddApp)
 	options := fieldOptions{
 		Width:      max(1, width-2),
 		LabelWidth: fieldLabelWidth(s.app.theme, labels...),
@@ -168,5 +192,31 @@ func (s *settingsScreen) View(width, height int) string {
 		options.Focused = index == s.focus
 		lines = append(lines, "  "+s.fields[index].Render(s.app.theme, options))
 	}
+	lines = append(lines, "", "  "+s.renderAuthoringRow(options))
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
+}
+
+func (s *settingsScreen) renderAuthoringRow(options fieldOptions) string {
+	marker := "  "
+	labelStyle := s.app.theme.Styles.Secondary
+	valueStyle := s.app.theme.Styles.Tertiary
+	if s.focus == authoringRow {
+		marker = s.app.theme.Symbols.Cursor + " "
+		labelStyle = s.app.theme.Styles.Primary
+		valueStyle = s.app.theme.Styles.Secondary
+	}
+	labelWidth := options.LabelWidth
+	if limit := options.Width - Width(marker) - Width(fieldGap) - 1; labelWidth > limit {
+		labelWidth = limit
+	}
+	if labelWidth < 0 {
+		labelWidth = 0
+	}
+	label := PadRight(fieldTruncate(texts.SettingsAddApp, labelWidth, s.app.theme.Symbols.Ellipsis), labelWidth)
+	valueWidth := options.Width - Width(marker) - labelWidth - Width(fieldGap)
+	if valueWidth < 1 {
+		valueWidth = 1
+	}
+	value := fieldTruncate(texts.SettingsAddAppHelp, valueWidth, s.app.theme.Symbols.Ellipsis)
+	return marker + labelStyle.Render(label) + fieldGap + valueStyle.Render(value)
 }

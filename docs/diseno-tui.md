@@ -264,6 +264,7 @@ a 76; en 140+ sube a 120.
 | D5       | `kamino · Desplegar · Resumen` | no      | sí     | deploy-conflicts |
 | U1       | `kamino · Actualización`       | no      | sí     | self-update      |
 | Settings | `kamino · Configuración`       | no      | sí     | user-configuration |
+| A1       | `kamino · Configuración · Añadir app` | no | sí    | app-authoring    |
 | Help     | `kamino · <Flujo> · Ayuda`     | sí      | no     | tui-navigation   |
 | Error    | `kamino · Error`               | no      | no     | tui-navigation   |
 | Small    | `kamino · Aviso`               | no      | sí     | tui-navigation   |
@@ -288,7 +289,7 @@ kamino · Menú                                    o o o o o o o *
    > Clonar             Crea un clon de las apps instaladas.
      Desplegar          Despliega desde un archivo del clon.
      Actualizar         Actualiza a la última versión publicada.
-     Configuración      Edita las rutas de la TUI.
+     Configuración      Edita las rutas y añade apps.
      Abandonar Kamino   Cierra kamino.
 
    Última misión: clonación completada · 20 archivos
@@ -865,12 +866,14 @@ kamino · Configuración
 --------------------------------------------------------------------------------
 
   Configuración
-  Las rutas solo afectan a la TUI; el límite de holocrones también lo aplica la CLI.
+  El catálogo y el límite de holocrones también los aplica la CLI.
 
   > Catálogo    ~/.config/kamino/apps|
     Clones      ~/.config/kamino/vault
     Holocrones  ~/.config/kamino/vault/snapshot
     Límite      5
+
+    Añadir app  Crea una definición TOML en el catálogo del usuario.
 
 --------------------------------------------------------------------------------
 Tab/Mayús+Tab mover  Ctrl+S guardar  Esc volver  ←→ cursor  F1/? ayuda
@@ -895,6 +898,11 @@ Notas:
   defaults, muestra un `ERROR` en la zona de mensajes y marca el campo afectado
   sin desplazar las filas.
 - El aviso «Configuración guardada» va en la zona de mensajes como `INFO`.
+- Después de los cuatro campos hay una acción «Añadir app». `Tab`/`Mayús+Tab` y
+  las flechas verticales la alcanzan; `Enter` abre la pantalla de autoría y `Esc`
+  vuelve al menú. La acción no se edita como un campo y `Enter` no guarda.
+- Guardar un `catalog.dir` distinto descarta el catálogo en memoria; el siguiente
+  flujo lo carga desde la ruta nueva sin reiniciar.
 - `?` y `F1` abren la ayuda desde un campo sin insertar caracteres.
 
 ### 4.14 Ayuda contextual
@@ -990,6 +998,44 @@ Notas:
 - La operación en curso no se cancela ni se cierra la aplicación.
 - No se pierde el estado de la pantalla inferior.
 
+### 4.17 A1 · Añadir app
+
+La pantalla crea un borrador `.toml.tmp` en el catálogo efectivo, abre el editor
+del usuario y valida el archivo al volver. Un borrador sin editar no se guarda.
+
+```text
+kamino · Configuración · Añadir app
+--------------------------------------------------------------------------------
+
+  Nueva definición
+  Se creará un borrador y se abrirá tu editor.
+
+  Catálogo: ~/.config/kamino/apps
+  Borrador: ~/.config/kamino/apps/.kamino-draft-123.toml.tmp
+
+  Usa rutas relativas al HOME, sin ".." ni rutas absolutas.
+  El borrador no se guardará hasta que sea válido.
+
+--------------------------------------------------------------------------------
+Enter/e editar   Esc descartar                                      ? ayuda
+```
+
+Notas:
+
+- Se abre desde la acción «Añadir app» de Configuración; al terminar o cancelar
+  se vuelve a Configuración.
+- `Enter` o `e` abre `$VISUAL`, `$EDITOR` o `vi` con `tea.ExecProcess`; al volver,
+  Kamino parsea y valida el borrador con las mismas reglas que `LoadCatalog`.
+- Si el TOML es inválido o el editor falla, la pantalla sigue abierta, muestra el
+  `ERROR` en la zona de mensajes y la ruta del borrador, y permite reeditar o
+  descartar con `Esc`.
+- Si el borrador es válido, el archivo se renombra de forma atómica a
+  `<id>.toml` y el catálogo se recarga. Si el id reemplaza una app integrada o el
+  archivo destino ya existe, se muestra una confirmación antes de escribir.
+- La pantalla de éxito muestra la ruta creada y si la app se detectó. Si no se
+  detectó, se avisa de que aparecerá en Clonar cuando esté instalada.
+- `Esc` antes de editar no crea archivos; `Esc` con un borrador lo elimina.
+
 ## 5. Matriz de teclas
 
 | Pantalla | Teclas |
@@ -1006,7 +1052,8 @@ Notas:
 | D4       | `←→` mover; `Enter` aceptar; `Esc` retroceder |
 | D5       | `c` copiar holocrón; `Enter`/`Esc` continuar |
 | U1       | `Enter` continuar; `Esc` cancelar/salir |
-| Settings | `Tab`/`Shift+Tab` mover; `←→` cursor; `Ctrl+S` guardar; `Esc` volver; `F1`/`?` ayuda |
+| Settings | `Tab`/`Shift+Tab` mover; `←→` cursor; `Ctrl+S` guardar; `Enter` abrir «Añadir app»; `Esc` volver; `F1`/`?` ayuda |
+| A1       | `Enter`/`e` editar; `Esc` descartar. Confirmación: `Enter` guardar, `Esc` volver. Final: `Enter`/`Esc` continuar |
 | Help     | `Enter`/`Esc`/`?` cerrar |
 | Error    | `t` detalle; `c` copiar; `Enter` aceptar; `Esc` volver |
 

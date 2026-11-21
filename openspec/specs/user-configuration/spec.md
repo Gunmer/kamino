@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Permitir que la TUI de Kamino lea y guarde las rutas de catálogo, clones y holocrones y el límite de holocrones en `~/.config/kamino/config.toml`, con una pantalla de configuración, validación estricta y valores por defecto bajo `vault/`, sin que la CLI dependa de ese archivo salvo para ese límite.
+Permitir que Kamino lea y guarde las rutas de catálogo, clones y holocrones y el límite de holocrones en `~/.config/kamino/config.toml`, con una pantalla de configuración, validación estricta y valores por defecto bajo `vault/`, compartiendo `catalog.dir` y `deploy.snapshots_limit` con la CLI de texto.
 
 ## Requirements
 

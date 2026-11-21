@@ -29,9 +29,11 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   holocrones como cuatro campos de una fila; el del límite solo admite dígitos. `Tab` y `Mayús+Tab`
   y las flechas verticales mueven el foco, `←`/`→` el cursor dentro del valor, `Ctrl+S` valida y
   guarda, y `Esc` vuelve sin escribir. El archivo
-  `~/.config/kamino/config.toml` solo lo lee y escribe la TUI; la vía no interactiva de la CLI usa
-  los valores integrados para las rutas y lee únicamente `deploy.snapshots_limit`. El archivo se
-  crea solo al guardar.
+  `~/.config/kamino/config.toml` lo leen la TUI y la CLI: `catalog.dir` y
+  `deploy.snapshots_limit` son compartidos; `clone.output_dir` y `deploy.snapshots_dir` solo los
+  usa la TUI. Si el archivo falta o es inválido, la CLI usa el catálogo integrado y los valores por
+  defecto. El archivo se crea solo al guardar. Después de los cuatro campos, Configuración ofrece
+  la acción «Añadir app», que abre el flujo de autoría y vuelve a Configuración al terminar.
 - Todos los campos de texto comparten un único componente de una fila con marcador `▌`, etiqueta
   alineada y valor. El foco añade fondo ANSI, etiqueta en negrita y un cursor de edición en vídeo
   inverso; los demás campos quedan atenuados y solo el enfocado dibuja el cursor. Escribir inserta
@@ -164,6 +166,12 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 - Cada app soportada se describe con una **definición declarativa** TOML: nombre, cómo detectar si
   está instalada (bundle ID o ruta en `/Applications`) y qué rutas clonar.
 - Añadir soporte para una nueva app = añadir una definición, sin tocar el código.
+- `kamino apps new` crea una definición validada con detección y rutas obligatorias;
+  `kamino apps validate` comprueba un archivo, un directorio o el catálogo efectivo y
+  `kamino apps list` muestra el catálogo fusionado con su origen. La pantalla de Configuración
+  ofrece «Añadir app» con un borrador y el editor del usuario. Las definiciones viven en
+  `catalog.dir` (por defecto `~/.config/kamino/apps/`) y una definición del usuario reemplaza a la
+  integrada con el mismo id.
 
 ### 2.4 Actualización (`update`)
 
