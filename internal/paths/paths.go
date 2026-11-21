@@ -481,7 +481,7 @@ func (s *SafeHome) WriteFile(rel string, data []byte, mode os.FileMode) error {
 		cleanup()
 		return pathError(fmt.Sprintf("no se pudo reemplazar %q: %v", rel, err))
 	}
-	return nil
+	return syncDir(parent, rel)
 }
 
 // ReplaceWithSymlink atomically creates a symlink at rel.
@@ -499,5 +499,15 @@ func (s *SafeHome) ReplaceWithSymlink(rel, target string) error {
 		_ = unix.Unlinkat(parent, temp, 0)
 		return pathError(fmt.Sprintf("no se pudo reemplazar %q: %v", rel, err))
 	}
-	return nil
+	return syncDir(parent, rel)
+}
+
+// syncDir makes the rename durable. Filesystems without directory fsync
+// (EINVAL, ENOTSUP) are not an error: the rename itself already succeeded.
+func syncDir(fd int, rel string) error {
+	err := unix.Fsync(fd)
+	if err == nil || errors.Is(err, unix.EINVAL) || errors.Is(err, unix.ENOTSUP) {
+		return nil
+	}
+	return pathError(fmt.Sprintf("no se pudo sincronizar el directorio de %q: %v", rel, err))
 }
