@@ -137,3 +137,16 @@ func TestSafeHomeWriteRejectsSymlinkParent(t *testing.T) {
 }
 
 var _ = errors.Is
+
+func TestEmptyHomeIsRejectedInsteadOfResolvingTheRealHome(t *testing.T) {
+	if _, err := ToAbsolute("a/b", ""); err == nil {
+		t.Fatal("ToAbsolute accepted an empty home")
+	}
+	if _, err := ToRelative("/tmp/a", ""); err == nil {
+		t.Fatal("ToRelative accepted an empty home")
+	}
+	if safe, err := NewSafeHome("", false); err == nil {
+		_ = safe.Close()
+		t.Fatal("NewSafeHome accepted an empty home")
+	}
+}

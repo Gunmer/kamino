@@ -75,6 +75,12 @@ func EnsureRelative(raw string) error {
 	return nil
 }
 
+// errEmptyHome reports a caller that skipped ResolveHome. Falling back to the
+// real home here would let a missing injection touch the developer's files.
+func errEmptyHome() error {
+	return pathError("se requiere un home resuelto; usa ResolveHome antes de acceder a rutas")
+}
+
 func pathError(msg string) error {
 	return &kerrors.PathError{KaminoError: kerrors.KaminoError{Msg: msg}}
 }
@@ -120,11 +126,7 @@ func ToAbsolute(rel string, home string) (string, error) {
 		return "", err
 	}
 	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
-		if err != nil {
-			return "", pathError(fmt.Sprintf("no se pudo resolver el home: %v", err))
-		}
+		return "", errEmptyHome()
 	}
 	return filepath.Join(home, filepath.FromSlash(rel)), nil
 }
@@ -136,11 +138,7 @@ func ToRelative(candidate string, home string) (string, error) {
 		return "", pathError(fmt.Sprintf("se requiere una ruta absoluta: %q", candidate))
 	}
 	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
-		if err != nil {
-			return "", pathError(fmt.Sprintf("no se pudo resolver el home: %v", err))
-		}
+		return "", errEmptyHome()
 	}
 	root := filepath.Clean(home)
 	rel, err := filepath.Rel(root, c)
@@ -159,11 +157,7 @@ type SafeHome struct {
 // NewSafeHome opens the home descriptor.
 func NewSafeHome(home string, create bool) (*SafeHome, error) {
 	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
-		if err != nil {
-			return nil, pathError(fmt.Sprintf("no se pudo resolver el home: %v", err))
-		}
+		return nil, errEmptyHome()
 	}
 	if create {
 		if err := os.MkdirAll(home, 0o755); err != nil {
