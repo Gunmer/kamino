@@ -3,9 +3,8 @@ package deploy
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 
+	"github.com/Gunmer/kamino/internal/archive"
 	"github.com/Gunmer/kamino/internal/conflicts"
 	kerrors "github.com/Gunmer/kamino/internal/errors"
 	"github.com/Gunmer/kamino/internal/paths"
@@ -126,11 +125,12 @@ func writeResolved(entries []resolvedFile, home, snapshotPath string, progressCa
 			if entry.content == nil {
 				err = fmt.Errorf("missing content for %s", entry.path)
 			} else {
-				mode, parseErr := strconv.ParseUint(entry.mode, 8, 32)
+				mode, parseErr := archive.ParseMode(entry.mode)
 				if parseErr != nil {
-					mode = 0o644
+					err = parseErr
+				} else {
+					err = safe.WriteFile(entry.path, entry.content, mode)
 				}
-				err = safe.WriteFile(entry.path, entry.content, os.FileMode(mode))
 			}
 		}
 		if err != nil {

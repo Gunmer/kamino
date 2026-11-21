@@ -38,3 +38,25 @@ func TestManifestValidateAcceptsRelativePath(t *testing.T) {
 		t.Fatalf("Validate rejected a valid path: %v", err)
 	}
 }
+
+func TestManifestValidateRejectsInvalidMode(t *testing.T) {
+	hash := sha([]byte("x"))
+	for _, mode := range []string{"rw-r--r--", "0999", "1777", "-1", "0644 "} {
+		manifest := &Manifest{
+			FormatVersion: FormatVersion,
+			Apps:          []AppEntry{{ID: "git", Name: "Git", Files: []FileEntry{{Path: "a", SHA256: &hash, Mode: mode}}}},
+		}
+		if err := manifest.Validate(); err == nil {
+			t.Fatalf("Validate accepted mode %q", mode)
+		}
+	}
+	for _, mode := range []string{"", "0644", "644", "0600", "0755"} {
+		manifest := &Manifest{
+			FormatVersion: FormatVersion,
+			Apps:          []AppEntry{{ID: "git", Name: "Git", Files: []FileEntry{{Path: "a", SHA256: &hash, Mode: mode}}}},
+		}
+		if err := manifest.Validate(); err != nil {
+			t.Fatalf("Validate rejected mode %q: %v", mode, err)
+		}
+	}
+}

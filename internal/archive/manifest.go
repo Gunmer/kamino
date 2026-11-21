@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	kerrors "github.com/Gunmer/kamino/internal/errors"
@@ -59,6 +61,15 @@ func (f *FileEntry) normalize() {
 	}
 }
 
+// ParseMode converts a manifest permission string such as "0644" to a mode.
+func ParseMode(value string) (os.FileMode, error) {
+	parsed, err := strconv.ParseUint(value, 8, 32)
+	if err != nil || parsed > 0o777 {
+		return 0, fmt.Errorf("'mode' debe ser un permiso octal entre 0000 y 0777: %q", value)
+	}
+	return os.FileMode(parsed), nil
+}
+
 func (f *FileEntry) validate() error {
 	f.normalize()
 	if err := paths.EnsureRelative(f.Path); err != nil {
@@ -74,6 +85,9 @@ func (f *FileEntry) validate() error {
 	}
 	if f.Size < 0 {
 		return fmt.Errorf("'size' no puede ser negativo")
+	}
+	if _, err := ParseMode(f.Mode); err != nil {
+		return err
 	}
 	if f.Link == nil && f.SHA256 == nil {
 		return fmt.Errorf("se requiere 'sha256' (archivo regular) o 'link' (enlace simbólico)")
