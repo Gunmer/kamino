@@ -227,6 +227,16 @@ func settingsKeys(valueLength int) []key.Binding {
 	return append(keys, fieldHelpKey())
 }
 
+func settingsAuthoringKeys() []key.Binding {
+	return []key.Binding{
+		bind([]string{"tab", "shift+tab"}, "Tab/Mayús+Tab", texts.KeyMove),
+		bind([]string{"enter"}, "Enter", texts.KeyOpen),
+		bind([]string{"ctrl+s"}, "Ctrl+S", texts.KeySave),
+		bind([]string{"esc"}, "Esc", texts.KeyBack),
+		fieldHelpKey(),
+	}
+}
+
 func helpKeys() []key.Binding {
 	return []key.Binding{bind([]string{"enter", "esc", "?"}, "Enter/Esc/?", texts.KeyClose)}
 }

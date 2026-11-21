@@ -13,6 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"github.com/Gunmer/kamino/internal/app"
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/clone"
 	"github.com/Gunmer/kamino/internal/config"
@@ -50,6 +51,9 @@ type AppOptions struct {
 	Deploy          DeployFlowOptions
 	UpdateQuery     func(context.Context) (update.Check, error)
 	UpdateRun       func(context.Context, progress.Callback) (update.Result, error)
+	// Editor opens an authoring draft. Tests inject a fake; nil uses the
+	// user's $VISUAL, $EDITOR or vi.
+	Editor func(path string) tea.Cmd
 }
 
 // App is the Bubble Tea root: it owns the navigation stack, the shared flow
@@ -94,6 +98,7 @@ type App struct {
 
 	updateQuery func(context.Context) (update.Check, error)
 	updateRun   func(context.Context, progress.Callback) (update.Result, error)
+	editor      func(string) tea.Cmd
 
 	settings     config.AppConfig
 	settingsLoad config.LoadResult
@@ -110,6 +115,7 @@ type startCloneMsg struct{}
 type startDeployMsg struct{}
 type startUpdateMsg struct{}
 type startSettingsMsg struct{}
+type startAuthoringMsg struct{}
 type menuMsg struct{}
 
 type operationStartedMsg struct {
@@ -169,7 +175,10 @@ func NewApp(options AppOptions) *App {
 		cloneForce: options.Clone.Force, cloneDryRun: options.Clone.DryRun,
 		cloneVerbose: options.Clone.Verbose, cloneOutput: options.Clone.Output,
 		updateQuery: options.UpdateQuery, updateRun: options.UpdateRun,
-		snapshotTimestamp: now().UTC().Format("2006-01-02T15:04:05Z"), parent: parent,
+		editor: options.Editor, snapshotTimestamp: now().UTC().Format("2006-01-02T15:04:05Z"), parent: parent,
+	}
+	if app.editor == nil {
+		app.editor = defaultEditor
 	}
 	app.menu = newMenuScreen(app)
 	app.current = app.menu
@@ -279,6 +288,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.Init()
 	case startSettingsMsg:
 		a.startSettings("")
+		return a, a.Init()
+	case startAuthoringMsg:
+		a.startAuthoring()
 		return a, a.Init()
 	case menuMsg:
 		a.resetToMenu()
@@ -504,11 +516,42 @@ func (a *App) startSettings(initialError string) {
 	a.begin(newSettingsScreen(a, message))
 }
 
+func (a *App) startAuthoring() {
+	directory, err := app.CatalogDir(a.home)
+	if err != nil {
+		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
+		return
+	}
+	if err := os.MkdirAll(directory, 0o755); err != nil {
+		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
+		return
+	}
+	file, err := os.CreateTemp(directory, ".kamino-draft-*.toml.tmp")
+	if err != nil {
+		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
+		return
+	}
+	draft := file.Name()
+	content, renderErr := catalog.RenderTemplate(catalog.TemplateOptions{Skeleton: true})
+	if renderErr == nil {
+		_, renderErr = file.WriteString(content)
+	}
+	if closeErr := file.Close(); renderErr == nil {
+		renderErr = closeErr
+	}
+	if renderErr != nil {
+		_ = os.Remove(draft)
+		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, renderErr.Error()))
+		return
+	}
+	a.push(newAppAuthoringScreen(a, directory, draft))
+}
+
 func (a *App) loadCatalog() bool {
 	if a.catalog != nil {
 		return true
 	}
-	directory, err := defaults.CatalogDir(a.home)
+	directory, err := app.CatalogDir(a.home)
 	if err != nil {
 		a.push(newErrorScreen(a, "no se pudo cargar el catálogo", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
 		return false

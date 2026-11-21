@@ -281,8 +281,10 @@ ver y editar las tres rutas y el límite de holocrones en una pantalla. Cada val
 etiqueta alineada: `Tab`/`Mayús+Tab` y `↑`/`↓` mueven el foco, `←`/`→` el cursor dentro del valor y
 el límite solo admite dígitos. La pantalla se guarda con `Ctrl+S`; `Esc` vuelve sin escribir. Un
 valor inválido marca su campo y muestra el `ERROR` en la zona de mensajes sin desplazar las filas.
-Las rutas solo las usa la TUI: la vía no interactiva de la CLI usa los defaults integrados. La CLI
-lee únicamente `deploy.snapshots_limit`, para aplicar el mismo límite de holocrones.
+`catalog.dir` y `deploy.snapshots_limit` los comparten la TUI y la CLI de texto; `clone.output_dir`
+y `deploy.snapshots_dir` solo los usa la TUI. Si el archivo falta o es inválido, la CLI usa el
+catálogo integrado y los valores por defecto sin bloquear; los comandos `apps` muestran el aviso y
+la ruta efectiva.
 
 ```toml
 [catalog]
@@ -298,7 +300,7 @@ snapshots_limit = 5
 
 | Clave | Valor por defecto | Uso |
 | --- | --- | --- |
-| `catalog.dir` | `~/.config/kamino/apps` | Definiciones TOML de apps del usuario en la TUI |
+| `catalog.dir` | `~/.config/kamino/apps` | Definiciones TOML de apps del usuario; las usan la TUI y la CLI |
 | `clone.output_dir` | `~/.config/kamino/vault` | Directorio propuesto en C2 y destino del clon en la TUI |
 | `deploy.snapshots_dir` | `~/.config/kamino/vault/snapshot` | Directorio de los holocrones en la TUI |
 | `deploy.snapshots_limit` | `5` | Holocrones que se conservan; `0` no borra ninguno. Lo aplican la TUI y la CLI |
@@ -308,8 +310,9 @@ claves: las tres rutas deben ser cadenas y `deploy.snapshots_limit` un entero ma
 Un TOML inválido, una sección o clave desconocida, un tipo incorrecto, una ruta relativa,
 `~usuario` o una ruta existente que no sea un directorio se rechazan. Si el archivo es inválido al
 arrancar, la TUI abre Configuración con el error y los valores legibles; no lo sobrescribe hasta
-que se guarde. Los directorios configurados se crean al clonar o desplegar, no al guardar. Los
-cambios guardados se aplican de inmediato a los flujos de la misma sesión. `--force`, `--yes` y
+que se guarde. Los directorios configurados se crean al clonar o desplegar, no al guardar; el
+catálogo se crea al guardar la primera definición con `apps new` o «Añadir app». Los cambios
+guardados se aplican de inmediato a los flujos de la misma sesión. `--force`, `--yes` y
 `--dry-run` no se configuran: son decisiones por operación. `ui.plain` y `ui.theme` tampoco existen
 en este esquema.
 
@@ -378,9 +381,10 @@ Límites del catálogo:
 
 - Solo se cubren las ubicaciones globales documentadas de cada herramienta. Kamino no descubre
   archivos de configuración de repositorios ni de proyectos.
-- Una definición propia en `~/.config/kamino/apps/` sustituye por completo a la integrada con el
-  mismo id. Sus rutas deben ser relativas al HOME; si una ruta es absoluta o contiene `..`, el
-  catálogo se rechaza. Las definiciones del usuario no pueden desactivar el confinamiento.
+- Una definición propia en `catalog.dir` (por defecto `~/.config/kamino/apps/`) sustituye por
+  completo a la integrada con el mismo id. Sus rutas deben ser relativas al HOME; si una ruta es
+  absoluta o contiene `..`, el catálogo se rechaza. Las definiciones del usuario no pueden
+  desactivar el confinamiento.
 - Las ubicaciones alternativas se admiten solo cuando están documentadas y dentro del HOME. Herdr
   admite `HERDR_CONFIG_PATH` y XDG; Ghostty admite su directorio XDG. Otras variables o rutas
   elegidas por scripts requieren una definición personalizada.
@@ -389,6 +393,39 @@ Límites del catálogo:
   dependen de variables del shell (`fzf`, `rg`, `zoxide`).
 - Un directorio de configuración puede mezclar ajustes y estado. Solo se incluyen las rutas
   declaradas y se excluyen credenciales, historiales, sesiones, cachés y registros.
+
+### Añadir tus propias apps
+
+Kamino carga las definiciones de `catalog.dir` (por defecto `~/.config/kamino/apps/`) además del
+catálogo integrado. Una definición con el mismo id reemplaza la integrada.
+
+```bash
+kamino apps new miapp --command miapp --path .config/miapp/config.toml
+kamino apps validate
+kamino apps list
+```
+
+- `apps new` exige `--command` o `--bundle-id` y al menos un `--path` o `--optional-path`. Las
+  rutas son relativas al HOME y los flags de ruta se pueden repetir. La definición se valida
+  antes de escribir; si algo falla, no queda ningún archivo.
+- `apps new --print` escribe el TOML en la salida estándar sin crear archivos. Es útil para
+  preparar una definición del catálogo embebido.
+- `apps new --force` solo reemplaza `<id>.toml`. Si otro archivo del usuario ya declara ese id, la
+  operación se rechaza y se nombra el archivo en conflicto.
+- `apps validate` valida el catálogo efectivo; con un archivo o un directorio, valida esa ruta.
+  Termina con código 0 si todo es válido y 1 si hay errores. Avisa, sin fallar, cuando una
+  definición no declara `exclude` o su id no coincide con el nombre del archivo.
+- `apps list` muestra el catálogo fusionado con el origen (`integrado` o `usuario`) y el estado de
+  cada archivo. Un archivo inválido se muestra con `ERROR` y no impide listar el resto.
+- `apps new` usa el código 2 para uso incorrecto (`ID` ausente, falta de detección o de rutas) y el
+  código 1 para validación, duplicados, un archivo existente sin `--force` o un error de escritura.
+- En la TUI, «Añadir app» es una acción dentro de Configuración, después de los cuatro campos.
+  Crea un borrador oculto, abre `$VISUAL`, `$EDITOR` o `vi`, valida al volver y solo guarda si la
+  definición es válida. Si el id reemplaza una app integrada o el archivo ya existe, pide
+  confirmación. El borrador no se guarda si se cancela y el flujo vuelve a Configuración.
+- La plantilla incluye la lista estándar de exclusiones de credenciales, cachés e historiales. Los
+  campos avanzados (`optional_patterns`, `env_paths`, `xdg_paths`, `install_marker`,
+  `command_aliases`) aparecen comentados como ejemplo.
 
 ### Oh My Zsh
 
@@ -447,7 +484,7 @@ internal/
 ├── texts/             # única fuente de textos visibles y glosario
 ├── ui/                # salida no interactiva
 ├── defaults/          # rutas por defecto compartidas
-├── config/            # configuración TOML exclusiva de la TUI
+├── config/            # configuración TOML compartida con la CLI
 ├── clone/             # plan_clone y write_clone
 ├── deploy/            # sesión, plan, clasificación y aplicación
 ├── update/            # consulta, descarga/verificación y reemplazo

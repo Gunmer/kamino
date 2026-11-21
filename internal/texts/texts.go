@@ -73,7 +73,7 @@ const (
 	MenuCloneHelp  = "Crea un clon de las apps instaladas."
 	MenuDeployHelp = "Despliega desde un archivo del clon."
 	MenuUpdateHelp = "Actualiza a la última versión publicada."
-	MenuConfigHelp = "Edita las rutas de la TUI."
+	MenuConfigHelp = "Edita las rutas y añade apps."
 	MenuExitHelp   = "Cierra kamino."
 
 	LastMission   = "Última misión: {summary}"
@@ -346,7 +346,7 @@ const (
 const (
 	SettingsTitle                = "Configuración"
 	SettingsSubtitle             = "Rutas de Kamino · ~/.config/kamino/config.toml"
-	SettingsCLINote              = "La CLI solo lee deploy.snapshots_limit; las rutas son de la TUI."
+	SettingsCLINote              = "La CLI lee catalog.dir y deploy.snapshots_limit; las rutas de salida son de la TUI."
 	SettingsCatalogLabel         = "Catálogo de aplicaciones"
 	SettingsCloneLabel           = "Destino de los clones"
 	SettingsSnapshotsLabel       = "Directorio de holocrones"
@@ -405,6 +405,7 @@ const (
 	ScreenC3       = "C3 · revisión"
 	ScreenC4       = "C4 · resumen"
 	ScreenU1       = "U1 · actualización"
+	ScreenA1       = "A1 · añadir app"
 	ScreenSettings = "Configuración"
 	ScreenMenu     = "menú principal"
 	ScreenError    = "error"

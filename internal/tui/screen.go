@@ -20,6 +20,7 @@ const (
 	ScreenD4       ScreenID = "d4"
 	ScreenD5       ScreenID = "d5"
 	ScreenU1       ScreenID = "u1"
+	ScreenA1       ScreenID = "a1"
 	ScreenSettings ScreenID = "settings"
 	ScreenHelp     ScreenID = "help"
 	ScreenError    ScreenID = "error"

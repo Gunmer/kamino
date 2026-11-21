@@ -5,9 +5,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"os"
 	"path"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -176,35 +174,18 @@ func loadEmbedded() (Catalog, error) {
 }
 
 func loadUser(directory string) (Catalog, error) {
-	catalog := Catalog{}
-	entries, err := os.ReadDir(directory)
+	results, err := InspectDir(directory)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return catalog, nil
-		}
-		return nil, catalogError("no se pudo leer el catálogo del usuario %q: %v", directory, err)
+		return nil, err
 	}
-	names := make([]string, 0)
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".toml") {
-			names = append(names, entry.Name())
+	catalog := Catalog{}
+	for _, result := range results {
+		if result.Err != nil {
+			return nil, result.Err
 		}
-	}
-	sort.Strings(names)
-	for _, name := range names {
-		file := filepath.Join(directory, name)
-		data, err := os.ReadFile(file)
-		if err != nil {
-			return nil, catalogError("no se pudo leer %q: %v", name, err)
+		if result.Definition != nil {
+			catalog[result.Definition.ID] = result.Definition
 		}
-		definition, err := parseDefinition(name, string(data))
-		if err != nil {
-			return nil, err
-		}
-		if _, exists := catalog[definition.ID]; exists {
-			return nil, catalogError("id duplicado %q en el catálogo del usuario", definition.ID)
-		}
-		catalog[definition.ID] = definition
 	}
 	return catalog, nil
 }

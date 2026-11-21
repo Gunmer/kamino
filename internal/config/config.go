@@ -1,4 +1,4 @@
-// Package config reads and writes the TUI configuration.
+// Package config reads and writes Kamino's shared configuration.
 package config
 
 import (
@@ -32,7 +32,7 @@ var sectionKeys = map[string]map[string]string{
 	"deploy":  {"snapshots_dir": SnapshotsKey, "snapshots_limit": SnapshotsLimitKey},
 }
 
-// AppConfig holds the three effective TUI paths and the snapshot limit.
+// AppConfig holds the three effective paths and the snapshot limit.
 type AppConfig struct {
 	CatalogDir     string
 	CloneOutputDir string
@@ -49,7 +49,7 @@ type LoadResult struct {
 	Raw    map[string]string
 }
 
-// ConfigPath returns the fixed TUI configuration path.
+// ConfigPath returns the fixed configuration path.
 func ConfigPath(home string) (string, error) {
 	root, err := paths.ResolveHome(home)
 	if err != nil {
@@ -84,7 +84,7 @@ func DefaultConfig(home string) (AppConfig, error) {
 	}, nil
 }
 
-// LoadConfig loads the TUI configuration, keeping readable values on failure.
+// LoadConfig loads the configuration, keeping readable values on failure.
 func LoadConfig(home, path string) LoadResult {
 	root, err := paths.ResolveHome(home)
 	if err != nil {
