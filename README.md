@@ -187,7 +187,8 @@ si el excedente no se puede borrar el despliegue se detiene antes de escribir en
 
 Dos despliegues simultáneos que comparten el directorio de holocrones se serializan con un bloqueo
 exclusivo (`<directorio>/.snapshot.lock`), de modo que el que espera no puede borrar el holocrón de
-un despliegue en curso. El archivo de bloqueo nunca se poda.
+un despliegue en curso. El archivo de bloqueo nunca se poda. Mientras espera el bloqueo, `Esc` o
+Ctrl+C cancelan el despliegue.
 
 Un holocrón tiene el mismo formato que un clon, así que se restaura desplegándolo:
 `kamino deploy ~/.config/kamino/vault/snapshot/<fecha>.tar.gz --yes`. Restaura el contenido que

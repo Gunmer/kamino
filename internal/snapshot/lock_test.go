@@ -1,21 +1,25 @@
 package snapshot
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	kerrors "github.com/Gunmer/kamino/internal/errors"
 )
 
 func TestLockIsExclusive(t *testing.T) {
 	directory := t.TempDir()
-	release, err := Lock(directory)
+	release, err := Lock(context.Background(), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
 	acquired := make(chan struct{})
 	go func() {
-		second, err := Lock(directory)
+		second, err := Lock(context.Background(), directory)
 		if err != nil {
 			return
 		}
@@ -39,7 +43,7 @@ func TestLockIsExclusive(t *testing.T) {
 
 func TestPruneKeepsTheLockFile(t *testing.T) {
 	directory := t.TempDir()
-	release, err := Lock(directory)
+	release, err := Lock(context.Background(), directory)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,5 +58,35 @@ func TestPruneKeepsTheLockFile(t *testing.T) {
 	}
 	if _, err := os.Lstat(filepath.Join(directory, lockName)); err != nil {
 		t.Fatalf("the lock file must survive pruning: %v", err)
+	}
+}
+
+func TestLockStopsWaitingWhenTheContextIsCancelled(t *testing.T) {
+	directory := t.TempDir()
+	release, err := Lock(context.Background(), directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = release() }()
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, err := Lock(ctx, directory)
+		result <- err
+	}()
+	select {
+	case err := <-result:
+		t.Fatalf("the lock is held, Lock must wait: %v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+	cancel()
+	select {
+	case err := <-result:
+		var cancelled *kerrors.OperationCancelled
+		if !errors.As(err, &cancelled) {
+			t.Fatalf("expected a cancellation, got %v", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Lock must return once the context is cancelled")
 	}
 }

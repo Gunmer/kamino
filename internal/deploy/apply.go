@@ -67,7 +67,7 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 	if err != nil {
 		return DeployResult{}, err
 	}
-	release, err := snapshot.Lock(directory)
+	release, err := snapshot.Lock(ctx, directory)
 	if err != nil {
 		return DeployResult{}, err
 	}

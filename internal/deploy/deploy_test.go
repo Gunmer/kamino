@@ -349,7 +349,7 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshots := t.TempDir()
-	release, err := snapshot.Lock(snapshots)
+	release, err := snapshot.Lock(context.Background(), snapshots)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestDeployDetectsChangeWhileWaitingForTheSnapshotLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshots := t.TempDir()
-	release, err := snapshot.Lock(snapshots)
+	release, err := snapshot.Lock(context.Background(), snapshots)
 	if err != nil {
 		t.Fatal(err)
 	}
