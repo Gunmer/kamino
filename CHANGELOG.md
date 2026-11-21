@@ -2,6 +2,12 @@
 
 <!-- version list -->
 
+## v0.14.0 (2026-11-21)
+
+### Funcionalidades
+
+- add user app authoring and shared catalog directory ([`d6977ee`](https://github.com/Gunmer/kamino/commit/d6977eee6d4d192c30e5c04952a1018d729afe3e))
+
 ## v0.13.0 (2026-11-19)
 
 ### Correcciones
@@ -220,6 +226,7 @@
 ## v0.1.0 (2026-10-31)
 
 - Versión inicial
+
 
 
 
