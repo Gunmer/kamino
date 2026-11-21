@@ -50,17 +50,9 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 			_ = safe.Close()
 			return DeployResult{}, err
 		}
-		current, err := fingerprintOf(safe, item.path)
-		if err != nil {
+		if err := s.verifyUnchanged(safe, item.path); err != nil {
 			_ = safe.Close()
 			return DeployResult{}, err
-		}
-		expected, ok := s.fingerprints[item.path]
-		if !ok || current != expected {
-			_ = safe.Close()
-			return DeployResult{}, &kerrors.ConcurrentChangeError{KaminoError: kerrors.KaminoError{
-				Msg: fmt.Sprintf("el destino cambió durante la revisión: %s", item.path),
-			}}
 		}
 	}
 	_ = safe.Close()
@@ -80,6 +72,10 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 		return DeployResult{}, err
 	}
 	defer func() { _ = release() }()
+	// Waiting for the lock can take long: check again before the snapshot.
+	if err := s.verifyAll(writes); err != nil {
+		return DeployResult{}, err
+	}
 	protected, err := snapshot.SnapshotFiles(ctx, destinations, s.Home)
 	if err != nil {
 		return DeployResult{}, err
@@ -91,7 +87,7 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 	if err != nil {
 		return DeployResult{}, err
 	}
-	if err := writeResolved(writes, s.Home, snapshotPath, progressCallback); err != nil {
+	if err := s.writeResolved(writes, snapshotPath, progressCallback); err != nil {
 		return DeployResult{}, err
 	}
 	result := classification(plan, resolved)
@@ -110,15 +106,56 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 	}, nil
 }
 
-func writeResolved(entries []resolvedFile, home, snapshotPath string, progressCallback progress.Callback) error {
+// verifyUnchanged fails when the destination no longer matches the state the
+// plan was built from.
+func (s *DeploySession) verifyUnchanged(safe *paths.SafeHome, rel string) error {
+	current, err := fingerprintOf(safe, rel)
+	if err != nil {
+		return err
+	}
+	expected, ok := s.fingerprints[rel]
+	if !ok || current != expected {
+		return &kerrors.ConcurrentChangeError{KaminoError: kerrors.KaminoError{
+			Msg: fmt.Sprintf("el destino cambió durante la revisión: %s", rel),
+		}}
+	}
+	return nil
+}
+
+func (s *DeploySession) verifyAll(entries []resolvedFile) error {
+	safe, err := paths.NewSafeHome(s.Home, false)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = safe.Close() }()
+	for _, entry := range entries {
+		if err := s.verifyUnchanged(safe, entry.path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *DeploySession) writeResolved(entries []resolvedFile, snapshotPath string, progressCallback progress.Callback) error {
 	applied := make([]string, 0, len(entries))
 	total := len(entries)
-	safe, err := paths.NewSafeHome(home, false)
+	safe, err := paths.NewSafeHome(s.Home, false)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = safe.Close() }()
 	for index, entry := range entries {
+		if err := s.verifyUnchanged(safe, entry.path); err != nil {
+			if len(applied) == 0 {
+				return err
+			}
+			return &kerrors.PartialApplyError{
+				KaminoError: kerrors.KaminoError{Msg: fmt.Sprintf("despliegue incompleto en %s: %v", entry.path, err)},
+				Applied:     applied,
+				Failed:      entry.path,
+				Snapshot:    snapshotPath,
+			}
+		}
 		if entry.link != "" {
 			err = safe.ReplaceWithSymlink(entry.path, entry.link)
 		} else {
