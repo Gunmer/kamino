@@ -472,3 +472,49 @@ func TestDeployDetectsChangeWhileWaitingForTheSnapshotLock(t *testing.T) {
 		t.Fatalf("the concurrent edit must survive: %q", data)
 	}
 }
+
+func TestDeployingASnapshotRestoresThePreviousState(t *testing.T) {
+	_, bin, cloneFile, definitions := deployFixture(t)
+	destination := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(destination, ".config/test/config")
+	if err := os.WriteFile(target, []byte("value=1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	options := Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()}
+	session, err := PrepareDeploy(cloneFile, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
+	if err != nil || result.Snapshot == "" {
+		t.Fatalf("deploy failed: %+v %v", result, err)
+	}
+	if data, _ := os.ReadFile(target); string(data) != "value=2\n" {
+		t.Fatalf("the deploy must change the file: %q", data)
+	}
+
+	options.SnapshotsDir = t.TempDir()
+	restore, err := PrepareDeploy(result.Snapshot, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restore.Close()
+	restorePlan, err := restore.Plan(context.Background(), nil, false, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restore.Apply(context.Background(), conflicts.ApplyAll(restorePlan.Conflicts), nil); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(target); string(data) != "value=1\n" {
+		t.Fatalf("the snapshot must restore the previous content: %q", data)
+	}
+}

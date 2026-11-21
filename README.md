@@ -189,6 +189,13 @@ Dos despliegues simultáneos que comparten el directorio de holocrones se serial
 exclusivo (`<directorio>/.snapshot.lock`), de modo que el que espera no puede borrar el holocrón de
 un despliegue en curso. El archivo de bloqueo nunca se poda.
 
+Un holocrón tiene el mismo formato que un clon, así que se restaura desplegándolo:
+`kamino deploy ~/.config/kamino/vault/snapshot/<fecha>.tar.gz --yes`. Restaura el contenido que
+tenían los archivos antes del despliegue; no borra los archivos que ese despliegue creó nuevos,
+porque el holocrón solo guarda lo que ya existía. Si un despliegue se interrumpe a medias, el error
+muestra la ruta del holocrón y este mismo comando para deshacerlo. Si un destino cambia mientras el
+despliegue espera el bloqueo o entre dos escrituras, el despliegue se detiene sin pisar ese cambio.
+
 Con terminal interactiva, `clone` abre la TUI si no se definió `KAMINO_PLAIN`. `--apps` omite C1,
 `--output` omite C2 y ambos juntos pasan directamente a la revisión C3. Un valor inválido abre la
 pantalla correspondiente precargada con el error. `--dry-run` termina en C3 sin acción de clonar.

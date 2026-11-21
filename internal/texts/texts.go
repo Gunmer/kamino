@@ -208,7 +208,7 @@ const (
 	DeployUndo              = "Para deshacer: kamino deploy {path}"
 	DeployExitLine          = "Salida {code}: se conservaron originales, no soportados o apps pedidas no cumplidas."
 	DeployPartial           = "Despliegue incompleto: {applied} aplicados; falló {failed}."
-	DeployPartialSnapshot   = "Holocrón disponible para deshacer: {path}"
+	DeployPartialSnapshot   = "Holocrón disponible para deshacer: {path}\nPara restaurarlo: kamino deploy {path} --yes"
 	DeployCopyPath          = "Ruta del holocrón copiada."
 	DeployBlock             = "Bloque {index} de {total}"
 	DeployBlockCounts       = "Clon: {clone} líneas · Original: {original} líneas"
