@@ -2,6 +2,32 @@
 
 <!-- version list -->
 
+## v0.15.0 (2026-11-22)
+
+### Correcciones
+
+- fsync the parent directory after an atomic replace ([`98126a5`](https://github.com/Gunmer/kamino/commit/98126a5552bdb85970eb03436e7ebbae3877267e))
+- reject paths that collide on case-insensitive volumes ([`d4daf2d`](https://github.com/Gunmer/kamino/commit/d4daf2dce4f0bd0cd0c54c0b7e120bd4ed651c67))
+- keep staged members readable regardless of their mode ([`157fadf`](https://github.com/Gunmer/kamino/commit/157fadf9f09f29886a8e7fb96115c1aae95b0093))
+- make the snapshots lock wait cancellable ([`09f568a`](https://github.com/Gunmer/kamino/commit/09f568a2ec5aaccceb119a9450c4c55b95921947))
+- detect destination changes while waiting for the snapshot lock ([`918e876`](https://github.com/Gunmer/kamino/commit/918e876f5af419d9fa7a2e6ef46bb01c128e024a))
+- validate the manifest file mode ([`253218a`](https://github.com/Gunmer/kamino/commit/253218ab867113352f1960559b31e61b713e6935))
+- never report an unreadable destination as missing ([`7620361`](https://github.com/Gunmer/kamino/commit/7620361f45435d7b3cec87f6852743963d6a8364))
+- reject an empty home instead of resolving the real one ([`6a26754`](https://github.com/Gunmer/kamino/commit/6a267547b4fa918a44bd9f3009bb328deaeba754))
+
+### Mantenimiento
+
+- remove OpenSpec commands and skills ([`45b1a39`](https://github.com/Gunmer/kamino/commit/45b1a39bea6d79953d7d22ffd85dd959aaa203c1))
+
+### Documentación
+
+- archive add-app-authoring and sync main specs ([`56dd236`](https://github.com/Gunmer/kamino/commit/56dd23651ff78becabd7a3c8492b52cd30752aeb))
+- explain how to restore a snapshot ([`bc85fdb`](https://github.com/Gunmer/kamino/commit/bc85fdb1b37781f5cf825cd64125f5023019c026))
+
+### Funcionalidades
+
+- make implant the primary command ([`6e6daf0`](https://github.com/Gunmer/kamino/commit/6e6daf0d1e90e10ef4e187ac1763cbde76847bbe))
+
 ## v0.14.0 (2026-11-21)
 
 ### Funcionalidades
@@ -226,6 +252,7 @@
 ## v0.1.0 (2026-10-31)
 
 - Versión inicial
+
 
 
 
