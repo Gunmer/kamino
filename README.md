@@ -1,14 +1,15 @@
 # kamino
 
 CLI para macOS que clona las configuraciones de las aplicaciones elegidas en **un único
-archivo portable** (`tar.gz` con `manifest.json`) y las despliega después, aplicando solo lo que
+archivo portable** (`tar.gz` con `manifest.json`) y las implanta después, aplicando solo lo que
 corresponda a las apps que estén instaladas.
 
 ## Estado
 
-Distribución Go estática implementada: `clone` y `deploy` funcionales con catálogo declarativo,
+Distribución Go estática implementada: `clone` e `implant` funcionales con catálogo declarativo,
 detección de apps, archivado `tar.gz` con manifiesto y checksums, CLI interactiva y revisión de
-conflictos por líneas dentro de cada bloque en una TUI ANSI propia. El binario es autocontenido.
+conflictos por líneas dentro de cada bloque en una TUI ANSI propia. `deploy` se conserva como alias
+de `implant`. El binario es autocontenido.
 
 ## Requisitos
 
@@ -112,7 +113,7 @@ El versionado sigue [SemVer](https://semver.org/) y se automatiza con `cmd/relea
    (Go estático, Apple Silicon), incluido el catálogo de aplicaciones. No se distribuye actualmente
    un binario Intel. La release permanece en borrador hasta subir el binario.
 
-Por ejemplo, desde `0.1.0`, `fix: corrige el despliegue` produce `0.1.1`, mientras que
+Por ejemplo, desde `0.1.0`, `fix: corrige la implantación` produce `0.1.1`, mientras que
 `feat: añade una aplicación` o `feat!: cambia el formato` produce `0.2.0`. Un merge que solo
 contenga `ci: ajusta el workflow` no publica nada.
 
@@ -140,20 +141,23 @@ El Homebrew tap se publicará tras la primera versión etiquetada.
 ## Uso
 
 ```bash
-kamino                       # TUI: menú Clonar, Desplegar, Actualizar, Configuración y Abandonar
+kamino                       # TUI: menú Clonar, Implantar, Actualizar, Configuración y Abandonar
 kamino --help
 kamino clone                 # TUI: elige apps, destino y revisa el plan
-kamino deploy clone-<aaaammdd>.tar.gz   # TUI: apps, conflictos y confirmación
+kamino implant clone-<aaaammdd>.tar.gz   # TUI: apps, conflictos y confirmación
 kamino update                # TUI: consulta, descarga y reemplazo
 ```
 
-`-h` es alias de `--help` en el nivel principal y en `clone`, `deploy` y `update`, y `-V` es
+`implant` es la forma principal para aplicar un clon; `deploy` sigue disponible como alias de
+compatibilidad con los mismos argumentos y opciones.
+
+`-h` es alias de `--help` en el nivel principal y en `clone`, `implant` y `update`, y `-V` es
 alias de `--version`:
 
 ```bash
 kamino -h
 kamino clone -h
-kamino deploy -h
+kamino implant -h
 kamino update -h
 kamino -V
 ```
@@ -176,52 +180,53 @@ El cambio de destino es incompatible con scripts que esperaban el archivo en el 
 usa `--output` para conservar la ruta anterior. Los holocrones nuevos se guardan en
 `~/.config/kamino/vault/snapshot/`; los antiguos en
 `~/Library/Application Support/kamino/snapshots/` no se mueven ni se copian y siguen pudiéndose
-desplegar indicando su ruta.
+implantar indicando su ruta.
 
-Cada despliegue crea su holocrón y después borra los más antiguos hasta dejar
+Cada implantación crea su holocrón y después borra los más antiguos hasta dejar
 `deploy.snapshots_limit` (5 por defecto; `0` conserva todos). Solo se borran archivos regulares con
 nombre `<fecha>.tar.gz` o `<fecha>-N.tar.gz` del directorio de holocrones: cualquier otro archivo,
 directorio o enlace queda intacto. Si el holocrón nuevo no se pudo escribir no se borra ninguno, y
-si el excedente no se puede borrar el despliegue se detiene antes de escribir en los destinos.
+si el excedente no se puede borrar la implantación se detiene antes de escribir en los destinos.
 `--dry-run` no borra holocrones.
 
-Dos despliegues simultáneos que comparten el directorio de holocrones se serializan con un bloqueo
+Dos implantaciones simultáneas que comparten el directorio de holocrones se serializan con un bloqueo
 exclusivo (`<directorio>/.snapshot.lock`), de modo que el que espera no puede borrar el holocrón de
-un despliegue en curso. El archivo de bloqueo nunca se poda. Mientras espera el bloqueo, `Esc` o
-Ctrl+C cancelan el despliegue.
+una implantación en curso. El archivo de bloqueo nunca se poda. Mientras espera el bloqueo, `Esc` o
+Ctrl+C cancelan la implantación.
 
-Un holocrón tiene el mismo formato que un clon, así que se restaura desplegándolo:
-`kamino deploy ~/.config/kamino/vault/snapshot/<fecha>.tar.gz --yes`. Restaura el contenido que
-tenían los archivos antes del despliegue; no borra los archivos que ese despliegue creó nuevos,
-porque el holocrón solo guarda lo que ya existía. Si un despliegue se interrumpe a medias, el error
-muestra la ruta del holocrón y este mismo comando para deshacerlo. Si un destino cambia mientras el
-despliegue espera el bloqueo o entre dos escrituras, el despliegue se detiene sin pisar ese cambio.
+Un holocrón tiene el mismo formato que un clon, así que se restaura implantándolo:
+`kamino implant ~/.config/kamino/vault/snapshot/<fecha>.tar.gz --yes`. Restaura el contenido que
+tenían los archivos antes de la implantación; no borra los archivos que esa implantación creó nuevos,
+porque el holocrón solo guarda lo que ya existía. Si una implantación se interrumpe a medias, el error
+muestra la ruta del holocrón y este mismo comando para deshacerlo. Si un destino cambia mientras la
+implantación espera el bloqueo o entre dos escrituras, la implantación se detiene sin pisar ese cambio.
 
 Con terminal interactiva, `clone` abre la TUI si no se definió `KAMINO_PLAIN`. `--apps` omite C1,
 `--output` omite C2 y ambos juntos pasan directamente a la revisión C3. Un valor inválido abre la
 pantalla correspondiente precargada con el error. `--dry-run` termina en C3 sin acción de clonar.
 
-En `deploy`, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes` y `-v` a `--verbose`; el archivo del clon sigue siendo un argumento posicional:
+En `implant` —y en su alias `deploy`—, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes`
+y `-v` a `--verbose`; el archivo del clon sigue siendo un argumento posicional:
 
 ```bash
-kamino deploy clone-20261109.tar.gz            # TUI: apps, conflictos, confirmación
-kamino deploy clone-20261109.tar.gz -a git,bat # sin selección de apps
-kamino deploy clone-20261109.tar.gz -y -v      # aplica todo sin preguntar
-kamino deploy clone-20261109.tar.gz -n         # simulación: imprime diffs, no escribe
+kamino implant clone-20261109.tar.gz            # TUI: apps, conflictos, confirmación
+kamino implant clone-20261109.tar.gz -a git,bat # sin selección de apps
+kamino implant clone-20261109.tar.gz -y -v      # aplica todo sin preguntar
+kamino implant clone-20261109.tar.gz -n         # simulación: imprime diffs, no escribe
 ```
 
-Desde el menú, **Desplegar** abre D0 con una sola lista que combina los clones de
+Desde el menú, **Implantar** abre D0 con una sola lista que combina los clones de
 `clone.output_dir` (por defecto `~/.config/kamino/vault/`) y los `.tar.gz` del directorio actual.
 La lista se ordena por fecha de modificación, deduplica los archivos que aparecen en ambas rutas y
 muestra el origen de cada fila, además de la ruta completa, la fecha y el tamaño del clon
 resaltado. La tabla recibe el foco y deja seleccionado el clon más reciente; `/` filtra por nombre
-u origen y `o` salta a `Otro archivo...`, que abre el campo de ruta manual. Si `kamino deploy`
+u origen y `o` salta a `Otro archivo...`, que abre el campo de ruta manual. Si `kamino implant`
 recibe una ruta inexistente o inválida, D0 se abre con esa ruta precargada, el error visible y la
 lista de clones disponible.
 
-Sin terminal interactiva, un despliegue real requiere `-y` o `--yes`; la simulación con `-n`
-no lo requiere. `deploy -n` y `deploy --yes` no abren la TUI aunque haya terminal. `-a` valida los
-ids contra las apps desplegables: los desconocidos o no instalados se avisan y cuentan como
+Sin terminal interactiva, una implantación real requiere `-y` o `--yes`; la simulación con `-n`
+no lo requiere. `implant -n` y `implant --yes` no abren la TUI aunque haya terminal. `-a` valida los
+ids contra las apps implantables: los desconocidos o no instalados se avisan y cuentan como
 omitidos (código de salida 3). Las apps del manifiesto no instaladas se informan como “sin base en
 este Mac” y no alteran el código.
 
@@ -230,7 +235,7 @@ este Mac” y no alteran el código.
 | Nombre visible | Significado |
 | --- | --- |
 | original | configuración actual del Mac; antes “local” |
-| holocrón de seguridad | copia previa a desplegar; antes “snapshot” |
+| holocrón de seguridad | copia previa a implantar; antes “snapshot” |
 | híbrido | archivo compuesto con líneas del original y del clon |
 | clon perfecto | archivo idéntico al clon; no se escribe ni cuenta como omitido |
 | sin base en este Mac | app del manifiesto que no está instalada aquí |
@@ -244,9 +249,9 @@ no cambian: el formato del archivo y los holocrones antiguos siguen siendo compa
 ### La TUI
 
 Una sola app de terminal construida con Bubble Tea, Lip Gloss y `bubbles` reúne menú, clonación,
-despliegue y actualización. El menú muestra el wordmark KAMINO en el cuerpo, ocho cápsulas en la
+implantación y actualización. El menú muestra el wordmark KAMINO en el cuerpo, ocho cápsulas en la
 cabecera con la última marcada como el original, una frase fija por sesión y las opciones Clonar,
-Desplegar, Actualizar, Configuración y Abandonar Kamino. Las flechas mueven la selección y `Enter`
+Implantar, Actualizar, Configuración y Abandonar Kamino. Las flechas mueven la selección y `Enter`
 acepta la opción seleccionada; no hay atajos de una tecla. Escape nunca cierra. La línea de última
 misión aparece tras el primer flujo de la sesión y no se persiste.
 
@@ -274,7 +279,7 @@ conserva el estado y bloquea la salida; al redimensionar de vuelta se recupera l
 de mensajes `INFO`/`AVISO`/`ERROR` vive sobre el pie y no reserva filas cuando está vacía.
 
 `Ctrl+C` cancela antes del punto de no retorno: en clonar, antes de renombrar el temporal; en
-desplegar, antes de crear el holocrón; en actualizar, antes de `os.replace`. Después de ese punto
+implantar, antes de crear el holocrón; en actualizar, antes de `os.replace`. Después de ese punto
 se ignora con aviso. La barra de progreso avanza por archivos y `Ctrl+C` elimina el temporal.
 
 La TUI usa la paleta ANSI del terminal: el tema por defecto es `ansi-dark` y `KAMINO_THEME`
@@ -318,13 +323,13 @@ claves: las tres rutas deben ser cadenas y `deploy.snapshots_limit` un entero ma
 Un TOML inválido, una sección o clave desconocida, un tipo incorrecto, una ruta relativa,
 `~usuario` o una ruta existente que no sea un directorio se rechazan. Si el archivo es inválido al
 arrancar, la TUI abre Configuración con el error y los valores legibles; no lo sobrescribe hasta
-que se guarde. Los directorios configurados se crean al clonar o desplegar, no al guardar; el
+que se guarde. Los directorios configurados se crean al clonar o implantar, no al guardar; el
 catálogo se crea al guardar la primera definición con `apps new` o «Añadir app». Los cambios
 guardados se aplican de inmediato a los flujos de la misma sesión. `--force`, `--yes` y
 `--dry-run` no se configuran: son decisiones por operación. `ui.plain` y `ui.theme` tampoco existen
 en este esquema.
 
-### Conflictos en el despliegue
+### Conflictos en la implantación
 
 - D0 valida solo el manifiesto: rechaza un `tar.gz` dañado, con más de un `manifest.json`, con un
   manifiesto de más de 4 MiB o con un formato más nuevo. Los avisos de arquitectura o macOS no
@@ -343,12 +348,12 @@ en este esquema.
   se permite aplicar. YAML y shell no se validan.
 - D4 muestra los conteos antes de escribir, el número de archivos protegidos y el directorio del
   holocrón. Retirada está preseleccionada; las flechas recorren las acciones, `Enter` acepta la
-  elegida y no hay atajo de una tecla para desplegar. Volver o cancelar no escribe ni crea holocrón.
+  elegida y no hay atajo de una tecla para implantar. Volver o cancelar no escribe ni crea holocrón.
   Si no hay destinos existentes, no se crea un holocrón vacío.
-- D5 distingue desplegados, híbridos, omitidos y sin cambios, muestra la ruta del holocrón y la
-  orden `kamino deploy <ruta>` para deshacer. Solo los conservados en el original, los no soportados
+- D5 distingue implantados, híbridos, omitidos y sin cambios, muestra la ruta del holocrón y la
+  orden `kamino implant <ruta>` para deshacer. Solo los conservados en el original, los no soportados
   y los `--apps` no cumplidos producen código 3. Un fallo después del holocrón se presenta como
-  “Despliegue incompleto” con los aplicados, el fallido y el holocrón, y termina con código 1.
+  “Implantación incompleta” con los aplicados, el fallido y el holocrón, y termina con código 1.
 - `--yes` no abre la TUI y resuelve todos los conflictos aplicando el clon. `--dry-run` tampoco
   abre la TUI: usa `--apps` o todas las apps instaladas y vuelca los diffs a la salida estándar.
 
@@ -364,7 +369,7 @@ en este esquema.
   sesiones, cachés, registros y metadatos `.git`. El filtro se aplica antes de leer el contenido.
 - Los archivos de configuración permitidos se conservan byte a byte, aunque contengan claves
   incrustadas: Kamino no redacta ni modifica ajustes.
-- Las exclusiones rigen la creación de clones nuevos. Al desplegar un clon anterior, sus
+- Las exclusiones rigen la creación de clones nuevos. Al implantar un clon anterior, sus
   archivos se aplican igual y el holocrón previo conserva completos los destinos que cambian,
   aunque ahora estén excluidos.
 
@@ -382,7 +387,7 @@ Ejemplo:
 
 ```bash
 kamino clone --apps opencode,claude-code,herdr,ghostty,oh-my-zsh -o clon.tar.gz
-kamino deploy clon.tar.gz --yes
+kamino implant clon.tar.gz --yes
 ```
 
 Límites del catálogo:
@@ -464,9 +469,9 @@ plugins.
 - Los temas integrados de Ghostty no se copian. Las referencias a credenciales conocidas o a rutas
   fuera del HOME se omiten antes de leer su contenido.
 - Los atajos globales viven en las configuraciones incluidas. Si un ajuste conserva una ruta
-  absoluta de otro HOME, el despliegue avisa sin reescribir el archivo: puede requerir un ajuste
+  absoluta de otro HOME, la implantación avisa sin reescribir el archivo: puede requerir un ajuste
   manual.
-- Tras desplegar en otro equipo puede ser necesario volver a conceder permisos de accesibilidad de
+- Tras implantar en otro equipo puede ser necesario volver a conceder permisos de accesibilidad de
   macOS a Ghostty para los atajos globales.
 
 ## Desarrollo
@@ -505,7 +510,7 @@ internal/
 ├── archive/           # tar.gz, manifiesto y checksums
 ├── ghostty/           # lectura acotada de config-file y temas
 ├── paths/             # SafeHome con openat/O_NOFOLLOW
-├── snapshot/          # holocrón de seguridad previo a desplegar
+├── snapshot/          # holocrón de seguridad previo a implantar
 └── errors/            # errores propios
 ```
 

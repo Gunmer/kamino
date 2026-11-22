@@ -531,12 +531,12 @@ func platformWarnings(manifest *archive.Manifest) []string {
 	currentArch := sysinfo.Arch()
 	if manifest.Arch != "" && currentArch != "" && manifest.Arch != currentArch {
 		warnings = append(warnings, fmt.Sprintf(
-			"el clon se creó en %s y este Mac es %s; el despliegue puede requerir ajustes", manifest.Arch, currentArch))
+			"el clon se creó en %s y este Mac es %s; la implantación puede requerir ajustes", manifest.Arch, currentArch))
 	}
 	currentMacOS := sysinfo.MacOSVersion()
 	if manifest.MacOSVersion != "" && currentMacOS != "" && manifest.MacOSVersion != currentMacOS {
 		warnings = append(warnings, fmt.Sprintf(
-			"el clon se creó con macOS %s y este Mac usa %s; el despliegue puede requerir ajustes", manifest.MacOSVersion, currentMacOS))
+			"el clon se creó con macOS %s y este Mac usa %s; la implantación puede requerir ajustes", manifest.MacOSVersion, currentMacOS))
 	}
 	return warnings
 }
@@ -557,7 +557,7 @@ func ghosttyPortabilityNotices(manifest *archive.Manifest, cloneFile, home strin
 			}
 			for _, reference := range ghostty.AbsoluteReferences(string(content)) {
 				if _, err := paths.ToRelative(reference, home); err != nil {
-					notices = append(notices, "aviso: Ghostty conserva una ruta absoluta que puede requerir ajuste manual tras el despliegue")
+					notices = append(notices, "aviso: Ghostty conserva una ruta absoluta que puede requerir ajuste manual tras la implantación")
 					break
 				}
 			}

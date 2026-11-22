@@ -17,7 +17,7 @@ los glifos reales.
 ```text
 +--------------------------------------------------------------+
 | App (raíz de Bubble Tea)                                     |
-|   stack []Screen        flujo compartido (clone/deploy/...)  |
+|   stack []Screen        flujo compartido (clone/implant/...)  |
 |                                                              |
 |   +------------------------------------------------------+   |
 |   | Frame                                                |   |
@@ -192,8 +192,8 @@ Path A incluye mover a `tea.Cmd` las operaciones que hoy bloquean la UI:
 
 - recuento de archivos de C1;
 - planificación y escritura del clon;
-- preparación y planificación del despliegue;
-- aplicación del despliegue;
+- preparación y planificación de la implantación;
+- aplicación de la implantación;
 - consulta y ejecución de la actualización.
 
 Las funciones de dominio no cambian. Solo cambia quién las ejecuta y cómo se
@@ -256,12 +256,12 @@ a 76; en 140+ sube a 120.
 | C1       | `kamino · Clonar · Apps`       | 1 de 3  | sí     | clone-tui        |
 | C2       | `kamino · Clonar · Destino`    | 2 de 3  | sí     | clone-tui        |
 | C3       | `kamino · Clonar · Revisión` / `Resultado` | 3 de 3 | sí | clone-tui |
-| D0       | `kamino · Desplegar · Clon`    | 1 de 4  | sí     | deploy-conflicts |
-| D1       | `kamino · Desplegar · Apps`    | 2 de 4  | sí     | deploy-conflicts |
-| D2       | `kamino · Desplegar · Conflictos` | 3 de 4 | sí    | deploy-conflicts |
-| D3       | `kamino · Desplegar · Conflictos` | 3 de 4 | sí    | deploy-conflicts |
-| D4       | `kamino · Desplegar · Confirmación` | 4 de 4 | sí  | deploy-conflicts |
-| D5       | `kamino · Desplegar · Resumen` | no      | sí     | deploy-conflicts |
+| D0       | `kamino · Implantar · Clon`    | 1 de 4  | sí     | deploy-conflicts |
+| D1       | `kamino · Implantar · Apps`    | 2 de 4  | sí     | deploy-conflicts |
+| D2       | `kamino · Implantar · Conflictos` | 3 de 4 | sí    | deploy-conflicts |
+| D3       | `kamino · Implantar · Conflictos` | 3 de 4 | sí    | deploy-conflicts |
+| D4       | `kamino · Implantar · Confirmación` | 4 de 4 | sí  | deploy-conflicts |
+| D5       | `kamino · Implantar · Resumen` | no      | sí     | deploy-conflicts |
 | U1       | `kamino · Actualización`       | no      | sí     | self-update      |
 | Settings | `kamino · Configuración`       | no      | sí     | user-configuration |
 | A1       | `kamino · Configuración · Añadir app` | no | sí    | app-authoring    |
@@ -283,11 +283,11 @@ kamino · Menú                                    o o o o o o o *
    [wordmark KAMINO]
    v0.10.0
 
-   Clona y despliega configuraciones de macOS en un solo archivo.
+   Clona e implanta configuraciones de macOS en un solo archivo.
    La Fuerza estará contigo.
 
    > Clonar             Crea un clon de las apps instaladas.
-     Desplegar          Despliega desde un archivo del clon.
+     Implantar          Implanta un clon desde un archivo.
      Actualizar         Actualiza a la última versión publicada.
      Configuración      Edita las rutas y añade apps.
      Abandonar Kamino   Cierra kamino.
@@ -557,10 +557,10 @@ no incluye `C4`; el estado final es `C3` con `phase = done`.
 ### 4.6 D0 · Elegir el clon
 
 ```text
-kamino · Desplegar · Clon                                    Paso 1 de 4   * o o o
+kamino · Implantar · Clon                                    Paso 1 de 4   * o o o
 --------------------------------------------------------------------------------
 
-  Elige el clon que quieres desplegar
+  Elige el clon que quieres implantar
 
   ARCHIVO                          ORIGEN            TAMAÑO
   --------------------------------------------------------------------------
@@ -610,13 +610,13 @@ Notas:
 - Variantes: filtro activo, sin clones (`No hay clones disponibles`), ruta manual
   con error de manifiesto, y scroll si hay más filas que espacio.
 
-### 4.7 D1 · Apps del despliegue
+### 4.7 D1 · Apps de la implantación
 
 ```text
-kamino · Desplegar · Apps                                    Paso 2 de 4   * * o o
+kamino · Implantar · Apps                                    Paso 2 de 4   * * o o
 --------------------------------------------------------------------------------
 
-  Elige las apps que quieres desplegar
+  Elige las apps que quieres implantar
 
   SEL  APP                     ARCHIVOS
   --------------------------------------------------------------------------
@@ -636,7 +636,7 @@ AVISO  Cierra las apps antes de continuar: pueden sobrescribir los cambios al ce
 Variante: preparación.
 
 ```text
-  Preparando el despliegue...
+  Preparando la implantación...
 
   Verificando el archivo y extrayendo el clon...
   Esc cancelar   Ctrl+C cancelar
@@ -653,7 +653,7 @@ Notas:
 ### 4.8 D2 · Conflictos
 
 ```text
-kamino · Desplegar · Conflictos                              Paso 3 de 4   * * * o
+kamino · Implantar · Conflictos                              Paso 3 de 4   * * * o
 --------------------------------------------------------------------------------
 
   Conflictos
@@ -692,7 +692,7 @@ Vista completa del archivo, dos columnas. El ejemplo muestra un bloque; la vista
 recorre el archivo entero con scroll.
 
 ```text
-kamino · Desplegar · Conflictos                              Paso 3 de 4   * * * o
+kamino · Implantar · Conflictos                              Paso 3 de 4   * * * o
 --------------------------------------------------------------------------------
 
   ~/.config/herdr/config.toml
@@ -749,10 +749,10 @@ Variante: decisión de archivo entero (binario, texto de más de 5 MB o enlace).
 ### 4.10 D4 · Confirmación
 
 ```text
-kamino · Desplegar · Confirmación                            Paso 4 de 4   * * * *
+kamino · Implantar · Confirmación                            Paso 4 de 4   * * * *
 --------------------------------------------------------------------------------
 
-  Confirma el despliegue
+  Confirma la implantación
 
   APP               NUEVOS  REEMPLAZOS  HÍBRIDOS  SIN DESPLEGAR  SIN CAMBIOS
   --------------------------------------------------------------------------
@@ -765,16 +765,16 @@ kamino · Desplegar · Confirmación                            Paso 4 de 4   * 
 
   Protegidos: 8    Holocrón: ~/.config/kamino/vault/snapshot/20261113.tar.gz
 
-  Abortar misión        > Retirada <        Desplegar
+  Abortar misión        > Retirada <        Implantar
 
-AVISO  Cierra las apps antes de desplegar: pueden sobrescribir los cambios.
+AVISO  Cierra las apps antes de implantar: pueden sobrescribir los cambios.
 --------------------------------------------------------------------------------
 <> mover  Enter aceptar  Esc retroceder  ? ayuda
 ```
 
 Notas:
 
-- Filas por app; columnas Nuevos, Reemplazos, Híbridos, Sin desplegar y Sin
+- Filas por app; columnas Nuevos, Reemplazos, Híbridos, Sin implantar y Sin
   cambios. El cero es `.`.
 - La fila de totales va separada por una línea. No hay líneas entre filas.
 - `Protegidos = reemplazos + híbridos` contando solo archivos existentes que se
@@ -785,30 +785,30 @@ Notas:
   `DeployPlan.Entries`, deduplicando por `Path` igual que `resolve`: la primera
   app gana. Así los totales coinciden con el núcleo.
 - Las acciones son horizontales, con Retirada preseleccionada. No hay atajo de
-  una tecla para desplegar: hay que mover el foco y pulsar Enter.
+  una tecla para implantar: hay que mover el foco y pulsar Enter.
 - Si no hay originales que proteger, se muestra «No hay originales que proteger;
   no se creará holocrón» en lugar de la ruta.
 - Variantes: muchas apps con scroll y tabla abreviada a 80 columnas.
 
-### 4.11 D5 · Resumen del despliegue
+### 4.11 D5 · Resumen de la implantación
 
 ```text
-kamino · Desplegar · Resumen
+kamino · Implantar · Resumen
 --------------------------------------------------------------------------------
 
-  Despliegue completado
+  Implantación completada
 
   RESUMEN
   --------------------------------------------------------------------------
-  Desplegados                                                            9
+  Implantados                                                            9
   Híbridos                                                               2
-  Sin desplegar                                                          2
+  Sin implantar                                                          2
   Sin cambios                                                           14
   Sin base en este Mac                                                   2
   Archivos protegidos                                                    8
 
   Holocrón: ~/.config/kamino/vault/snapshot/20261113.tar.gz
-  Para deshacer: kamino deploy ~/.config/kamino/vault/snapshot/20261113.tar.gz
+  Para deshacer: kamino implant ~/.config/kamino/vault/snapshot/20261113.tar.gz
 
   c Copiar holocrón
 
@@ -818,11 +818,11 @@ c copiar holocrón  Enter/Esc continuar  ? ayuda
 
 Notas:
 
-- «Desplegados» incluye nuevos y reemplazos; el detalle puede mostrarse como
+- «Implantados» incluye nuevos y reemplazos; el detalle puede mostrarse como
   `9 (3 nuevos, 6 reemplazos)`.
 - Un híbrido cuenta como éxito. El código 3 se reserva a omitidos, no soportados
   y `--apps` no cumplidos.
-- La variante «Despliegue incompleto» usa el título en rojo, un `ERROR` en la
+- La variante «Implantación incompleta» usa el título en rojo, un `ERROR` en la
   zona de mensajes, muestra aplicados, fallido y holocrón, y termina con código 1.
   No hay rollback automático.
 - Si no se creó holocrón, se muestra «No había originales que proteger».
@@ -908,7 +908,7 @@ Notas:
 ### 4.14 Ayuda contextual
 
 ```text
-kamino · Desplegar · Ayuda                                   Paso 3 de 4   * * * o
+kamino · Implantar · Ayuda                                   Paso 3 de 4   * * * o
 --------------------------------------------------------------------------------
 
   Ayuda · Conflictos
@@ -920,7 +920,7 @@ kamino · Desplegar · Ayuda                                   Paso 3 de 4   * *
   Atajos globales
   ? ayuda           Ctrl+C cancelar
 
-  Flujo de despliegue
+  Flujo de implantación
   * clon   * apps   * conflictos   o confirmación
 
   ! Los diffs pueden contener secretos.
@@ -1193,7 +1193,7 @@ fila. La maqueta usa `>` para `▌` y `|` para la celda en vídeo inverso.
    140×40 y 200×50, más `NO_COLOR` y ASCII.
 3. Resto por derivación: menú, C2, D0–D2, D5, U1, configuración, ayuda, error y
    aviso de terminal pequeña.
-4. Comandos asíncronos para recuento, planificación, escritura, despliegue y
+4. Comandos asíncronos para recuento, planificación, escritura, implantación y
    actualización; pruebas de cancelación y códigos de salida.
 5. Actualizar specs, `diseno-tecnico.md`, `diseno-funcional.md` y `AGENTS.md`.
 
@@ -1215,7 +1215,7 @@ Conventional Commits (`feat(tui):`, `refactor(tui):`, `test(tui):`).
    la zona de mensajes a partir de 30 filas?
 5. **Menú:** las ocho cápsulas pasan al lado derecho del header y el wordmark
    queda en el body. ¿Se mantiene así?
-6. **Acciones de D4:** orden `Abortar misión`, `Retirada`, `Desplegar`, con
+6. **Acciones de D4:** orden `Abortar misión`, `Retirada`, `Implantar`, con
    Retirada preseleccionada. ¿Se mantiene el orden de la spec?
 7. **`KAMINO_NO_LOGO`:** además de ocultar el wordmark, fuerza símbolos ASCII.
    ¿Es el comportamiento deseado?

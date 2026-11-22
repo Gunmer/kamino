@@ -150,7 +150,7 @@ func (s *DeploySession) writeResolved(entries []resolvedFile, snapshotPath strin
 				return err
 			}
 			return &kerrors.PartialApplyError{
-				KaminoError: kerrors.KaminoError{Msg: fmt.Sprintf("despliegue incompleto en %s: %v", entry.path, err)},
+				KaminoError: kerrors.KaminoError{Msg: fmt.Sprintf("implantación incompleta en %s: %v", entry.path, err)},
 				Applied:     applied,
 				Failed:      entry.path,
 				Snapshot:    snapshotPath,
@@ -172,7 +172,7 @@ func (s *DeploySession) writeResolved(entries []resolvedFile, snapshotPath strin
 		}
 		if err != nil {
 			return &kerrors.PartialApplyError{
-				KaminoError: kerrors.KaminoError{Msg: fmt.Sprintf("despliegue incompleto en %s: %v", entry.path, err)},
+				KaminoError: kerrors.KaminoError{Msg: fmt.Sprintf("implantación incompleta en %s: %v", entry.path, err)},
 				Applied:     applied,
 				Failed:      entry.path,
 				Snapshot:    snapshotPath,

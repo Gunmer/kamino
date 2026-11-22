@@ -1,8 +1,8 @@
-# Diseño: CLI de clonación y despliegue de configuraciones (macOS)
+# Diseño: CLI de clonación y implantación de configuraciones (macOS)
 
 ## 1. Objetivo
 
-Una herramienta de línea de comandos para macOS que guarda las configuraciones de las aplicaciones elegidas en **un único archivo portable**, y que permite desplegarlas después en el mismo Mac o en otro, aplicando solo lo que corresponda a las apps que estén instaladas.
+Una herramienta de línea de comandos para macOS que guarda las configuraciones de las aplicaciones elegidas en **un único archivo portable**, y que permite implantarlas después en el mismo Mac o en otro, aplicando solo lo que corresponda a las apps que estén instaladas.
 
 **Fuera de alcance:** otros sistemas operativos, clonación de documentos personales o de los binarios de las apps.
 
@@ -11,12 +11,12 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 ### 2.0 Menú interactivo (TUI)
 
 - Una sola app de terminal construida con Bubble Tea, Lip Gloss y `bubbles` reúne menú, clonación,
-  despliegue, actualización y pantallas transversales. Se abre solo si la entrada y la salida son
+  implantación, actualización y pantallas transversales. Se abre solo si la entrada y la salida son
   terminales y no se definió `KAMINO_PLAIN`.
 - El menú muestra el wordmark KAMINO en el cuerpo con la versión de la compilación justo debajo,
   un separador de ocho cápsulas en el lado derecho
   de la cabecera con la última marcada como el original, una frase fija por sesión y las opciones
-  Clonar, Desplegar, Actualizar, Configuración y Abandonar Kamino. Todas se recorren con flechas y
+  Clonar, Implantar, Actualizar, Configuración y Abandonar Kamino. Todas se recorren con flechas y
   `Enter`; no hay atajos de una tecla y Escape nunca cierra.
 - La cabecera del marco está presente desde 24 filas. El cuerpo del menú degrada por altura: con 30
   o más muestra wordmark, subtítulo, frase, opciones y última misión; con 26 a 29, wordmark y
@@ -98,7 +98,7 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 - Con terminal interactiva, `--apps` omite C1, `--output` omite C2 y ambos juntos pasan a C3. Un
   valor inválido abre la pantalla correspondiente precargada con el error.
 
-### 2.2 Despliegue (`deploy`)
+### 2.2 Implantación (`implant`)
 
 - D0 combina en una tabla `ARCHIVO | ORIGEN | TAMAÑO` los `.tar.gz` hijos directos de
   `clone.output_dir` (por defecto `~/.config/kamino/vault/`) y del directorio actual, sin recorrer
@@ -143,17 +143,17 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   que proteger. Después de escribirlo se borran los más antiguos hasta dejar
   `deploy.snapshots_limit` (5 por defecto; `0` conserva todos): solo archivos regulares
   `<fecha>.tar.gz` y `<fecha>-N.tar.gz` del directorio, nunca otros archivos, directorios o enlaces.
-  Dos despliegues simultáneos sobre el mismo directorio se serializan con un bloqueo exclusivo: la
-  poda nunca borra el holocrón de un despliegue que todavía está aplicando. Antes de escribir se revalidan los
-  destinos; si alguno cambió, se aborta sin escribir. Un fallo después del holocrón se informa como “Despliegue incompleto” con los aplicados,
+  Dos implantaciones simultáneas sobre el mismo directorio se serializan con un bloqueo exclusivo: la
+  poda nunca borra el holocrón de una implantación que todavía está aplicando. Antes de escribir se revalidan los
+  destinos; si alguno cambió, se aborta sin escribir. Un fallo después del holocrón se informa como “Implantación incompleta” con los aplicados,
   el fallido y el holocrón, y termina con código 1; no hay rollback automático.
 - Los holocrones antiguos en `~/Library/Application Support/kamino/snapshots/` no se mueven ni se
-  copian; siguen pudiendo desplegarse indicando su ruta.
-- D5 informa de desplegados, híbridos, sin desplegar, sin cambios, sin base en este Mac, archivos
+  copian; siguen pudiendo implantarse indicando su ruta.
+- D5 informa de implantados, híbridos, sin implantar, sin cambios, sin base en este Mac, archivos
   protegidos y la ruta del holocrón; `c` copia el holocrón y `Enter`/`Esc` continúan. Un híbrido
   cuenta como éxito. Si no hubo originales que proteger, muestra que no se creó holocrón. La línea
   de salida aparece solo si el código no es 0 e incluye la orden para deshacer con
-  `kamino deploy <ruta>` cuando existe holocrón. La variante incompleta usa el título en rojo, un
+  `kamino implant <ruta>` cuando existe holocrón. La variante incompleta usa el título en rojo, un
   `ERROR` en la zona de mensajes, muestra aplicados, fallido y holocrón, y termina con código 1.
 - El código 3 se reserva para los conflictos conservados en el original, los no soportados y los
   `--apps` no cumplidos. Los clones perfectos, las apps no instaladas y los híbridos no producen
@@ -192,17 +192,17 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 
 ### 3.1 Simulación (`--dry-run`)
 
-Mostrar qué se clonaría o desplegaría, sin tocar nada. En `deploy` conserva la vía de texto; en
+Mostrar qué se clonaría o implantaría, sin tocar nada. En `implant` conserva la vía de texto; en
 `clone` con terminal interactiva termina en la revisión C3 sin acción de clonar.
 
-### 3.2 Red de seguridad al desplegar
+### 3.2 Red de seguridad al implantar
 
 El holocrón de seguridad guarda automáticamente la configuración actual antes de sobrescribirla.
 La orden para deshacer se muestra en el resumen.
 
 ### 3.3 Inspección del clon (`list` / `inspect`)
 
-Ver el contenido de un clon (apps, versiones, fecha, tamaño) sin desplegarlo. Útil antes de migrar a otro Mac.
+Ver el contenido de un clon (apps, versiones, fecha, tamaño) sin implantarlo. Útil antes de migrar a otro Mac.
 
 ### 3.4 Cifrado opcional
 
@@ -214,7 +214,7 @@ Poder excluir cachés, logs, historiales o archivos grandes dentro de la configu
 
 ### 3.6 Resolución de rutas entre equipos
 
-Al llevar el clon a otro Mac, el nombre de usuario y las rutas pueden cambiar (`/Users/ana` vs `/Users/pedro`). Guardar rutas relativas al home y normalizarlas al desplegar.
+Al llevar el clon a otro Mac, el nombre de usuario y las rutas pueden cambiar (`/Users/ana` vs `/Users/pedro`). Guardar rutas relativas al home y normalizarlas al implantar.
 
 ### 3.7 Manejo de conflictos
 
@@ -231,12 +231,12 @@ Cuando el archivo destino ya existe y difiere:
 - Antes de aplicar un híbrido se validan TOML, JSON, INI y plist. Si ambos originales eran válidos
   y el híbrido no, se bloquea; si alguno ya era inválido, se avisa y se permite aplicar. YAML y
   shell no se validan.
-- La confirmación final muestra lo que se desplegará, hibridará, omitirá y quedará sin cambios, el
+- La confirmación final muestra lo que se implantará, hibridará, omitirá y quedará sin cambios, el
   número de protegidos y el directorio del holocrón. Volver o cancelar no escribe ni crea holocrón.
 - Si un destino cambia durante la revisión, se aborta toda la operación antes de escribir.
 - `--yes` mantiene una vía no interactiva que aplica el clon a todos los conflictos.
   `--dry-run` imprime los diffs en la salida estándar sin abrir la TUI ni escribir nada.
-- El resumen distingue desplegados, híbridos, omitidos y sin cambios; un híbrido cuenta como éxito
+- El resumen distingue implantados, híbridos, omitidos y sin cambios; un híbrido cuenta como éxito
   y el código 3 queda reservado a los elementos omitidos y a los `--apps` no cumplidos.
 
 ### 3.8 Avisos de compatibilidad
@@ -244,14 +244,14 @@ Cuando el archivo destino ya existe y difiere:
 Si la arquitectura o la versión de macOS del manifiesto difieren de las actuales, D0 lo avisa sin
 bloquear y sin alterar el código de salida.
 
-### 3.9 Cierre de apps antes de desplegar
+### 3.9 Cierre de apps antes de implantar
 
-Muchas apps reescriben sus preferencias al cerrarse y pisan lo desplegado. D4 recuerda cerrar las
+Muchas apps reescriben sus preferencias al cerrarse y pisan lo implantado. D4 recuerda cerrar las
 apps abiertas; la detección automática queda fuera de este cambio.
 
 ### 3.10 Verificación de integridad
 
-Incluir checksums en el manifiesto y verificarlos antes de desplegar para detectar archivos corruptos.
+Incluir checksums en el manifiesto y verificarlos antes de implantar para detectar archivos corruptos.
 
 ### 3.11 Permisos de macOS
 
@@ -284,11 +284,13 @@ Barra de progreso, resumen final (qué se clonó, qué se omitió y por qué), c
 | Comando | Función |
 | --- | --- |
 | `clone` | Crea el archivo del clon con las apps elegidas |
-| `deploy` | Despliega desde un archivo, solo apps instaladas |
+| `implant` | Implanta desde un archivo, solo apps instaladas |
 | `list` / `inspect` | Muestra el contenido de un clon |
 | `apps` | Lista las apps soportadas y su estado (instalada o no) |
-| `undo` | Revierte el último despliegue |
+| `undo` | Revierte la última implantación |
 | `verify` | Comprueba la integridad de un clon |
+
+`deploy` se conserva como alias de `implant`.
 
 Opciones comunes: `--dry-run`, `--apps`, `--output`, `--force`, `--encrypt`, `--yes`, `--verbose`.
 
@@ -298,9 +300,9 @@ Opciones comunes: `--dry-run`, `--apps`, `--output`, `--force`, `--encrypt`, `--
 planificar y revisar en C3 → escribir el temporal con progreso → renombrar al destino → estado final
 de C3 con resultado.
 
-**Despliegue:** D0 valida el manifiesto → D1 verifica, extrae y clasifica → D2 resuelve conflictos →
+**Implantación:** D0 valida el manifiesto → D1 verifica, extrae y clasifica → D2 resuelve conflictos →
 D3 revisa el archivo completo en dos columnas → D4 confirma y crea el holocrón → D5 aplica con
-progreso y presenta el resultado o el despliegue incompleto.
+progreso y presenta el resultado o la implantación incompleta.
 
 **Actualización:** U1 consulta la release → descarga y verifica tamaño y SHA-256 → reemplaza el
 binario de forma atómica → pide reiniciar.
@@ -319,7 +321,7 @@ binario de forma atómica → pide reiniciar.
 
 ## 7. Propuesta de alcance por versiones
 
-**v1 (MVP):** `clone` interactivo, `deploy` filtrado por apps instaladas, catálogo declarativo, manifiesto, `--dry-run`, copia de seguridad previa a desplegar y normalización de rutas entre usuarios.
+**v1 (MVP):** `clone` interactivo, `implant` filtrado por apps instaladas, catálogo declarativo, manifiesto, `--dry-run`, copia de seguridad previa a implantar y normalización de rutas entre usuarios.
 
 **v2:** cifrado, `inspect`, verificación de integridad, manejo de conflictos, detección de apps abiertas.
 
