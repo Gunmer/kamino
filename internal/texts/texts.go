@@ -10,7 +10,7 @@ import (
 
 const (
 	AppName  = "kamino"
-	Subtitle = "Clona y despliega configuraciones de macOS en un solo archivo."
+	Subtitle = "Clona e implanta configuraciones de macOS en un solo archivo."
 )
 
 var Wordmark = []string{
@@ -65,13 +65,13 @@ const (
 
 const (
 	MenuClone  = "Clonar"
-	MenuDeploy = "Desplegar"
+	MenuDeploy = "Implantar"
 	MenuUpdate = "Actualizar"
 	MenuConfig = "Configuración"
 	MenuExit   = "Abandonar Kamino"
 
 	MenuCloneHelp  = "Crea un clon de las apps instaladas."
-	MenuDeployHelp = "Despliega desde un archivo del clon."
+	MenuDeployHelp = "Implanta un clon desde un archivo."
 	MenuUpdateHelp = "Actualiza a la última versión publicada."
 	MenuConfigHelp = "Edita las rutas y añade apps."
 	MenuExitHelp   = "Cierra kamino."
@@ -146,14 +146,14 @@ const (
 )
 
 const (
-	DeployTitle             = "Desplegar un clon"
-	DeployFileTitle         = "Elige el clon que quieres desplegar"
-	DeployAppsTitle         = "Elige las apps que quieres desplegar"
+	DeployTitle             = "Implantar un clon"
+	DeployFileTitle         = "Elige el clon que quieres implantar"
+	DeployAppsTitle         = "Elige las apps que quieres implantar"
 	DeployConflictsTitle    = "Conflictos"
 	DeployDetailTitle       = "Revisión por bloques"
-	DeployConfirmTitle      = "Confirma el despliegue"
-	DeploySummaryTitle      = "Despliegue completado"
-	DeployIncompleteTitle   = "Despliegue incompleto"
+	DeployConfirmTitle      = "Confirma la implantación"
+	DeploySummaryTitle      = "Implantación completada"
+	DeployIncompleteTitle   = "Implantación incompleta"
 	DeployNoFile            = "Escribe o elige un archivo .tar.gz."
 	DeployFileInvalid       = "El archivo no es un clon válido: {message}"
 	DeployFileMissing       = "no existe o no es un archivo"
@@ -170,15 +170,15 @@ const (
 	DeployManifestWarnings  = "Avisos del manifiesto"
 	DeployArchWarning       = "Arquitectura distinta: {message}"
 	DeployMacOSWarning      = "Versión de macOS distinta: {message}"
-	DeployPreparing         = "Preparando el despliegue…"
+	DeployPreparing         = "Preparando la implantación…"
 	DeployVerifying         = "Verificando la integridad del clon…"
 	DeployExtracting        = "Extrayendo en un directorio temporal…"
 	DeployClassifying       = "Clasificando los archivos…"
-	DeployApplying          = "Aplicando el despliegue…"
+	DeployApplying          = "Implantando el clon…"
 	DeployAfterSnapshot     = "El holocrón ya está creado: no se puede cancelar."
 	DeployNoneSelected      = "Selecciona al menos una app para continuar."
 	DeployNotInstalledTitle = "Sin base en este Mac"
-	DeployNotInstalledNote  = "Estas apps se informan, no se despliegan y no cuentan como omitidas."
+	DeployNotInstalledNote  = "Estas apps se informan, no se implantan y no cuentan como omitidas."
 	DeployNew               = "Nuevos: {count}"
 	DeployPerfect           = "Clones perfectos: {count}"
 	DeployChanged           = "Conflictos: {count}"
@@ -191,24 +191,24 @@ const (
 	DeployReview            = "Revisar"
 	DeployApply             = "Aplicar clon"
 	DeployOmit              = "Conservar original"
-	DeployDeployed          = "Desplegados: {count}"
+	DeployDeployed          = "Implantados: {count}"
 	DeployDeployedDetail    = "{new} nuevos y {replaced} reemplazos"
 	DeployHybrids           = "Híbridos: {count}"
 	DeployOmitted           = "Omitidos: {count}"
-	DeployNotDeployed       = "Sin desplegar: {count}"
+	DeployNotDeployed       = "Sin implantar: {count}"
 	DeployUnchanged         = "Sin cambios: {count}"
 	DeployProtected         = "Archivos protegidos: {count}"
 	DeploySnapshotDir       = "Holocrón de seguridad en: {path}"
 	DeploySnapshotPath      = "Holocrón: {path}"
 	DeployNoSnapshot        = "No había originales que proteger; no se creó holocrón."
-	DeployOpenApps          = "Si desplegarás sobre apps abiertas, ciérralas antes de continuar."
+	DeployOpenApps          = "Si vas a implantar sobre apps abiertas, ciérralas antes de continuar."
 	DeployBack              = "Retirada"
 	DeployAbort             = "Abortar misión"
-	DeployApplyButton       = "Desplegar"
-	DeployUndo              = "Para deshacer: kamino deploy {path}"
+	DeployApplyButton       = "Implantar"
+	DeployUndo              = "Para deshacer: kamino implant {path}"
 	DeployExitLine          = "Salida {code}: se conservaron originales, no soportados o apps pedidas no cumplidas."
-	DeployPartial           = "Despliegue incompleto: {applied} aplicados; falló {failed}."
-	DeployPartialSnapshot   = "Holocrón disponible para deshacer: {path}"
+	DeployPartial           = "Implantación incompleta: {applied} aplicados; falló {failed}."
+	DeployPartialSnapshot   = "Holocrón disponible para deshacer: {path}\nPara restaurarlo: kamino implant {path} --yes"
 	DeployCopyPath          = "Ruta del holocrón copiada."
 	DeployBlock             = "Bloque {index} de {total}"
 	DeployBlockCounts       = "Clon: {clone} líneas · Original: {original} líneas"
@@ -275,7 +275,7 @@ const (
 	IconOriginal = "◉"
 
 	Cancelled        = "cancelado"
-	RequiresYes      = "se requiere --yes para desplegar sin terminal interactiva"
+	RequiresYes      = "se requiere --yes para implantar sin terminal interactiva"
 	CloneForceHelp   = "Reemplaza un clon existente de forma atómica. Sin esta opción, un clon existente es un error."
 	CloneExistsHint  = "El clon ya existe: usa --force (-f) para reemplazarlo."
 	DeployNoDecision = "Faltan decisiones de conflicto: {paths}"
@@ -352,7 +352,7 @@ const (
 	SettingsSnapshotsLabel       = "Directorio de holocrones"
 	SettingsWarnCatalogMissing   = "no existe; se usarán solo las definiciones integradas"
 	SettingsWarnCloneMissing     = "no existe; se creará al clonar"
-	SettingsWarnSnapshotsMissing = "no existe; se creará al desplegar"
+	SettingsWarnSnapshotsMissing = "no existe; se creará al implantar"
 	SettingsWarnNoFile           = "no existe config.toml; se creará al guardar"
 	SettingsSaved                = "configuración guardada"
 	SettingsSaveError            = "no se pudo guardar. El archivo anterior no cambió"
@@ -367,11 +367,11 @@ const (
 	TitleCancelClone     = "Clonación cancelada"
 	TitleSimulation      = "Simulación de clonación"
 	TitleCloneCreated    = "Clon creado en {path}"
-	TitleDeployCancelled = "Despliegue cancelado"
-	TitleDeployAborted   = "Despliegue abortado"
+	TitleDeployCancelled = "Implantación cancelada"
+	TitleDeployAborted   = "Implantación abortada"
 	TitleBackToApps      = "Volver a las apps"
 	TitleBackToAppsBody  = "Volver descarta las decisiones de conflicto tomadas hasta ahora."
-	TitlePreparing       = "Preparando el despliegue"
+	TitlePreparing       = "Preparando la implantación"
 	TitleRetryAdvice     = "Vuelve a D0 y elige un clon válido."
 	TitleCancelPrepare   = "Cancelando…"
 )
@@ -383,11 +383,11 @@ var (
 	HelpC3       = [][2]string{{"d", "rutas omitidas y su motivo"}, {"f", "archivos incluidos por app"}, {"Enter", "clonar cuando el plan esté listo"}, {"Ctrl+C", "cancelar antes del renombrado"}, {"Esc", "volver"}}
 	HelpC4       = [][2]string{{"d", "rutas omitidas"}, {"c", "copiar la ruta con OSC 52"}, {"Enter/Esc", "continuar"}}
 	HelpD0       = [][2]string{{"↑↓", "recorrer los clones de la lista"}, {"/", "filtrar por nombre u origen"}, {"o", "ir a Otro archivo... y escribir una ruta"}, {"Enter", "continuar con la fila resaltada o abrir la ruta manual"}, {"Esc", "volver a la tabla, cerrar el filtro o cancelar"}, {"F1", "abrir esta ayuda"}}
-	HelpD1       = [][2]string{{"↑↓", "recorrer apps"}, {"Espacio", "marcar o desmarcar sin perder el foco"}, {"a", "seleccionar todas"}, {"n", "quitar todas"}, {"Enter", "continuar"}, {"Esc", "volver sin desplegar"}}
+	HelpD1       = [][2]string{{"↑↓", "recorrer apps"}, {"Espacio", "marcar o desmarcar sin perder el foco"}, {"a", "seleccionar todas"}, {"n", "quitar todas"}, {"Enter", "continuar"}, {"Esc", "volver sin implantar"}}
 	HelpPrepare  = [][2]string{{"Esc", "detener antes de escribir"}, {"Ctrl+C", "detener antes de escribir"}}
 	HelpD2       = [][2]string{{"↑↓", "recorrer conflictos"}, {"r", "revisar el conflicto seleccionado"}, {"c", "aplicar el clon completo"}, {"o", "conservar el original"}, {"C", "aplicar el clon a todos"}, {"O", "conservar el original en todos"}, {"Enter", "confirmar cuando todo esté decidido"}, {"Esc", "retirada: descarta decisiones tras confirmar"}}
 	HelpD3       = [][2]string{{"↑↓", "recorrer líneas decidibles"}, {"Espacio/Enter", "alternar original/clon"}, {"c/o", "bloque actual al clon u original"}, {"C/O", "todo el archivo al clon u original"}, {"Tab/Mayús+Tab", "cambiar de bloque"}, {"Esc", "volver y validar"}}
-	HelpD4       = [][2]string{{"↑↓", "elegir una acción"}, {"Enter", "aceptar la acción seleccionada"}, {"Retirada", "volver sin escribir ni crear holocrón"}, {"Abortar misión", "cancelar el despliegue"}, {"Desplegar", "crear el holocrón y escribir"}, {"Esc", "retroceder"}}
+	HelpD4       = [][2]string{{"↑↓", "elegir una acción"}, {"Enter", "aceptar la acción seleccionada"}, {"Retirada", "volver sin escribir ni crear holocrón"}, {"Abortar misión", "cancelar la implantación"}, {"Implantar", "crear el holocrón y escribir"}, {"Esc", "retroceder"}}
 	HelpD5       = [][2]string{{"c", "copiar la ruta del holocrón"}, {"Enter/Esc", "continuar y cerrar el flujo"}}
 	HelpU1       = [][2]string{{"Enter", "continuar al terminar"}, {"Esc", "cancelar antes del reemplazo o salir al terminar"}}
 	HelpMenu     = [][2]string{{"↑↓", "mover la selección, incluida Configuración"}, {"Enter", "aceptar la opción seleccionada"}}
@@ -410,15 +410,15 @@ const (
 	ScreenMenu     = "menú principal"
 	ScreenError    = "error"
 	ScreenSmall    = "terminal pequeña"
-	ScreenPrepare  = "Preparando el despliegue"
+	ScreenPrepare  = "Preparando la implantación"
 
 	AdviceBackToD0       = "Vuelve a D0 y elige un clon válido."
 	AdviceRetryConflict  = "Revisa el conflicto y vuelve a intentarlo."
 	StatusAllDecided     = "Todos los conflictos tienen decisión. Puedes confirmar."
-	SummaryDeploy        = "Despliegue: {deployed} desplegados, {merged} híbridos"
-	SummaryDeployGeneric = "Despliegue"
+	SummaryDeploy        = "Implantación: {deployed} implantados, {merged} híbridos"
+	SummaryDeployGeneric = "Implantación"
 
-	TitleDeployDryRun = "Plan de despliegue (simulación)"
+	TitleDeployDryRun = "Plan de implantación (simulación)"
 	TitleDetail       = "Detalle"
 	ConflictWholeFile = "{path}: conflicto {reason}; se resuelve como archivo entero"
 	ConflictBinary    = "binario"

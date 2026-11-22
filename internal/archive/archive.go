@@ -449,6 +449,13 @@ func hashTarMember(reader io.Reader) (string, error) {
 	return hex.EncodeToString(digest.Sum(nil)), nil
 }
 
+// Staging is private and only read back by kamino, so a member mode must never
+// make it unreadable: the real mode is restored from the manifest on deploy.
+const (
+	stagingDirMode  os.FileMode = 0o700
+	stagingFileMode os.FileMode = 0o600
+)
+
 // ExtractArchive extracts safely into a staging directory.
 func ExtractArchive(ctx context.Context, file, dest string, callback progress.Callback) error {
 	if err := os.MkdirAll(dest, 0o755); err != nil {
@@ -468,7 +475,7 @@ func ExtractArchive(ctx context.Context, file, dest string, callback progress.Ca
 			continue
 		}
 		target := filepath.Join(dest, filepath.FromSlash(member.Name))
-		if err := os.MkdirAll(target, os.FileMode(member.Mode).Perm()); err != nil {
+		if err := os.MkdirAll(target, os.FileMode(member.Mode).Perm()|stagingDirMode); err != nil {
 			return archiveError("extracción insegura o fallida: %v", err)
 		}
 	}
@@ -502,7 +509,7 @@ func ExtractArchive(ctx context.Context, file, dest string, callback progress.Ca
 		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 			return archiveError("extracción insegura o fallida: %v", err)
 		}
-		out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode).Perm())
+		out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, os.FileMode(header.Mode).Perm()|stagingFileMode)
 		if err != nil {
 			return archiveError("extracción insegura o fallida: %v", err)
 		}

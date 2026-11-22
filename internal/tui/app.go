@@ -584,7 +584,7 @@ func (a *App) finishDeploy() {
 	}
 	mission := ""
 	if a.deployResult != nil {
-		mission = fmt.Sprintf("despliegue: %d desplegados, %d híbridos", len(a.deployResult.Deployed), len(a.deployResult.Merged))
+		mission = fmt.Sprintf("implantación: %d implantados, %d híbridos", len(a.deployResult.Deployed), len(a.deployResult.Merged))
 	}
 	if a.deploySession != nil {
 		a.deploySession.Close()

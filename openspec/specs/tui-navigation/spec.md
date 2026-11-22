@@ -6,6 +6,28 @@ Definir la experiencia transversal de la interfaz interactiva: apertura, menú, 
 
 ## Requirements
 
+### Requirement: Terminología visible de implantación
+
+La TUI DEBE (`MUST`) usar «Implantar» como nombre visible de la acción que aplica un clon y «implantación» como sustantivo del flujo. Las pantallas, botones, mensajes, resúmenes y la orden de deshacer DEBEN (`MUST`) usar esa terminología; `deploy` NO DEBE (`MUST NOT`) aparecer como etiqueta principal de la TUI.
+
+#### Scenario: Menú con Implantar
+
+- **GIVEN** el menú principal abierto
+- **WHEN** se muestran las opciones
+- **THEN** la segunda opción se llama «Implantar» y no «Desplegar».
+
+#### Scenario: Títulos y acciones del flujo
+
+- **GIVEN** el flujo de implantación abierto
+- **WHEN** se muestran sus pantallas
+- **THEN** los títulos usan «Implantar un clon» y «Confirmar la implantación», y la acción final se llama «Implantar».
+
+#### Scenario: Resumen y orden de deshacer
+
+- **GIVEN** una implantación terminada con holocrón
+- **WHEN** se muestra el resumen
+- **THEN** se usan «Implantación completada», «Implantados» y «Sin implantar», y la orden para deshacer es `kamino implant <ruta>`.
+
 ### Requirement: Aplicación única y apertura con terminal
 
 La interfaz interactiva DEBE (`MUST`) ser una sola aplicación con menú y flujos. DEBE abrirse solo cuando la entrada y la salida estándar son terminales y no se solicitó la vía no interactiva; sin terminal, o con `KAMINO_PLAIN`, los comandos DEBEN usar la salida de texto. Un comando directo NO DEBE volver al menú; un flujo iniciado desde el menú SÍ DEBE volver a él.
@@ -31,18 +53,18 @@ La interfaz interactiva DEBE (`MUST`) ser una sola aplicación con menú y flujo
 #### Scenario: Comando directo no vuelve al menú
 
 - **GIVEN** una terminal interactiva
-- **WHEN** se ejecuta `kamino clone` o `kamino deploy`
+- **WHEN** se ejecuta `kamino clone`, `kamino implant` o el alias `kamino deploy`
 - **THEN** el flujo termina con el código del comando y no muestra el menú al finalizar
 
 ### Requirement: Menú principal
 
-El menú DEBE (`MUST`) mostrar el wordmark KAMINO en el cuerpo, las ocho cápsulas de clonación en el lado derecho de la cabecera con la última marcada como el original, las opciones Clonar, Desplegar, Actualizar, Configuración y Abandonar Kamino, en ese orden, y la línea de última misión cuando exista. Las opciones NO DEBEN (`MUST NOT`) tener atajos de una tecla. Las flechas arriba y abajo DEBEN mover la selección y `Enter` DEBE aceptar la opción seleccionada; la opción de salida DEBE cerrar la aplicación y Escape NO DEBE cerrarla.
+El menú DEBE (`MUST`) mostrar el wordmark KAMINO en el cuerpo, las ocho cápsulas de clonación en el lado derecho de la cabecera con la última marcada como el original, las opciones Clonar, Implantar, Actualizar, Configuración y Abandonar Kamino, en ese orden, y la línea de última misión cuando exista. Las opciones NO DEBEN (`MUST NOT`) tener atajos de una tecla. Las flechas arriba y abajo DEBEN mover la selección y `Enter` DEBE aceptar la opción seleccionada; la opción de salida DEBE cerrar la aplicación y Escape NO DEBE cerrarla.
 
 #### Scenario: Menú completo
 
 - **GIVEN** una terminal de al menos 30 filas y una sesión sin flujos ejecutados
 - **WHEN** se abre el menú
-- **THEN** se muestran la cabecera con las ocho cápsulas, el wordmark, el subtítulo, las opciones Clonar, Desplegar, Actualizar, Configuración y Abandonar, y no se muestra una última misión
+- **THEN** se muestran la cabecera con las ocho cápsulas, el wordmark, el subtítulo, las opciones Clonar, Implantar, Actualizar, Configuración y Abandonar, y no se muestra una última misión
 
 #### Scenario: Cápsulas en la cabecera
 
@@ -64,7 +86,7 @@ El menú DEBE (`MUST`) mostrar el wordmark KAMINO en el cuerpo, las ocho cápsul
 #### Scenario: Opciones sin atajos de una tecla
 
 - **GIVEN** el menú principal abierto
-- **WHEN** se pulsan `c`, `d`, `u` o `q`
+- **WHEN** se pulsan `c`, `i`, `u` o `q`
 - **THEN** no se ejecuta ninguna opción y la aplicación permanece en el menú
 
 #### Scenario: Salir con la opción de salida
@@ -125,9 +147,9 @@ La navegación DEBE (`MUST`) usar una pila de pantallas que conserve el estado d
 
 #### Scenario: Atrás descarta decisiones de conflicto
 
-- **GIVEN** el flujo de desplegar con decisiones tomadas en D2
+- **GIVEN** el flujo de implantar con decisiones tomadas en D2
 - **WHEN** se vuelve de D2 a D1 y se confirma la retirada
-- **THEN** las decisiones se descartan antes de volver a preparar el despliegue
+- **THEN** las decisiones se descartan antes de volver a preparar la implantación
 
 #### Scenario: Volver al menú tras un flujo
 
@@ -137,7 +159,7 @@ La navegación DEBE (`MUST`) usar una pila de pantallas que conserve el estado d
 
 ### Requirement: Numeración de pasos adaptable
 
-Cada flujo DEBE (`MUST`) mostrar el paso actual y el total de pasos visibles. Clonar DEBE tener tres pasos (apps, destino y revisión) y Desplegar cuatro (clon, apps, conflictos y confirmación); el detalle por líneas DEBE ser una subpantalla. Los totales DEBEN bajar cuando un argumento omita una pantalla, pero DEBEN incluirla si el valor es inválido y se abre precargada con el error.
+Cada flujo DEBE (`MUST`) mostrar el paso actual y el total de pasos visibles. Clonar DEBE tener tres pasos (apps, destino y revisión) e Implantar cuatro (clon, apps, conflictos y confirmación); el detalle por líneas DEBE ser una subpantalla. Los totales DEBEN bajar cuando un argumento omita una pantalla, pero DEBEN incluirla si el valor es inválido y se abre precargada con el error.
 
 #### Scenario: Tres pasos al clonar
 
@@ -147,13 +169,13 @@ Cada flujo DEBE (`MUST`) mostrar el paso actual y el total de pasos visibles. Cl
 
 #### Scenario: Cuatro pasos al desplegar
 
-- **GIVEN** el flujo de desplegar iniciado desde el menú
+- **GIVEN** el flujo de implantar iniciado desde el menú
 - **WHEN** se muestra D0
 - **THEN** se indica el paso 1 de 4 y el flujo continúa con apps, conflictos y confirmación
 
 #### Scenario: Totales reducidos por argumentos
 
-- **GIVEN** un despliegue con `--apps` y un archivo posicional
+- **GIVEN** una implantación con `--apps` y un archivo posicional
 - **WHEN** se inicia el flujo
 - **THEN** el total de pasos baja porque D0 y D1 se omiten
 
@@ -213,7 +235,7 @@ Por debajo de 80 columnas o 24 filas, la interfaz DEBE (`MUST`) mostrar una pant
 
 #### Scenario: Operación en curso y terminal pequeña
 
-- **GIVEN** una clonación o un despliegue en curso
+- **GIVEN** una clonación o una implantación en curso
 - **WHEN** la terminal baja de 80x24
 - **THEN** la operación continúa y la aplicación no se cierra hasta que termine
 
@@ -229,7 +251,7 @@ Por debajo de 80 columnas o 24 filas, la interfaz DEBE (`MUST`) mostrar una pant
 
 #### Scenario: Ctrl+C antes de aplicar
 
-- **GIVEN** una revisión de clonación o despliegue sin escrituras iniciadas
+- **GIVEN** una revisión de clonación o implantación sin escrituras iniciadas
 - **WHEN** se pulsa `Ctrl+C`
 - **THEN** la operación se cancela y no se escribe nada
 

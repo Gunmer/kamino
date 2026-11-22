@@ -33,7 +33,7 @@ func TestAppsHelpAndDiscovery(t *testing.T) {
 		}
 	}
 	code, _, stderr := run("apps", "nope")
-	if code != 2 || !strings.Contains(stderr, "No such command") {
+	if code != 2 || !strings.Contains(stderr, "comando desconocido") {
 		t.Fatalf("unexpected unknown subcommand: %d %q", code, stderr)
 	}
 	code, stdout, _ = run("--help")

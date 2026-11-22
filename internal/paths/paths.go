@@ -75,6 +75,12 @@ func EnsureRelative(raw string) error {
 	return nil
 }
 
+// errEmptyHome reports a caller that skipped ResolveHome. Falling back to the
+// real home here would let a missing injection touch the developer's files.
+func errEmptyHome() error {
+	return pathError("se requiere un home resuelto; usa ResolveHome antes de acceder a rutas")
+}
+
 func pathError(msg string) error {
 	return &kerrors.PathError{KaminoError: kerrors.KaminoError{Msg: msg}}
 }
@@ -120,11 +126,7 @@ func ToAbsolute(rel string, home string) (string, error) {
 		return "", err
 	}
 	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
-		if err != nil {
-			return "", pathError(fmt.Sprintf("no se pudo resolver el home: %v", err))
-		}
+		return "", errEmptyHome()
 	}
 	return filepath.Join(home, filepath.FromSlash(rel)), nil
 }
@@ -136,11 +138,7 @@ func ToRelative(candidate string, home string) (string, error) {
 		return "", pathError(fmt.Sprintf("se requiere una ruta absoluta: %q", candidate))
 	}
 	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
-		if err != nil {
-			return "", pathError(fmt.Sprintf("no se pudo resolver el home: %v", err))
-		}
+		return "", errEmptyHome()
 	}
 	root := filepath.Clean(home)
 	rel, err := filepath.Rel(root, c)
@@ -159,11 +157,7 @@ type SafeHome struct {
 // NewSafeHome opens the home descriptor.
 func NewSafeHome(home string, create bool) (*SafeHome, error) {
 	if home == "" {
-		var err error
-		home, err = os.UserHomeDir()
-		if err != nil {
-			return nil, pathError(fmt.Sprintf("no se pudo resolver el home: %v", err))
-		}
+		return nil, errEmptyHome()
 	}
 	if create {
 		if err := os.MkdirAll(home, 0o755); err != nil {
@@ -487,7 +481,7 @@ func (s *SafeHome) WriteFile(rel string, data []byte, mode os.FileMode) error {
 		cleanup()
 		return pathError(fmt.Sprintf("no se pudo reemplazar %q: %v", rel, err))
 	}
-	return nil
+	return syncDir(parent, rel)
 }
 
 // ReplaceWithSymlink atomically creates a symlink at rel.
@@ -505,5 +499,15 @@ func (s *SafeHome) ReplaceWithSymlink(rel, target string) error {
 		_ = unix.Unlinkat(parent, temp, 0)
 		return pathError(fmt.Sprintf("no se pudo reemplazar %q: %v", rel, err))
 	}
-	return nil
+	return syncDir(parent, rel)
+}
+
+// syncDir makes the rename durable. Filesystems without directory fsync
+// (EINVAL, ENOTSUP) are not an error: the rename itself already succeeded.
+func syncDir(fd int, rel string) error {
+	err := unix.Fsync(fd)
+	if err == nil || errors.Is(err, unix.EINVAL) || errors.Is(err, unix.ENOTSUP) {
+		return nil
+	}
+	return pathError(fmt.Sprintf("no se pudo sincronizar el directorio de %q: %v", rel, err))
 }

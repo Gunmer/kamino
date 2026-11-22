@@ -93,14 +93,14 @@ func Run(args []string, options Options) int {
 		return 0
 	case "clone":
 		return runCloneCommand(ctx, args[1:], options, interactive)
-	case "deploy":
-		return runDeployCommand(ctx, args[1:], options, interactive)
+	case "implant", "deploy":
+		return runImplantCommand(ctx, args[1:], options, interactive)
 	case "update":
 		return runUpdateCommand(ctx, args[1:], options, interactive)
 	case "apps":
 		return runAppsCommand(args[1:], options)
 	default:
-		fmt.Fprintf(options.Stderr, "Error: No such command %q.\n", args[0])
+		fmt.Fprintf(options.Stderr, "Error: comando desconocido %q.\n", args[0])
 		printMainHelp(options.Stderr)
 		return 2
 	}
@@ -241,7 +241,7 @@ func runCloneCommand(ctx context.Context, args []string, options Options, intera
 	return outcome.Code
 }
 
-func runDeployCommand(ctx context.Context, args []string, options Options, interactive func() bool) int {
+func runImplantCommand(ctx context.Context, args []string, options Options, interactive func() bool) int {
 	flags, err := parseFlags(args,
 		map[string]string{"--apps": "apps", "-a": "apps"},
 		map[string]string{
@@ -255,7 +255,7 @@ func runDeployCommand(ctx context.Context, args []string, options Options, inter
 		return 2
 	}
 	if flags.help {
-		printDeployHelp(options.Stdout)
+		printImplantHelp(options.Stdout)
 		return 0
 	}
 	if len(flags.positionals) != 1 {
@@ -298,7 +298,7 @@ func runDeployCommand(ctx context.Context, args []string, options Options, inter
 		return 1
 	}
 	for _, appID := range outcome.Missing {
-		fmt.Fprintf(options.Stderr, "aviso: app no desplegable o desconocida: %s\n", appID)
+		fmt.Fprintf(options.Stderr, "aviso: app no implantable o desconocida: %s\n", appID)
 	}
 	ui.PrintDeploySummary(options.Stdout, outcome.Result, verbose)
 	return outcome.Code
@@ -340,7 +340,7 @@ func runAppsCommand(args []string, options Options) int {
 	case "new":
 		return runAppsNewCommand(args[1:], options)
 	default:
-		fmt.Fprintf(options.Stderr, "Error: No such command %q.\n", args[0])
+		fmt.Fprintf(options.Stderr, "Error: comando desconocido %q.\n", args[0])
 		printAppsHelp(options.Stderr)
 		return 2
 	}
@@ -539,7 +539,7 @@ func resolveUserPath(value string) (string, error) {
 func printMainHelp(w io.Writer) {
 	fmt.Fprintln(w, "Usage: kamino [OPTIONS] COMMAND [ARGS]...")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  kamino: clonación y despliegue de configuraciones de macOS.")
+	fmt.Fprintln(w, "  kamino: clonación e implantación de configuraciones de macOS.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Options:")
 	fmt.Fprintln(w, "  --version, -V          Muestra la versión y termina.")
@@ -548,10 +548,13 @@ func printMainHelp(w io.Writer) {
 	fmt.Fprintln(w, "  --help, -h             Muestra esta ayuda y termina.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Commands:")
-	fmt.Fprintln(w, "  clone   Crea un clon con las apps elegidas.")
-	fmt.Fprintln(w, "  deploy  Despliega desde un archivo, solo las apps instaladas.")
-	fmt.Fprintln(w, "  update  Actualiza kamino a la última versión publicada.")
-	fmt.Fprintln(w, "  apps    Crea y valida definiciones de apps.")
+	fmt.Fprintln(w, "  clone    Crea un clon con las apps elegidas.")
+	fmt.Fprintln(w, "  implant  Implanta un clon en este Mac.")
+	fmt.Fprintln(w, "  update   Actualiza kamino a la última versión publicada.")
+	fmt.Fprintln(w, "  apps     Crea y valida definiciones de apps.")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Alias:")
+	fmt.Fprintln(w, "  deploy   Alias de implant (compatibilidad).")
 }
 
 func printCloneHelp(w io.Writer) {
@@ -565,20 +568,22 @@ func printCloneHelp(w io.Writer) {
 	fmt.Fprintln(w, "  --dry-run, -n       Simula sin escribir nada.")
 	fmt.Fprintln(w, "  --verbose, -v       Salida detallada.")
 	fmt.Fprintln(w, "  --force, -f         "+texts.CloneForceHelp)
-	fmt.Fprintln(w, "  --help, -h          Show this message and exit.")
+	fmt.Fprintln(w, "  --help, -h          Muestra esta ayuda y termina.")
 }
 
-func printDeployHelp(w io.Writer) {
-	fmt.Fprintln(w, "Usage: kamino deploy [OPTIONS] CLONE_FILE")
+func printImplantHelp(w io.Writer) {
+	fmt.Fprintln(w, "Usage: kamino implant [OPTIONS] CLONE_FILE")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "  Despliega desde un archivo, solo las apps instaladas.")
+	fmt.Fprintln(w, "  Implanta un clon en este Mac: aplica sus configuraciones solo a las apps instaladas.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Options:")
-	fmt.Fprintln(w, "  --apps, -a TEXT   Apps a desplegar, separadas por comas.")
+	fmt.Fprintln(w, "  --apps, -a TEXT   Apps a implantar, separadas por comas.")
 	fmt.Fprintln(w, "  --dry-run, -n     Simula sin escribir nada.")
-	fmt.Fprintln(w, "  --yes, -y         Aplica todas las apps desplegables sin confirmar.")
+	fmt.Fprintln(w, "  --yes, -y         Aplica todas las apps implantables sin confirmar.")
 	fmt.Fprintln(w, "  --verbose, -v     Salida detallada.")
-	fmt.Fprintln(w, "  --help, -h        Show this message and exit.")
+	fmt.Fprintln(w, "  --help, -h        Muestra esta ayuda y termina.")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Alias: deploy (compatibilidad).")
 }
 
 func printUpdateHelp(w io.Writer) {
@@ -643,10 +648,10 @@ func printAppsNewHelp(w io.Writer) {
 func completionScript(shell string) string {
 	switch shell {
 	case "zsh":
-		return "#compdef kamino\n_kamino() { _arguments '*: :((clone deploy update apps))' }\ncompdef _kamino kamino\n"
+		return "#compdef kamino\n_kamino() { _arguments '*: :((clone implant deploy update apps))' }\ncompdef _kamino kamino\n"
 	case "fish":
-		return "complete -c kamino -f -a 'clone deploy update apps'\n"
+		return "complete -c kamino -f -a 'clone implant deploy update apps'\n"
 	default:
-		return "complete -W 'clone deploy update apps' kamino\n"
+		return "complete -W 'clone implant deploy update apps' kamino\n"
 	}
 }

@@ -9,7 +9,7 @@ kamino · Menú                                                    [2m○[0m 
     [2mv0.10.0[0m
   
   [1m  ▌ Clonar            [2mCrea un clon de las apps instaladas.[0m[0m
-      Desplegar         [2mDespliega desde un archivo del clon.[0m
+      Implantar         [2mImplanta un clon desde un archivo.[0m
       Actualizar        [2mActualiza a la última versión publicada.[0m
       Configuración     [2mEdita las rutas y añade apps.[0m
       Abandonar Kamino  [2mCierra kamino.[0m

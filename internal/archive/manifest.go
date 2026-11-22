@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	kerrors "github.com/Gunmer/kamino/internal/errors"
@@ -59,6 +61,15 @@ func (f *FileEntry) normalize() {
 	}
 }
 
+// ParseMode converts a manifest permission string such as "0644" to a mode.
+func ParseMode(value string) (os.FileMode, error) {
+	parsed, err := strconv.ParseUint(value, 8, 32)
+	if err != nil || parsed > 0o777 {
+		return 0, fmt.Errorf("'mode' debe ser un permiso octal entre 0000 y 0777: %q", value)
+	}
+	return os.FileMode(parsed), nil
+}
+
 func (f *FileEntry) validate() error {
 	f.normalize()
 	if err := paths.EnsureRelative(f.Path); err != nil {
@@ -74,6 +85,9 @@ func (f *FileEntry) validate() error {
 	}
 	if f.Size < 0 {
 		return fmt.Errorf("'size' no puede ser negativo")
+	}
+	if _, err := ParseMode(f.Mode); err != nil {
+		return err
 	}
 	if f.Link == nil && f.SHA256 == nil {
 		return fmt.Errorf("se requiere 'sha256' (archivo regular) o 'link' (enlace simbólico)")
@@ -104,12 +118,21 @@ func (m *Manifest) Validate() error {
 	if m.FormatVersion < 1 {
 		return fmt.Errorf("'format_version' debe ser positivo")
 	}
+	// macOS volumes are case-insensitive by default: two paths that differ only
+	// in case would overwrite each other when deployed.
+	folded := map[string]string{}
 	for index := range m.Apps {
 		app := &m.Apps[index]
 		for fileIndex := range app.Files {
-			if err := app.Files[fileIndex].validate(); err != nil {
+			file := &app.Files[fileIndex]
+			if err := file.validate(); err != nil {
 				return fmt.Errorf("app %q: %w", app.ID, err)
 			}
+			key := strings.ToLower(file.Path)
+			if previous, seen := folded[key]; seen && previous != file.Path {
+				return fmt.Errorf("app %q: las rutas %q y %q solo difieren en mayúsculas y colisionan en un volumen que no distingue mayúsculas", app.ID, previous, file.Path)
+			}
+			folded[key] = file.Path
 		}
 	}
 	return nil

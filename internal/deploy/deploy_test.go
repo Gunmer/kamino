@@ -349,7 +349,7 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	snapshots := t.TempDir()
-	release, err := snapshot.Lock(snapshots)
+	release, err := snapshot.Lock(context.Background(), snapshots)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,4 +417,104 @@ func TestCancelledContextStopsPlanAndApply(t *testing.T) {
 func cancelledError(err error) bool {
 	var target *kerrors.OperationCancelled
 	return errors.As(err, &target)
+}
+
+func TestDeployDetectsChangeWhileWaitingForTheSnapshotLock(t *testing.T) {
+	_, bin, cloneFile, definitions := deployFixture(t)
+	destination := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(destination, ".config/test/config")
+	if err := os.WriteFile(target, []byte("value=1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	snapshots := t.TempDir()
+	release, err := snapshot.Lock(context.Background(), snapshots)
+	if err != nil {
+		t.Fatal(err)
+	}
+	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("the deploy must wait for the snapshots lock: %v", err)
+	case <-time.After(150 * time.Millisecond):
+	}
+	if err := os.WriteFile(target, []byte("changed=1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case err := <-done:
+		var concurrent *kerrors.ConcurrentChangeError
+		if !errors.As(err, &concurrent) {
+			t.Fatalf("expected concurrent change, got %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the deploy must finish once the lock is released")
+	}
+	if data, _ := os.ReadFile(target); string(data) != "changed=1\n" {
+		t.Fatalf("the concurrent edit must survive: %q", data)
+	}
+}
+
+func TestDeployingASnapshotRestoresThePreviousState(t *testing.T) {
+	_, bin, cloneFile, definitions := deployFixture(t)
+	destination := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(destination, ".config/test/config")
+	if err := os.WriteFile(target, []byte("value=1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	options := Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()}
+	session, err := PrepareDeploy(cloneFile, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close()
+	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	result, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
+	if err != nil || result.Snapshot == "" {
+		t.Fatalf("deploy failed: %+v %v", result, err)
+	}
+	if data, _ := os.ReadFile(target); string(data) != "value=2\n" {
+		t.Fatalf("the deploy must change the file: %q", data)
+	}
+
+	options.SnapshotsDir = t.TempDir()
+	restore, err := PrepareDeploy(result.Snapshot, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer restore.Close()
+	restorePlan, err := restore.Plan(context.Background(), nil, false, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := restore.Apply(context.Background(), conflicts.ApplyAll(restorePlan.Conflicts), nil); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(target); string(data) != "value=1\n" {
+		t.Fatalf("the snapshot must restore the previous content: %q", data)
+	}
 }

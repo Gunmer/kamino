@@ -274,3 +274,41 @@ func TestManifestJSONCanonicalShape(t *testing.T) {
 		}
 	}
 }
+
+func TestExtractKeepsStagingReadableWhateverTheMemberMode(t *testing.T) {
+	output := filepath.Join(t.TempDir(), "modes.tar.gz")
+	file, err := os.Create(output)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gz := gzip.NewWriter(file)
+	tw := tar.NewWriter(gz)
+	headers := []*tar.Header{
+		{Name: "locked", Mode: 0, Typeflag: tar.TypeDir},
+		{Name: "locked/file", Mode: 0, Size: 1, Typeflag: tar.TypeReg},
+	}
+	for _, header := range headers {
+		if err := tw.WriteHeader(header); err != nil {
+			t.Fatal(err)
+		}
+		if header.Typeflag == tar.TypeReg {
+			if _, err := tw.Write([]byte("x")); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, closer := range []interface{ Close() error }{tw, gz, file} {
+		if err := closer.Close(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	dest := t.TempDir()
+	t.Cleanup(func() { _ = os.Chmod(filepath.Join(dest, "locked"), 0o755) })
+	if err := ExtractArchive(context.Background(), output, dest, nil); err != nil {
+		t.Fatalf("extract failed: %v", err)
+	}
+	data, err := os.ReadFile(filepath.Join(dest, "locked", "file"))
+	if err != nil || string(data) != "x" {
+		t.Fatalf("staged file must be readable: %q %v", data, err)
+	}
+}
