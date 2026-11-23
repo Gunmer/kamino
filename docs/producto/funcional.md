@@ -290,8 +290,6 @@ Barra de progreso, resumen final (qué se clonó, qué se omitió y por qué), c
 | `undo` | Revierte la última implantación |
 | `verify` | Comprueba la integridad de un clon |
 
-`implant` se conserva como alias de `implant`.
-
 Opciones comunes: `--dry-run`, `--apps`, `--output`, `--force`, `--encrypt`, `--yes`, `--verbose`.
 
 ## 5. Flujo general
