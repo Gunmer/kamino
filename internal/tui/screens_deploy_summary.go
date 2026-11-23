@@ -27,8 +27,17 @@ func newDeploySummaryScreen(app *App, result *deploy.DeployResult, incomplete bo
 			"{applied}", fmt.Sprintf("%d", len(result.Deployed)),
 			"{failed}", failed,
 		).Replace(texts.D5IncompleteInfo)}}
-	} else if result != nil && (len(result.Omitted) > 0 || len(result.MissingRequested) > 0) {
+	} else if result != nil && deploy.ResultCode(*result) == 3 {
 		screen.messages = []Message{{Kind: MessageWarning, Text: strings.ReplaceAll(texts.DeployExitLine, "{code}", "3")}}
+	}
+	if result != nil {
+		for _, outcome := range result.Installs {
+			if outcome.Status == deploy.InstallFailed {
+				screen.messages = append(screen.messages, Message{Kind: MessageWarning, Text: strings.NewReplacer(
+					"{app}", outcome.AppID, "{reason}", outcome.Reason,
+				).Replace(texts.DeployInstallFailed)})
+			}
+		}
 	}
 	return screen
 }

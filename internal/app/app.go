@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"runtime"
 
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/clone"
@@ -11,6 +12,7 @@ import (
 	"github.com/Gunmer/kamino/internal/defaults"
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
+	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/update"
 )
 
@@ -91,8 +93,10 @@ func ExecuteClone(ctx context.Context, requested *[]string, output string, dryRu
 	return CloneOutcome{Result: result, Code: code, Missing: missing}, nil
 }
 
-// ExecuteDeploy runs the text deploy flow.
-func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, dryRun bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue, snapshotsDir string) (DeployOutcome, error) {
+// ExecuteDeploy runs the text deploy flow. With installMissing, the missing
+// apps that have a recipe for this platform are installed before classification,
+// restricted to the requested ids when any were given.
+func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, dryRun bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue, snapshotsDir string, installMissing bool) (DeployOutcome, error) {
 	directory, err := CatalogDir(home)
 	if err != nil {
 		return DeployOutcome{}, err
@@ -113,6 +117,22 @@ func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, d
 	deployable := map[string]bool{}
 	for _, item := range session.DeployableApps {
 		deployable[item.ID] = true
+	}
+	if installMissing {
+		installIDs := make([]string, 0)
+		for _, candidate := range session.InstallCandidates(runtime.GOOS, runtime.GOARCH) {
+			if requested != nil && !containsID(*requested, candidate.AppID) {
+				continue
+			}
+			installIDs = append(installIDs, candidate.AppID)
+			deployable[candidate.AppID] = true
+		}
+		session.SetInstall(deploy.InstallSettings{
+			AppIDs:    installIDs,
+			Installer: &install.Installer{Runner: install.ExecRunner{}, Home: session.Home},
+			OS:        runtime.GOOS,
+			Arch:      runtime.GOARCH,
+		})
 	}
 	var selected *[]string
 	missing := make([]string, 0)
@@ -141,6 +161,15 @@ func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, d
 		}
 	}
 	return DeployOutcome{Result: result, Code: deploy.ResultCode(result), Missing: missing}, nil
+}
+
+func containsID(ids []string, id string) bool {
+	for _, value := range ids {
+		if value == id {
+			return true
+		}
+	}
+	return false
 }
 
 // ExecuteUpdate runs the text update flow.

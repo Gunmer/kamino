@@ -102,7 +102,7 @@ func TestDeployUsesCustomCatalogDir(t *testing.T) {
 	writeTestExecutable(t, bin, "miapp-test")
 	cloneFile := filepath.Join(t.TempDir(), "clone.tar.gz")
 	writeTestClone(t, cloneFile, "miapp")
-	outcome, err := ExecuteDeploy(context.Background(), cloneFile, nil, true, nil, home, nil, bin, "")
+	outcome, err := ExecuteDeploy(context.Background(), cloneFile, nil, true, nil, home, nil, bin, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,5 +285,33 @@ func writeTestClone(t *testing.T, cloneFile, appID string) {
 	}
 	if err := archive.WriteArchive(context.Background(), cloneFile, manifest, archive.WriteOptions{SourceRoot: source}); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestExecuteAppsValidateReportsInstallRecipeErrors(t *testing.T) {
+	home := t.TempDir()
+	file := filepath.Join(t.TempDir(), "bad.toml")
+	content := `id = "bad"
+name = "Bad"
+command = "bad"
+paths = [".bad"]
+
+[[install]]
+method = "binary"
+url = "https://example.com/bad"
+dest = ".local/bin/bad"
+`
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outcome, err := ExecuteAppsValidate(home, file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Valid || len(outcome.Entries) != 1 || outcome.Entries[0].Err == nil {
+		t.Fatalf("una receta binary sin sha256 debe invalidar el archivo: %+v", outcome)
+	}
+	if !strings.Contains(outcome.Entries[0].Err.Error(), "sha256") {
+		t.Fatalf("el error debe nombrar sha256: %v", outcome.Entries[0].Err)
 	}
 }

@@ -168,6 +168,10 @@ const (
 	D1Cancelled     = "Preparación cancelada; no se escribió nada."
 	D1CancelRunning = "Cancelando…"
 	D1NoApps        = "No hay apps implantables en este clon"
+	D1InstallQ      = "¿Instalar las apps ausentes que tienen receta para este Mac?"
+	D1InstallHint   = "Marca las que quieras instalar. Las no marcadas quedan como «Sin base en este Mac»."
+	D1InstallRow    = "{method}"
+	D1InstallFrom   = "desde {url}"
 
 	D2Summary       = "Nuevos {new}   Clones perfectos {perfect}   No soportados {unsupported}   Avisos {notices}"
 	D2ColumnFile    = "ARCHIVO"

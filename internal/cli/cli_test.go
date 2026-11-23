@@ -103,7 +103,7 @@ func TestDeployRequiresYes(t *testing.T) {
 func TestImplantAndDeployUseSameFlow(t *testing.T) {
 	original := executeDeploy
 	var files []string
-	executeDeploy = func(_ context.Context, file string, _ *[]string, _ bool, _ catalog.Catalog, _ string, _ []string, _ string, _ string) (app.DeployOutcome, error) {
+	executeDeploy = func(_ context.Context, file string, _ *[]string, _ bool, _ catalog.Catalog, _ string, _ []string, _ string, _ string, _ bool) (app.DeployOutcome, error) {
 		files = append(files, file)
 		return app.DeployOutcome{Result: deploy.DeployResult{Plan: &deploy.DeployPlan{}, Manifest: &archive.Manifest{}}, Code: 0}, nil
 	}
@@ -122,7 +122,7 @@ func TestImplantAndDeployUseSameFlow(t *testing.T) {
 
 func TestImplantKeepsPartialExitCode(t *testing.T) {
 	original := executeDeploy
-	executeDeploy = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string) (app.DeployOutcome, error) {
+	executeDeploy = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string, bool) (app.DeployOutcome, error) {
 		return app.DeployOutcome{Result: deploy.DeployResult{Plan: &deploy.DeployPlan{}, Manifest: &archive.Manifest{}}, Code: 3, Missing: []string{"no-existe"}}, nil
 	}
 	defer func() { executeDeploy = original }()
@@ -165,7 +165,7 @@ func TestUnknownCommandIsSpanish(t *testing.T) {
 func TestDeployYesAndDryRun(t *testing.T) {
 	original := executeDeploy
 	calls := 0
-	executeDeploy = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string) (app.DeployOutcome, error) {
+	executeDeploy = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string, bool) (app.DeployOutcome, error) {
 		calls++
 		return app.DeployOutcome{Result: deploy.DeployResult{Plan: &deploy.DeployPlan{}, Manifest: &archive.Manifest{}}, Code: 0}, nil
 	}
@@ -266,5 +266,47 @@ func TestHelpAliases(t *testing.T) {
 				t.Fatalf("missing %s in %q", want, stdout)
 			}
 		}
+	}
+}
+
+func TestImplantInstallMissingIsOffByDefault(t *testing.T) {
+	original := executeDeploy
+	var received []bool
+	executeDeploy = func(_ context.Context, _ string, _ *[]string, _ bool, _ catalog.Catalog, _ string, _ []string, _ string, _ string, installMissing bool) (app.DeployOutcome, error) {
+		received = append(received, installMissing)
+		return app.DeployOutcome{Result: deploy.DeployResult{Plan: &deploy.DeployPlan{}, Manifest: &archive.Manifest{}}}, nil
+	}
+	defer func() { executeDeploy = original }()
+
+	if code, _, _ := run("implant", "clone.tar.gz", "--yes"); code != 0 {
+		t.Fatalf("unexpected code: %d", code)
+	}
+	if code, _, _ := run("implant", "clone.tar.gz", "--yes", "--install-missing"); code != 0 {
+		t.Fatalf("unexpected code with flag: %d", code)
+	}
+	if len(received) != 2 || received[0] || !received[1] {
+		t.Fatalf("el flag debe llegar solo cuando se pasa: %v", received)
+	}
+}
+
+func TestImplantInstallMissingRequiresYesWhenNotInteractive(t *testing.T) {
+	original := executeDeploy
+	called := false
+	executeDeploy = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string, bool) (app.DeployOutcome, error) {
+		called = true
+		return app.DeployOutcome{}, nil
+	}
+	defer func() { executeDeploy = original }()
+
+	code, _, stderr := run("implant", "clone.tar.gz", "--install-missing")
+	if code != 1 || !strings.Contains(stderr, "--yes") || called {
+		t.Fatalf("sin --yes debe fallar con código 1 sin instalar: code=%d called=%v stderr=%q", code, called, stderr)
+	}
+}
+
+func TestImplantHelpDescribesInstallMissingInSpanish(t *testing.T) {
+	code, stdout, _ := run("implant", "--help")
+	if code != 0 || !strings.Contains(stdout, "--install-missing") || !strings.Contains(stdout, "Instala las apps ausentes") {
+		t.Fatalf("la ayuda debe describir --install-missing: %d %q", code, stdout)
 	}
 }

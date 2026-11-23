@@ -54,6 +54,7 @@ type DeployPlan struct {
 	Unchanged        []string
 	NotInstalled     []string
 	MissingRequested []string
+	Installs         []InstallOutcome
 }
 
 // DeployResult is the result of a deploy.
@@ -69,6 +70,7 @@ type DeployResult struct {
 	Unchanged        []string
 	NotInstalled     []string
 	MissingRequested []string
+	Installs         []InstallOutcome
 	SnapshotFiles    int
 }
 
@@ -84,10 +86,19 @@ type DeployClassification struct {
 
 // ResultCode returns the exit code of a finished deploy.
 func ResultCode(result DeployResult) int {
-	if len(result.Omitted) > 0 || len(result.MissingRequested) > 0 {
+	if len(result.Omitted) > 0 || len(result.MissingRequested) > 0 || hasFailedInstall(result.Installs) {
 		return 3
 	}
 	return 0
+}
+
+func hasFailedInstall(outcomes []InstallOutcome) bool {
+	for _, outcome := range outcomes {
+		if outcome.Status == InstallFailed {
+			return true
+		}
+	}
+	return false
 }
 
 // Options controls PrepareDeploy.
@@ -117,6 +128,10 @@ type DeploySession struct {
 	plan             *DeployPlan
 	fingerprints     map[string]fingerprint
 	closed           bool
+	definitions      catalog.Catalog
+	applicationDirs  []string
+	pathValue        string
+	install          *InstallSettings
 }
 
 // SnapshotDirectory is where the previous-state snapshot will be written.
@@ -170,6 +185,9 @@ func PrepareDeploy(cloneFile string, options Options) (*DeploySession, error) {
 		SnapshotsDir:     options.SnapshotsDir,
 		SnapshotsLimit:   options.SnapshotsLimit,
 		fingerprints:     map[string]fingerprint{},
+		definitions:      definitions,
+		applicationDirs:  options.ApplicationDirs,
+		pathValue:        options.Path,
 	}
 	session.Notices = ghosttyPortabilityNotices(manifest, cloneFile, root)
 	session.Warnings = platformWarnings(manifest)

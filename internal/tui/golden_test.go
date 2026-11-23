@@ -16,6 +16,7 @@ import (
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/conflicts"
 	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/texts"
 )
 
@@ -303,6 +304,22 @@ func goldenD1() goldenCase {
 			return &deployAppsScreen{
 				screenBase: screenBase{app: app}, apps: apps,
 				messages: []Message{{Kind: MessageWarning, Text: texts.D1CloseApps}},
+			}
+		},
+	}
+}
+
+func goldenD1Install() goldenCase {
+	return goldenCase{
+		name: "d1-install", sizes: [][2]int{{100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			return &deployAppsScreen{
+				screenBase: screenBase{app: app}, installing: true,
+				installChoices: []installChoice{
+					{AppID: "iterm2", Name: "iTerm2", Recipe: install.Recipe{Method: install.MethodBrew, Cask: "iterm2"}, Selected: true},
+					{AppID: "yazi", Name: "yazi", Recipe: install.Recipe{Method: install.MethodInstaller, URL: "https://example.com/yazi.sh"}},
+				},
+				messages: []Message{{Kind: MessageWarning, Text: texts.D1InstallQ}},
 			}
 		},
 	}
@@ -600,9 +617,10 @@ func TestGoldenD0D1D2(t *testing.T) {
 	runGolden(t, goldenD1())
 	runGolden(t, goldenD2())
 }
-func TestGoldenD3(t *testing.T) { runGolden(t, goldenD3()) }
-func TestGoldenD4(t *testing.T) { runGolden(t, goldenD4()) }
-func TestGoldenD5(t *testing.T) { runGolden(t, goldenD5()) }
+func TestGoldenD1Install(t *testing.T) { runGolden(t, goldenD1Install()) }
+func TestGoldenD3(t *testing.T)        { runGolden(t, goldenD3()) }
+func TestGoldenD4(t *testing.T)        { runGolden(t, goldenD4()) }
+func TestGoldenD5(t *testing.T)        { runGolden(t, goldenD5()) }
 func TestGoldenA1(t *testing.T) {
 	runGolden(t, goldenA1Intro())
 	runGolden(t, goldenA1Confirm())

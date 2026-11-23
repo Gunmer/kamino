@@ -90,7 +90,31 @@ paths = [
 - `env_paths`: variables de entorno con una ruta absoluta que debe quedar dentro del home, como `HERDR_CONFIG_PATH`. Opcional.
 - `xdg_paths`: rutas relativas a `XDG_CONFIG_HOME`, admitidas solo si ese directorio está dentro del home. Opcional.
 - `exclude`: patrones glob que se descartan al expandir las rutas.
+- `[[install]]`: recetas de instalación ordenadas, opcionales. Solo se admiten los métodos `brew`, `installer` y `binary`; la lista completa de reglas está en la sección 4.1.1.
 - Una definición necesita al menos una ruta obligatoria, opcional o un patrón.
+
+#### 4.1.1 Recetas de instalación
+
+Una receta permite que Kamino instale la app si falta al implantar un clon. Vive solo en el catálogo: el manifiesto del clon nunca aporta URLs, comandos ni métodos.
+
+- `method`: `brew`, `installer` o `binary`. Cualquier otro valor se rechaza.
+- `brew`: exactamente una de `formula` o `cask`. Kamino nunca instala Homebrew; si `brew` no está en el PATH, se prueba la siguiente receta.
+- `installer`: `url` con `https`. Se descarga a un temporal y se ejecuta con `sh` desde ese archivo; la confirmación muestra la URL exacta.
+- `binary`: `url` con `https`, `sha256` de 64 caracteres hexadecimales y `dest` relativo al home. Se descarga, se verifica el SHA-256 y solo entonces se mueve al destino con modo 0755.
+- `os` (`darwin`) y `arch` (`arm64` o `amd64`): opcionales. Las recetas que no coinciden con el entorno se ignoran.
+
+```toml
+[[install]]
+method = "brew"
+cask = "ghostty"
+
+[[install]]
+method = "binary"
+url = "https://example.com/tool-arm64"
+sha256 = "<64 caracteres hexadecimales>"
+dest = ".local/bin/tool"
+arch = "arm64"
+```
 
 ### 4.2 Manifiesto (`manifest.json`)
 

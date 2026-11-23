@@ -323,6 +323,12 @@ type deployAppsScreen struct {
 	total         int
 	events        <-chan operationEvent
 	plan          *deploy.DeployPlan
+	// installing shows the install question before the plan; pendingSelected
+	// keeps the apps the user chose to deploy meanwhile.
+	installing      bool
+	installChoices  []installChoice
+	installIndex    int
+	pendingSelected []string
 }
 
 func newDeployAppsScreen(app *App, cloneFile string, preparing bool) *deployAppsScreen {
@@ -341,7 +347,12 @@ func (s *deployAppsScreen) Step() (int, int) { return 2, 4 }
 
 func (s *deployAppsScreen) Messages() []Message { return s.messages }
 
-func (s *deployAppsScreen) Keys() []key.Binding { return deployAppsKeys(s.preparing || s.planning) }
+func (s *deployAppsScreen) Keys() []key.Binding {
+	if s.installing {
+		return deployInstallKeys()
+	}
+	return deployAppsKeys(s.preparing || s.planning)
+}
 
 func (s *deployAppsScreen) Operation() string {
 	if s.preparing {
@@ -444,6 +455,9 @@ func (s *deployAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		}
 		return s, nil
 	}
+	if s.installing {
+		return s.updateInstall(keyMessage)
+	}
 	switch keyMessage.String() {
 	case "up", "k":
 		if len(s.apps) > 0 {
@@ -479,6 +493,9 @@ func (s *deployAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 			return s, nil
 		}
 		if s.app.deploySession == nil {
+			return s, nil
+		}
+		if s.beginInstallQuestion(selected) {
 			return s, nil
 		}
 		s.planning = true
@@ -526,6 +543,9 @@ func (s *deployAppsScreen) View(width, height int) string {
 	if s.preparing {
 		lines = append(lines, "", "  "+texts.D1Preparing, "  "+texts.D1Verifying)
 		return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
+	}
+	if s.installing {
+		return s.viewInstall(width, height)
 	}
 	if s.planning {
 		value := texts.D1Verifying

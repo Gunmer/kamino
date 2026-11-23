@@ -248,6 +248,7 @@ func runImplantCommand(ctx context.Context, args []string, options Options, inte
 			"--dry-run": "dry_run", "-n": "dry_run",
 			"--yes": "yes", "-y": "yes",
 			"--verbose": "verbose", "-v": "verbose",
+			"--install-missing": "install_missing",
 		},
 	)
 	if err != nil {
@@ -267,6 +268,7 @@ func runImplantCommand(ctx context.Context, args []string, options Options, inte
 	dryRun := flags.booleans["dry_run"]
 	yes := flags.booleans["yes"]
 	verbose := flags.booleans["verbose"]
+	installMissing := flags.booleans["install_missing"]
 
 	if interactive() && !dryRun && !yes {
 		fileError := ""
@@ -281,7 +283,7 @@ func runImplantCommand(ctx context.Context, args []string, options Options, inte
 		fmt.Fprintln(options.Stderr, texts.RequiresYes)
 		return 1
 	}
-	outcome, err := executeDeploy(ctx, cloneFile, requested, dryRun, nil, "", nil, "", "")
+	outcome, err := executeDeploy(ctx, cloneFile, requested, dryRun, nil, "", nil, "", "", installMissing)
 	if err != nil {
 		var partial *kerrors.PartialApplyError
 		if errors.As(err, &partial) {
@@ -580,6 +582,7 @@ func printImplantHelp(w io.Writer) {
 	fmt.Fprintln(w, "  --apps, -a TEXT   Apps a implantar, separadas por comas.")
 	fmt.Fprintln(w, "  --dry-run, -n     Simula sin escribir nada.")
 	fmt.Fprintln(w, "  --yes, -y         Aplica todas las apps implantables sin confirmar.")
+	fmt.Fprintln(w, "  --install-missing Instala las apps ausentes que tengan receta para este Mac. Con --yes en modo no interactivo.")
 	fmt.Fprintln(w, "  --verbose, -v     Salida detallada.")
 	fmt.Fprintln(w, "  --help, -h        Muestra esta ayuda y termina.")
 	fmt.Fprintln(w)

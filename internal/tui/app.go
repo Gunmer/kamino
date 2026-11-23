@@ -21,6 +21,7 @@ import (
 	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
 	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/progress"
 	"github.com/Gunmer/kamino/internal/texts"
@@ -99,6 +100,8 @@ type App struct {
 	updateQuery func(context.Context) (update.Check, error)
 	updateRun   func(context.Context, progress.Callback) (update.Result, error)
 	editor      func(string) tea.Cmd
+	// installRunner executes the installation recipes chosen in the deploy flow.
+	installRunner install.Runner
 
 	settings     config.AppConfig
 	settingsLoad config.LoadResult
@@ -176,6 +179,7 @@ func NewApp(options AppOptions) *App {
 		cloneVerbose: options.Clone.Verbose, cloneOutput: options.Clone.Output,
 		updateQuery: options.UpdateQuery, updateRun: options.UpdateRun,
 		editor: options.Editor, snapshotTimestamp: now().UTC().Format("2006-01-02T15:04:05Z"), parent: parent,
+		installRunner: install.ExecRunner{},
 	}
 	if app.editor == nil {
 		app.editor = defaultEditor

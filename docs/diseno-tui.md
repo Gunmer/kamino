@@ -650,6 +650,34 @@ Notas:
 - La preparación es cancelable y limpia el staging si se cancela.
 - Un checksum fallido vuelve a D0 sin escribir.
 
+#### 4.7.1 D1 · Pregunta de instalación
+
+Aparece al pulsar Enter en D1 solo si alguna app ausente tiene una receta aplicable a este Mac. Si no hay ninguna, D1 pasa directamente al plan.
+
+```text
+kamino · Implantar · Apps                                    Paso 2 de 4   * * o o
+--------------------------------------------------------------------------------
+
+  Elige las apps que quieres implantar
+
+  ¿Instalar las apps ausentes que tienen receta para este Mac?
+  Marca las que quieras instalar. Las no marcadas quedan como «Sin base en este Mac».
+
+  > [x] iTerm2  brew
+    [ ] yazi  installer · desde https://example.com/yazi.sh
+
+AVISO  ¿Instalar las apps ausentes que tienen receta para este Mac?
+--------------------------------------------------------------------------------
+^v mover  Espacio marcar  a/n todas/ninguna  Enter continuar  Esc volver  ? ayuda
+```
+
+Notas:
+
+- Ninguna receta se marca por defecto. Rechazar una o todas no cancela la implantación: las no marcadas quedan como «Sin base en este Mac».
+- El método se muestra siempre. Para `installer`, la URL exacta que se descargará.
+- Esc vuelve a la elección de apps sin perder la selección.
+- Al confirmar, la instalación se ejecuta durante la planificación, después de verificar el archivo y antes de clasificar los archivos y crear la instantánea.
+
 ### 4.8 D2 · Conflictos
 
 ```text

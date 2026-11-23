@@ -35,6 +35,13 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			return nil, err
 		}
+	}
+	installs, err := s.installMissing(ctx, dryRun)
+	if err != nil {
+		s.clearStaging()
+		return nil, err
+	}
+	if !dryRun {
 		if err := os.MkdirAll(s.Home, 0o755); err != nil {
 			return nil, err
 		}
@@ -169,6 +176,7 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 		Unchanged:        dedupe(unchanged),
 		NotInstalled:     dedupe(notInstalled),
 		MissingRequested: missingRequested,
+		Installs:         installs,
 	}
 	s.plan = plan
 	s.fingerprints = fingerprints
@@ -194,6 +202,7 @@ func (s *DeploySession) DryRunResult(plan *DeployPlan) DeployResult {
 		Unchanged:        plan.Unchanged,
 		NotInstalled:     plan.NotInstalled,
 		MissingRequested: plan.MissingRequested,
+		Installs:         plan.Installs,
 	}
 }
 

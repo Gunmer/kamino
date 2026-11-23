@@ -230,6 +230,24 @@ ids contra las apps implantables: los desconocidos o no instalados se avisan y c
 omitidos (código de salida 3). Las apps del manifiesto no instaladas se informan como “sin base en
 este Mac” y no alteran el código.
 
+#### Instalar apps ausentes
+
+Si una app del clon no está instalada y su definición del catálogo declara una receta
+`[[install]]` aplicable a este Mac, Kamino puede instalarla antes de aplicar su configuración.
+
+- En la TUI, D1 pregunta por cada app ofrecida (método y, para `installer`, la URL exacta). Nada
+  viene marcado; rechazar no cancela la implantación.
+- En la CLI, `--install-missing` activa la instalación. Sin terminal interactiva exige `--yes`:
+  `kamino implant clon.tar.gz --yes --install-missing`. Sin el flag no se instala nada.
+- `--dry-run --install-missing` solo muestra qué se instalaría, sin descargar ni ejecutar nada.
+- La instalación ocurre después de verificar el archivo completo y antes de crear la instantánea.
+  Si falla, la app queda como omitida, el resto continúa y el código de salida es 3.
+- Los métodos son `brew` (Kamino no instala Homebrew: si falta, se prueba la siguiente receta),
+  `installer` (script HTTPS descargado a un temporal y ejecutado con `sh`) y `binary` (HTTPS con
+  SHA-256 verificado antes de escribir el destino con modo 0755). El clon nunca aporta recetas ni
+  URLs.
+- El clon nunca guarda ejecutables ni bundles `.app`: se informan como no clonados.
+
 ### Glosario visible
 
 | Nombre visible | Significado |
@@ -428,6 +446,10 @@ kamino apps list
 - `apps validate` valida el catálogo efectivo; con un archivo o un directorio, valida esa ruta.
   Termina con código 0 si todo es válido y 1 si hay errores. Avisa, sin fallar, cuando una
   definición no declara `exclude` o su id no coincide con el nombre del archivo.
+- Las recetas `[[install]]` se validan con las mismas reglas al cargar el catálogo y en
+  `apps validate`: `brew`, `installer` o `binary`; `https` obligatorio; `sha256` de 64 caracteres
+  en `binary`. Una receta inválida se muestra con su número y su motivo. Ver `docs/diseno-tecnico.md`
+  (sección 4.1.1).
 - `apps list` muestra el catálogo fusionado con el origen (`integrado` o `usuario`) y el estado de
   cada archivo. Un archivo inválido se muestra con `ERROR` y no impide listar el resto.
 - `apps new` usa el código 2 para uso incorrecto (`ID` ausente, falta de detección o de rutas) y el

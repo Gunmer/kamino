@@ -39,6 +39,7 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 			Unchanged:        plan.Unchanged,
 			NotInstalled:     plan.NotInstalled,
 			MissingRequested: plan.MissingRequested,
+			Installs:         plan.Installs,
 		}, nil
 	}
 	safe, err := paths.NewSafeHome(s.Home, false)
@@ -102,6 +103,7 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 		Unchanged:        result.Unchanged,
 		NotInstalled:     result.NotInstalled,
 		MissingRequested: result.MissingRequested,
+		Installs:         plan.Installs,
 		SnapshotFiles:    protected,
 	}, nil
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/Gunmer/kamino/internal/clone"
 	"github.com/Gunmer/kamino/internal/conflicts"
 	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/plan"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/update"
 )
@@ -78,6 +79,20 @@ func PrintCloneSummary(w io.Writer, result clone.CloneResult, verbose bool) {
 		for _, notice := range result.Plan.Notices {
 			fmt.Fprintf(w, "  ! %s\n", notice)
 		}
+	} else {
+		// Rejections such as binaries or app bundles must stay visible without
+		// --verbose: the user needs to know what the clone does not contain.
+		printSkipped(w, result.Plan.Skipped)
+	}
+}
+
+func printSkipped(w io.Writer, skipped []plan.SkippedPath) {
+	if len(skipped) == 0 {
+		return
+	}
+	fmt.Fprintln(w, texts.CloneSkippedTitle)
+	for _, item := range skipped {
+		fmt.Fprintf(w, "  ~ %s (%s)\n", item.Path, item.Reason)
 	}
 }
 
@@ -85,6 +100,7 @@ func PrintCloneSummary(w io.Writer, result clone.CloneResult, verbose bool) {
 func PrintDeploySummary(w io.Writer, result deploy.DeployResult, verbose bool) {
 	if result.DryRun {
 		fmt.Fprintln(w, texts.TitleDeployDryRun)
+		printInstalls(w, result.Installs)
 		for _, entry := range result.Plan.Entries {
 			fmt.Fprintf(w, "  [%s] %s\n", entry.Status, entry.Path)
 		}
@@ -99,6 +115,7 @@ func PrintDeploySummary(w io.Writer, result deploy.DeployResult, verbose bool) {
 		}
 		return
 	}
+	printInstalls(w, result.Installs)
 	fmt.Fprintln(w, strings.ReplaceAll(texts.DeployDeployed, "{count}", itoa(len(result.Deployed))))
 	fmt.Fprintln(w, strings.ReplaceAll(texts.DeployHybrids, "{count}", itoa(len(result.Merged))))
 	fmt.Fprintln(w, strings.ReplaceAll(texts.DeployOmitted, "{count}", itoa(len(result.Omitted))))
@@ -126,6 +143,28 @@ func PrintDeploySummary(w io.Writer, result deploy.DeployResult, verbose bool) {
 		}
 		for _, path := range result.Unchanged {
 			fmt.Fprintf(w, "  = %s\n", path)
+		}
+	}
+}
+
+// printInstalls lists what --install-missing did or would do, one line per app.
+func printInstalls(w io.Writer, outcomes []deploy.InstallOutcome) {
+	if len(outcomes) == 0 {
+		return
+	}
+	fmt.Fprintln(w, texts.DeployInstallTitle)
+	for _, outcome := range outcomes {
+		switch outcome.Status {
+		case deploy.InstallPlanned:
+			url := ""
+			if outcome.URL != "" {
+				url = " desde " + outcome.URL
+			}
+			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method, "{url}", url).Replace(texts.DeployInstallPlanned))
+		case deploy.InstallDone:
+			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method).Replace(texts.DeployInstallDone))
+		case deploy.InstallFailed:
+			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{reason}", outcome.Reason).Replace(texts.DeployInstallFailed))
 		}
 	}
 }
