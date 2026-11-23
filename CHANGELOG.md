@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v0.16.0 (2026-11-23)
+
+### Documentación
+
+- dividir el README en guías ([`58e263d`](https://github.com/Gunmer/kamino/commit/58e263debb01b58aaae22af51814bc57e969ae4e))
+- reorganizar docs como base de conocimiento y reducir AGENTS.md ([`afeef47`](https://github.com/Gunmer/kamino/commit/afeef47ed303179f0117e579084a3b524626aa8e))
+
+### Funcionalidades
+
+- add install recipes to built-in apps ([`f9dc219`](https://github.com/Gunmer/kamino/commit/f9dc219ba9e24bb2941adb87497810c3e29cf726))
+- install missing apps during implant ([`e4e932d`](https://github.com/Gunmer/kamino/commit/e4e932dacdec54fb596b0c854a3d5fed67787675))
+
+### Refactorización
+
+- rename deploy to implant across code, config, CLI and docs ([`ff72a03`](https://github.com/Gunmer/kamino/commit/ff72a034a748814f23f9fedaf25c1d71c008e3ca))
+
+  **Cambio incompatible.** the 'kamino deploy' alias and the [deploy] config section
+
 ## v0.15.0 (2026-11-22)
 
 ### Correcciones
@@ -252,6 +270,7 @@
 ## v0.1.0 (2026-10-31)
 
 - Versión inicial
+
 
 
 
