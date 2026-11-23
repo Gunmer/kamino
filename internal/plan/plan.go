@@ -1,7 +1,8 @@
-// Package plan expands catalog definitions into a clone or deploy plan.
+// Package plan expands catalog definitions into a clone or implant plan.
 package plan
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -30,6 +31,24 @@ var sensitivePatterns = []string{
 	"**/*.pem", "**/*.key", "**/sessions", "**/sessions/**", "**/history",
 	"**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/cache",
 	"**/cache/**", "**/logs", "**/logs/**", "**/*.log", "**/*.sqlite", "**/*.sqlite3",
+}
+
+// Reasons reported for content that a clone never stores, whatever the
+// definition declares: binaries and application bundles belong to their
+// installers, not to a configuration clone.
+const (
+	reasonBundle     = "bundle de aplicación no clonado"
+	reasonExecutable = "ejecutable no clonado"
+)
+
+// machOMagics are the headers of Mach-O executables, both byte orders, plus
+// fat (universal) binaries.
+var machOMagics = [][]byte{
+	{0xFE, 0xED, 0xFA, 0xCE},
+	{0xFE, 0xED, 0xFA, 0xCF},
+	{0xCE, 0xFA, 0xED, 0xFE},
+	{0xCF, 0xFA, 0xED, 0xFE},
+	{0xCA, 0xFE, 0xBA, 0xBE},
 }
 
 var ghosttyThemeDirs = []string{
@@ -264,6 +283,10 @@ func expand(app *catalog.AppDefinition, entry string, b *builder, required, auto
 	case paths.KindLink:
 		addLink(app.ID, rel, info, b)
 	case paths.KindDir:
+		if isAppBundle(rel) {
+			b.skip(rel, reasonBundle)
+			return
+		}
 		walk(app, rel, b)
 	case paths.KindFile:
 		addFile(app.ID, rel, info, b)
@@ -317,7 +340,20 @@ func expandXDG(app *catalog.AppDefinition, entry string, b *builder) {
 }
 
 func walk(app *catalog.AppDefinition, rel string, b *builder) {
-	prune := func(child string) bool { return IsExcluded(child, app.Exclude) }
+	prune := func(child string) bool {
+		if IsExcluded(child, app.Exclude) {
+			return true
+		}
+		if !isAppBundle(child) {
+			return false
+		}
+		info, err := b.safe.Lstat(child)
+		if err == nil && info.IsDir() {
+			b.skip(child, reasonBundle)
+			return true
+		}
+		return false
+	}
 	err := b.safe.Walk(rel, prune, func(item paths.WalkItem) error {
 		if err := progress.EnsureNotCancelled(b.ctx); err != nil {
 			return err
@@ -339,6 +375,10 @@ func addFile(appID, rel string, info paths.Info, b *builder) {
 	if err := progress.EnsureNotCancelled(b.ctx); err != nil {
 		return
 	}
+	if isExecutable(rel, info, b) {
+		b.skip(rel, reasonExecutable)
+		return
+	}
 	source, err := paths.ToAbsolute(rel, b.root)
 	if err != nil {
 		b.skip(rel, "ruta insegura o ilegible")
@@ -356,6 +396,30 @@ func addFile(appID, rel string, info paths.Info, b *builder) {
 	digest := sha256.Sum256(data)
 	sha := hex.EncodeToString(digest[:])
 	b.addOperation(Operation{AppID: appID, Path: rel, Source: source, Size: int64(len(data)), SHA256: &sha, Mode: info.ModeOctal()})
+}
+
+// isAppBundle reports whether a path is named like a macOS application bundle.
+// Callers still check that the entry is a directory.
+func isAppBundle(rel string) bool {
+	return strings.HasSuffix(strings.ToLower(path.Base(rel)), ".app")
+}
+
+// isExecutable detects executables by the execute bit or a Mach-O header. The
+// header is sniffed with a few bytes, so the content of a binary is never read.
+func isExecutable(rel string, info paths.Info, b *builder) bool {
+	if info.Perm.Perm()&0o111 != 0 {
+		return true
+	}
+	head, err := b.safe.ReadHead(rel, 4)
+	if err != nil {
+		return false
+	}
+	for _, magic := range machOMagics {
+		if bytes.HasPrefix(head, magic) {
+			return true
+		}
+	}
+	return false
 }
 
 func addLink(appID, rel string, info paths.Info, b *builder) {

@@ -2,6 +2,7 @@
 package paths
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -255,6 +256,36 @@ func (s *SafeHome) Lstat(rel string) (Info, error) {
 
 // ReadBytes reads a regular file without following intermediate or final links.
 func (s *SafeHome) ReadBytes(rel string) ([]byte, error) {
+	file, err := s.openRegular(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	data, err := io.ReadAll(file)
+	if err != nil {
+		return nil, pathError(fmt.Sprintf("no se pudo leer %q: %v", rel, err))
+	}
+	return data, nil
+}
+
+// ReadHead reads at most n leading bytes of a regular file. It is for format
+// sniffing, so a file can be classified without loading all of its content.
+func (s *SafeHome) ReadHead(rel string, n int) ([]byte, error) {
+	file, err := s.openRegular(rel)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = file.Close() }()
+	buffer := make([]byte, n)
+	read, err := io.ReadFull(file, buffer)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) && !errors.Is(err, io.EOF) {
+		return nil, pathError(fmt.Sprintf("no se pudo leer %q: %v", rel, err))
+	}
+	return buffer[:read], nil
+}
+
+// openRegular opens a regular file without following intermediate or final links.
+func (s *SafeHome) openRegular(rel string) (*os.File, error) {
 	parent, name, err := s.parent(rel)
 	if err != nil {
 		return nil, err
@@ -265,19 +296,16 @@ func (s *SafeHome) ReadBytes(rel string) ([]byte, error) {
 		return nil, pathError(fmt.Sprintf("no se pudo leer %q sin seguir enlaces: %v", rel, err))
 	}
 	file := os.NewFile(uintptr(fd), rel)
-	defer func() { _ = file.Close() }()
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
+		_ = file.Close()
 		return nil, pathError(fmt.Sprintf("no se pudo inspeccionar %q: %v", rel, err))
 	}
 	if infoFromStat(&st).Kind != KindFile {
+		_ = file.Close()
 		return nil, pathError(fmt.Sprintf("no es un archivo regular: %q", rel))
 	}
-	data, err := io.ReadAll(file)
-	if err != nil {
-		return nil, pathError(fmt.Sprintf("no se pudo leer %q: %v", rel, err))
-	}
-	return data, nil
+	return file, nil
 }
 
 // ReadText reads a file as UTF-8 with replacement, optionally limited by size.
@@ -444,6 +472,13 @@ func randomName() string {
 
 // WriteFile writes a regular file with atomic replacement.
 func (s *SafeHome) WriteFile(rel string, data []byte, mode os.FileMode) error {
+	return s.CopyFile(rel, bytes.NewReader(data), mode)
+}
+
+// CopyFile streams content into a regular file with atomic replacement. The
+// data never touches the destination until it is complete, and the temporary
+// lives in the destination directory so the final rename stays on one volume.
+func (s *SafeHome) CopyFile(rel string, content io.Reader, mode os.FileMode) error {
 	parent, name, err := s.ensureParent(rel)
 	if err != nil {
 		return err
@@ -458,7 +493,7 @@ func (s *SafeHome) WriteFile(rel string, data []byte, mode os.FileMode) error {
 		_ = unix.Unlinkat(parent, temp, 0)
 	}
 	file := os.NewFile(uintptr(fd), temp)
-	if _, err := file.Write(data); err != nil {
+	if _, err := io.Copy(file, content); err != nil {
 		_ = file.Close()
 		cleanup()
 		return pathError(fmt.Sprintf("no se pudo escribir %q: %v", rel, err))

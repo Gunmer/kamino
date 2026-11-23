@@ -28,7 +28,7 @@ func TestLockIsExclusive(t *testing.T) {
 	}()
 	select {
 	case <-acquired:
-		t.Fatal("a second deploy must not take the lock while it is held")
+		t.Fatal("a second implant must not take the lock while it is held")
 	case <-time.After(150 * time.Millisecond):
 	}
 	if err := release(); err != nil {

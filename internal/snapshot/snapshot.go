@@ -1,4 +1,4 @@
-// Package snapshot creates the previous-state archive used before deploying.
+// Package snapshot creates the previous-state archive used before implanting.
 package snapshot
 
 import (
@@ -112,8 +112,8 @@ func CreateSnapshot(ctx context.Context, targets []string, home, snapshotsDir, t
 	if _, err := PruneSnapshots(directory, limit, output); err != nil {
 		return "", err
 	}
-	// A concurrent deploy sharing this directory may have pruned the snapshot
-	// we just wrote. Without it the deploy has no recovery point, so fail
+	// A concurrent implant sharing this directory may have pruned the snapshot
+	// we just wrote. Without it the implant has no recovery point, so fail
 	// before any destination is written.
 	if _, err := os.Lstat(output); err != nil {
 		return "", &kerrors.ArchiveError{KaminoError: kerrors.KaminoError{
@@ -182,7 +182,7 @@ func PruneSnapshots(directory string, limit int, keep string) ([]string, error) 
 		}
 		path := filepath.Join(directory, file.name)
 		if err := removeFile(path); err != nil {
-			// A concurrent deploy already pruned this snapshot; the
+			// A concurrent implant already pruned this snapshot; the
 			// retention invariant holds, so keep going.
 			if os.IsNotExist(err) {
 				remaining--

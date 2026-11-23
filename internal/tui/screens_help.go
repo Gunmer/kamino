@@ -64,7 +64,7 @@ func (s *helpScreen) View(width, height int) string {
 		}
 		lines = append(lines, "  "+strings.Join(markers, "   "))
 	}
-	if flowOf(s.target) == texts.FlowDeploy {
+	if flowOf(s.target) == texts.FlowImplant {
 		step, _ := s.target.Step()
 		if step == 3 {
 			lines = append(lines, "", "  "+s.app.theme.Styles.Warning.Render(s.app.theme.Symbols.Warning+" "+texts.DiffSecretsShort))
@@ -78,8 +78,8 @@ func (s *helpScreen) flow() ([]string, int) {
 	switch flowOf(s.target) {
 	case texts.FlowClone:
 		return texts.CloneSteps, current
-	case texts.FlowDeploy:
-		return texts.DeploySteps, current
+	case texts.FlowImplant:
+		return texts.ImplantSteps, current
 	}
 	return nil, 0
 }

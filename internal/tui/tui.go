@@ -11,8 +11,8 @@ type CloneFlowOptions struct {
 	OutputError string
 }
 
-// DeployFlowOptions is the input shared by the deploy flow.
-type DeployFlowOptions struct {
+// ImplantFlowOptions is the input shared by the implant flow.
+type ImplantFlowOptions struct {
 	CloneFile string
 	Requested *[]string
 	Verbose   bool
@@ -25,8 +25,8 @@ func RunMenu() int { return runMenu() }
 // RunCloneFlow opens the clone flow directly.
 func RunCloneFlow(options CloneFlowOptions) int { return runCloneFlow(options) }
 
-// RunDeployFlow opens the deploy flow directly.
-func RunDeployFlow(options DeployFlowOptions) int { return runDeployFlow(options) }
+// RunImplantFlow opens the implant flow directly.
+func RunImplantFlow(options ImplantFlowOptions) int { return runImplantFlow(options) }
 
 // RunUpdateFlow opens the update flow.
 func RunUpdateFlow() int { return runUpdateFlow() }

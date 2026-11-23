@@ -12,7 +12,7 @@ import (
 	"github.com/Gunmer/kamino/internal/archive"
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/clone"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/plan"
 	"github.com/Gunmer/kamino/internal/tui"
 	"github.com/Gunmer/kamino/internal/update"
@@ -31,7 +31,7 @@ func TestVersionAndHelp(t *testing.T) {
 		t.Fatalf("unexpected version: %d %q", code, stdout)
 	}
 	code, stdout, _ = run("--help")
-	if code != 0 || !strings.Contains(stdout, "Usage:") || !strings.Contains(stdout, "clone") || !strings.Contains(stdout, "implant") || !strings.Contains(stdout, "deploy") {
+	if code != 0 || !strings.Contains(stdout, "Usage:") || !strings.Contains(stdout, "clone") || !strings.Contains(stdout, "implant") || strings.Contains(stdout, "deploy") {
 		t.Fatalf("unexpected help: %d %q", code, stdout)
 	}
 	for _, option := range []string{"--version", "-V", "--install-completion", "--show-completion"} {
@@ -91,8 +91,8 @@ type testError struct{ message string }
 
 func (e *testError) Error() string { return e.message }
 
-func TestDeployRequiresYes(t *testing.T) {
-	for _, command := range []string{"deploy", "implant"} {
+func TestImplantRequiresYes(t *testing.T) {
+	for _, command := range []string{"implant", "implant"} {
 		code, _, stderr := run(command, "clone.tar.gz")
 		if code != 1 || !strings.Contains(stderr, "--yes") {
 			t.Fatalf("unexpected %s result: %d %q", command, code, stderr)
@@ -100,32 +100,36 @@ func TestDeployRequiresYes(t *testing.T) {
 	}
 }
 
-func TestImplantAndDeployUseSameFlow(t *testing.T) {
-	original := executeDeploy
+func TestImplantRunsTheImplantFlow(t *testing.T) {
+	original := executeImplant
 	var files []string
-	executeDeploy = func(_ context.Context, file string, _ *[]string, _ bool, _ catalog.Catalog, _ string, _ []string, _ string, _ string) (app.DeployOutcome, error) {
+	executeImplant = func(_ context.Context, file string, _ *[]string, _ bool, _ catalog.Catalog, _ string, _ []string, _ string, _ string, _ bool) (app.ImplantOutcome, error) {
 		files = append(files, file)
-		return app.DeployOutcome{Result: deploy.DeployResult{Plan: &deploy.DeployPlan{}, Manifest: &archive.Manifest{}}, Code: 0}, nil
+		return app.ImplantOutcome{Result: implant.ImplantResult{Plan: &implant.ImplantPlan{}, Manifest: &archive.Manifest{}}, Code: 0}, nil
 	}
-	defer func() { executeDeploy = original }()
+	defer func() { executeImplant = original }()
 
 	if code, _, _ := run("implant", "primero.tar.gz", "--yes", "-v"); code != 0 {
 		t.Fatalf("unexpected implant code: %d", code)
 	}
-	if code, _, _ := run("deploy", "segundo.tar.gz", "--yes", "-v"); code != 0 {
-		t.Fatalf("unexpected deploy code: %d", code)
-	}
-	if len(files) != 2 || files[0] != "primero.tar.gz" || files[1] != "segundo.tar.gz" {
+	if len(files) != 1 || files[0] != "primero.tar.gz" {
 		t.Fatalf("unexpected files: %#v", files)
 	}
 }
 
-func TestImplantKeepsPartialExitCode(t *testing.T) {
-	original := executeDeploy
-	executeDeploy = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string) (app.DeployOutcome, error) {
-		return app.DeployOutcome{Result: deploy.DeployResult{Plan: &deploy.DeployPlan{}, Manifest: &archive.Manifest{}}, Code: 3, Missing: []string{"no-existe"}}, nil
+func TestDeployCommandIsUnknown(t *testing.T) {
+	code, _, stderr := run("deploy", "clon.tar.gz", "--yes")
+	if code != 2 || !strings.Contains(stderr, "comando desconocido") {
+		t.Fatalf("deploy must be unknown, got code %d stderr %q", code, stderr)
 	}
-	defer func() { executeDeploy = original }()
+}
+
+func TestImplantKeepsPartialExitCode(t *testing.T) {
+	original := executeImplant
+	executeImplant = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string, bool) (app.ImplantOutcome, error) {
+		return app.ImplantOutcome{Result: implant.ImplantResult{Plan: &implant.ImplantPlan{}, Manifest: &archive.Manifest{}}, Code: 3, Missing: []string{"no-existe"}}, nil
+	}
+	defer func() { executeImplant = original }()
 
 	code, _, stderr := run("implant", "clone.tar.gz", "--yes", "--apps", "no-existe")
 	if code != 3 || !strings.Contains(stderr, "no-existe") {
@@ -138,18 +142,14 @@ func TestImplantHelpAndCompletion(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("unexpected implant help code: %d", code)
 	}
-	for _, want := range []string{"kamino implant", "CLONE_FILE", "--apps", "--yes", "Alias: deploy"} {
+	for _, want := range []string{"kamino implant", "CLONE_FILE", "--apps", "--yes"} {
 		if !strings.Contains(stdout, want) {
 			t.Fatalf("missing %q in implant help: %q", want, stdout)
 		}
 	}
-	code, stdout, _ = run("deploy", "-h")
-	if code != 0 || !strings.Contains(stdout, "Alias: deploy") {
-		t.Fatalf("unexpected deploy help: %d %q", code, stdout)
-	}
 	for _, shell := range []string{"bash", "zsh", "fish"} {
 		code, stdout, _ := run("--show-completion", shell)
-		if code != 0 || !strings.Contains(stdout, "implant") || !strings.Contains(stdout, "deploy") {
+		if code != 0 || !strings.Contains(stdout, "implant") || strings.Contains(stdout, "deploy") {
 			t.Fatalf("unexpected %s completion: %d %q", shell, code, stdout)
 		}
 	}
@@ -162,34 +162,34 @@ func TestUnknownCommandIsSpanish(t *testing.T) {
 	}
 }
 
-func TestDeployYesAndDryRun(t *testing.T) {
-	original := executeDeploy
+func TestImplantYesAndDryRun(t *testing.T) {
+	original := executeImplant
 	calls := 0
-	executeDeploy = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string) (app.DeployOutcome, error) {
+	executeImplant = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string, bool) (app.ImplantOutcome, error) {
 		calls++
-		return app.DeployOutcome{Result: deploy.DeployResult{Plan: &deploy.DeployPlan{}, Manifest: &archive.Manifest{}}, Code: 0}, nil
+		return app.ImplantOutcome{Result: implant.ImplantResult{Plan: &implant.ImplantPlan{}, Manifest: &archive.Manifest{}}, Code: 0}, nil
 	}
-	defer func() { executeDeploy = original }()
-	if code, _, _ := run("deploy", "clone.tar.gz", "--yes"); code != 0 {
+	defer func() { executeImplant = original }()
+	if code, _, _ := run("implant", "clone.tar.gz", "--yes"); code != 0 {
 		t.Fatalf("unexpected yes code: %d", code)
 	}
-	if code, _, _ := run("deploy", "clone.tar.gz", "--dry-run"); code != 0 {
+	if code, _, _ := run("implant", "clone.tar.gz", "--dry-run"); code != 0 {
 		t.Fatalf("unexpected dry-run code: %d", code)
 	}
 	if calls != 2 {
-		t.Fatalf("expected two deploy calls, got %d", calls)
+		t.Fatalf("expected two implant calls, got %d", calls)
 	}
 }
 
 func TestInteractiveGating(t *testing.T) {
 	originalMenu := runMenu
 	originalClone := runCloneFlow
-	originalDeploy := runDeployFlow
+	originalImplant := runImplantFlow
 	originalUpdate := runUpdateFlow
 	defer func() {
 		runMenu = originalMenu
 		runCloneFlow = originalClone
-		runDeployFlow = originalDeploy
+		runImplantFlow = originalImplant
 		runUpdateFlow = originalUpdate
 	}()
 	runMenu = func() int { return 3 }
@@ -212,15 +212,15 @@ func TestInteractiveGating(t *testing.T) {
 	if err := os.WriteFile(existing, []byte("x"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	runDeployFlow = func(options tui.DeployFlowOptions) int {
+	runImplantFlow = func(options tui.ImplantFlowOptions) int {
 		if options.FileError != "" {
 			t.Fatalf("unexpected file error: %s", options.FileError)
 		}
 		return 0
 	}
-	code = Run([]string{"deploy", existing}, Options{Stdin: strings.NewReader(""), Stdout: &stdout, Stderr: &stderr, Interactive: func() bool { return true }})
+	code = Run([]string{"implant", existing}, Options{Stdin: strings.NewReader(""), Stdout: &stdout, Stderr: &stderr, Interactive: func() bool { return true }})
 	if code != 0 {
-		t.Fatalf("unexpected deploy code: %d", code)
+		t.Fatalf("unexpected implant code: %d", code)
 	}
 	runUpdateFlow = func() int { return 0 }
 	code = Run([]string{"update"}, Options{Stdin: strings.NewReader(""), Stdout: &stdout, Stderr: &stderr, Interactive: func() bool { return true }})
@@ -254,7 +254,7 @@ func TestHelpAliases(t *testing.T) {
 		expected []string
 	}{
 		{[]string{"clone", "-h"}, []string{"--force", "-f", "--help", "-h"}},
-		{[]string{"deploy", "-h"}, []string{"--yes", "-y", "--help", "-h"}},
+		{[]string{"implant", "-h"}, []string{"--yes", "-y", "--help", "-h"}},
 	}
 	for _, testCase := range cases {
 		code, stdout, _ := run(testCase.args...)
@@ -266,5 +266,47 @@ func TestHelpAliases(t *testing.T) {
 				t.Fatalf("missing %s in %q", want, stdout)
 			}
 		}
+	}
+}
+
+func TestImplantInstallMissingIsOffByDefault(t *testing.T) {
+	original := executeImplant
+	var received []bool
+	executeImplant = func(_ context.Context, _ string, _ *[]string, _ bool, _ catalog.Catalog, _ string, _ []string, _ string, _ string, installMissing bool) (app.ImplantOutcome, error) {
+		received = append(received, installMissing)
+		return app.ImplantOutcome{Result: implant.ImplantResult{Plan: &implant.ImplantPlan{}, Manifest: &archive.Manifest{}}}, nil
+	}
+	defer func() { executeImplant = original }()
+
+	if code, _, _ := run("implant", "clone.tar.gz", "--yes"); code != 0 {
+		t.Fatalf("unexpected code: %d", code)
+	}
+	if code, _, _ := run("implant", "clone.tar.gz", "--yes", "--install-missing"); code != 0 {
+		t.Fatalf("unexpected code with flag: %d", code)
+	}
+	if len(received) != 2 || received[0] || !received[1] {
+		t.Fatalf("el flag debe llegar solo cuando se pasa: %v", received)
+	}
+}
+
+func TestImplantInstallMissingRequiresYesWhenNotInteractive(t *testing.T) {
+	original := executeImplant
+	called := false
+	executeImplant = func(context.Context, string, *[]string, bool, catalog.Catalog, string, []string, string, string, bool) (app.ImplantOutcome, error) {
+		called = true
+		return app.ImplantOutcome{}, nil
+	}
+	defer func() { executeImplant = original }()
+
+	code, _, stderr := run("implant", "clone.tar.gz", "--install-missing")
+	if code != 1 || !strings.Contains(stderr, "--yes") || called {
+		t.Fatalf("sin --yes debe fallar con código 1 sin instalar: code=%d called=%v stderr=%q", code, called, stderr)
+	}
+}
+
+func TestImplantHelpDescribesInstallMissingInSpanish(t *testing.T) {
+	code, stdout, _ := run("implant", "--help")
+	if code != 0 || !strings.Contains(stdout, "--install-missing") || !strings.Contains(stdout, "Instala las apps ausentes") {
+		t.Fatalf("la ayuda debe describir --install-missing: %d %q", code, stdout)
 	}
 }

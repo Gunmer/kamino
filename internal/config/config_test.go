@@ -31,7 +31,7 @@ func TestLoadValidAndInvalidConfig(t *testing.T) {
 	if err := os.MkdirAll(filepath.Dir(mustConfigPath(t, home)), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	content := "[catalog]\ndir = \"" + catalog + "\"\n\n[clone]\noutput_dir = \"" + clones + "\"\n\n[deploy]\nsnapshots_dir = \"" + snapshots + "\"\n"
+	content := "[catalog]\ndir = \"" + catalog + "\"\n\n[clone]\noutput_dir = \"" + clones + "\"\n\n[implant]\nsnapshots_dir = \"" + snapshots + "\"\n"
 	if err := os.WriteFile(mustConfigPath(t, home), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestSnapshotsLimitDefaultAndLoad(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	writeConfig("[deploy]\nsnapshots_limit = 3\n")
+	writeConfig("[implant]\nsnapshots_limit = 3\n")
 	loaded := LoadConfig(home, "")
 	if loaded.Error != nil {
 		t.Fatalf("unexpected error: %v", loaded.Error)
@@ -107,7 +107,7 @@ func TestSnapshotsLimitDefaultAndLoad(t *testing.T) {
 	if loaded.Raw[SnapshotsLimitKey] != "3" {
 		t.Fatalf("expected the raw limit for the settings screen, got %q", loaded.Raw[SnapshotsLimitKey])
 	}
-	writeConfig("[deploy]\nsnapshots_limit = 0\n")
+	writeConfig("[implant]\nsnapshots_limit = 0\n")
 	loaded = LoadConfig(home, "")
 	if loaded.Error != nil || loaded.Config.SnapshotsLimit != 0 {
 		t.Fatalf("zero must disable the limit: %#v", loaded)
@@ -116,9 +116,9 @@ func TestSnapshotsLimitDefaultAndLoad(t *testing.T) {
 
 func TestSnapshotsLimitRejectsInvalidValues(t *testing.T) {
 	cases := map[string]string{
-		"negative":     "[deploy]\nsnapshots_limit = -1\n",
-		"string":       "[deploy]\nsnapshots_limit = \"5\"\n",
-		"float":        "[deploy]\nsnapshots_limit = 2.5\n",
+		"negative":     "[implant]\nsnapshots_limit = -1\n",
+		"string":       "[implant]\nsnapshots_limit = \"5\"\n",
+		"float":        "[implant]\nsnapshots_limit = 2.5\n",
 		"pathAsNumber": "[catalog]\ndir = 5\n",
 	}
 	for name, content := range cases {

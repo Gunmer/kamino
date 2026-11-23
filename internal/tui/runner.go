@@ -22,9 +22,9 @@ func runCloneFlow(options CloneFlowOptions) int {
 	return runProgram(app)
 }
 
-func runDeployFlow(options DeployFlowOptions) int {
-	app := newRootApp(AppOptions{Deploy: options})
-	app.startDeploy()
+func runImplantFlow(options ImplantFlowOptions) int {
+	app := newRootApp(AppOptions{Implant: options})
+	app.startImplant()
 	return runProgram(app)
 }
 

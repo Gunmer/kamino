@@ -13,6 +13,7 @@ import (
 	"github.com/BurntSushi/toml"
 
 	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/install"
 )
 
 //go:embed apps/*.toml
@@ -25,19 +26,20 @@ var (
 
 // AppDefinition is one validated catalog definition.
 type AppDefinition struct {
-	ID               string   `toml:"id"`
-	Name             string   `toml:"name"`
-	BundleID         *string  `toml:"bundle_id"`
-	Command          *string  `toml:"command"`
-	CommandAliases   []string `toml:"command_aliases"`
-	SearchPaths      []string `toml:"search_paths"`
-	InstallMarker    *string  `toml:"install_marker"`
-	Paths            []string `toml:"paths"`
-	OptionalPaths    []string `toml:"optional_paths"`
-	OptionalPatterns []string `toml:"optional_patterns"`
-	EnvPaths         []string `toml:"env_paths"`
-	XDGPaths         []string `toml:"xdg_paths"`
-	Exclude          []string `toml:"exclude"`
+	ID               string           `toml:"id"`
+	Name             string           `toml:"name"`
+	BundleID         *string          `toml:"bundle_id"`
+	Command          *string          `toml:"command"`
+	CommandAliases   []string         `toml:"command_aliases"`
+	SearchPaths      []string         `toml:"search_paths"`
+	InstallMarker    *string          `toml:"install_marker"`
+	Paths            []string         `toml:"paths"`
+	OptionalPaths    []string         `toml:"optional_paths"`
+	OptionalPatterns []string         `toml:"optional_patterns"`
+	EnvPaths         []string         `toml:"env_paths"`
+	XDGPaths         []string         `toml:"xdg_paths"`
+	Exclude          []string         `toml:"exclude"`
+	Install          []install.Recipe `toml:"install"`
 }
 
 // Validate checks the definition against the catalog contract.
@@ -84,6 +86,11 @@ func (a *AppDefinition) Validate() error {
 	}
 	if len(a.Paths) == 0 && len(a.OptionalPaths) == 0 && len(a.OptionalPatterns) == 0 {
 		return fmt.Errorf("se requiere al menos una entrada en 'paths', 'optional_paths' o 'optional_patterns'")
+	}
+	for index, recipe := range a.Install {
+		if err := recipe.Validate(); err != nil {
+			return fmt.Errorf("[[install]] %d: %w", index+1, err)
+		}
 	}
 	return nil
 }

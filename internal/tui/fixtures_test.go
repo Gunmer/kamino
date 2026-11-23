@@ -11,7 +11,7 @@ import (
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/clone"
 	"github.com/Gunmer/kamino/internal/conflicts"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/plan"
 	"github.com/Gunmer/kamino/internal/update"
 )
@@ -127,20 +127,20 @@ func fixtureConflictStates() []*conflictState {
 	return states
 }
 
-func fixtureDeployPlan(states []*conflictState) *deploy.DeployPlan {
-	entries := make([]deploy.DeployEntry, 0)
+func fixtureImplantPlan(states []*conflictState) *implant.ImplantPlan {
+	entries := make([]implant.ImplantEntry, 0)
 	for _, state := range states {
-		entries = append(entries, deploy.DeployEntry{
+		entries = append(entries, implant.ImplantEntry{
 			AppID: state.Conflict.AppID, Path: state.Conflict.Path,
-			Destination: state.Conflict.Destination, Status: deploy.StatusDifferent,
+			Destination: state.Conflict.Destination, Status: implant.StatusDifferent,
 		})
 	}
 	entries = append(entries,
-		deploy.DeployEntry{AppID: "git", Path: ".config/git/config", Destination: "/Users/test/.config/git/config", Status: deploy.StatusNew},
-		deploy.DeployEntry{AppID: "zsh", Path: ".config/zsh/.zshrc", Destination: "/Users/test/.config/zsh/.zshrc", Status: deploy.StatusIdentical},
-		deploy.DeployEntry{AppID: "vscode", Path: ".config/vscode/settings.json", Destination: "/Users/test/.config/vscode/settings.json", Status: deploy.StatusUnsupported},
+		implant.ImplantEntry{AppID: "git", Path: ".config/git/config", Destination: "/Users/test/.config/git/config", Status: implant.StatusNew},
+		implant.ImplantEntry{AppID: "zsh", Path: ".config/zsh/.zshrc", Destination: "/Users/test/.config/zsh/.zshrc", Status: implant.StatusIdentical},
+		implant.ImplantEntry{AppID: "vscode", Path: ".config/vscode/settings.json", Destination: "/Users/test/.config/vscode/settings.json", Status: implant.StatusUnsupported},
 	)
-	return &deploy.DeployPlan{
+	return &implant.ImplantPlan{
 		Entries: entries, Conflicts: fixtureConflictList(states),
 		Unchanged: []string{".config/zsh/.zshrc"}, Omitted: []string{".config/vscode/settings.json"},
 		Notices: []string{"Arquitectura distinta: arm64 → x86_64"},
@@ -155,20 +155,20 @@ func fixtureConflictList(states []*conflictState) []conflicts.Conflict {
 	return result
 }
 
-func fixtureDeployResult() *deploy.DeployResult {
-	plan := fixtureDeployPlan(fixtureConflictStates())
-	return &deploy.DeployResult{
+func fixtureImplantResult() *implant.ImplantResult {
+	plan := fixtureImplantPlan(fixtureConflictStates())
+	return &implant.ImplantResult{
 		Plan: plan, Output: "/Users/test/.config/kamino/vault/clone-20261113.tar.gz",
-		Snapshot: "/Users/test/.config/kamino/vault/snapshot/20261113T103000Z.tar.gz",
-		Deployed: []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"},
-		Merged:   []string{"j", "k"}, Omitted: []string{"l", "m"},
+		Snapshot:  "/Users/test/.config/kamino/vault/snapshot/20261113T103000Z.tar.gz",
+		Implanted: []string{"a", "b", "c", "d", "e", "f", "g", "h", "i"},
+		Merged:    []string{"j", "k"}, Omitted: []string{"l", "m"},
 		Unchanged: []string{"n", "o"}, NotInstalled: []string{"p", "q"},
 		SnapshotFiles: 8,
 	}
 }
 
-func fixtureDeployCandidates() []deployCandidate {
-	return []deployCandidate{
+func fixtureImplantCandidates() []implantCandidate {
+	return []implantCandidate{
 		{
 			Path: "/Users/test/.config/kamino/vault/clone-20261113.tar.gz",
 			Name: "clone-20261113.tar.gz", Origin: "por defecto",
