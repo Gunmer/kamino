@@ -4,3 +4,7 @@ command = "zsh"
 install_marker = ".oh-my-zsh/oh-my-zsh.sh"
 optional_paths = [".zshrc", ".zprofile", ".zshenv", ".oh-my-zsh/custom"]
 exclude = ["**/plugins", "**/plugins/**", "**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]
+
+[[install]]
+method = "installer"
+url = "https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"

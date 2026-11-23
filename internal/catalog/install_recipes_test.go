@@ -70,15 +70,3 @@ func TestDefinitionWithoutRecipesLoadsAsBefore(t *testing.T) {
 		t.Fatalf("sin [[install]] no debe haber recetas: %+v", definition.Install)
 	}
 }
-
-func TestEmbeddedCatalogHasNoInstallRecipes(t *testing.T) {
-	embedded, err := Embedded()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for id, definition := range embedded {
-		if len(definition.Install) != 0 {
-			t.Fatalf("la app integrada %q no debe declarar recetas en esta versión", id)
-		}
-	}
-}

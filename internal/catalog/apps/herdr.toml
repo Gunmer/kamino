@@ -5,3 +5,11 @@ paths = [".config/herdr/config.toml", ".config/herdr/plugins/config"]
 env_paths = ["HERDR_CONFIG_PATH"]
 xdg_paths = ["herdr/config.toml"]
 exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]
+
+[[install]]
+method = "brew"
+formula = "herdr"
+
+[[install]]
+method = "installer"
+url = "https://herdr.dev/install.sh"
