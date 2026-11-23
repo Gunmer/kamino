@@ -57,7 +57,7 @@ type UpdateError struct {
 	Kind UpdateErrorKind
 }
 
-// ConflictError means deploy conflicts cannot be resolved as requested.
+// ConflictError means implant conflicts cannot be resolved as requested.
 type ConflictError struct{ KaminoError }
 
 // DecisionRequiredError means a conflict has no decision.

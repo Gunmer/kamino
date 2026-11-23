@@ -10,8 +10,8 @@ import (
 	"github.com/Gunmer/kamino/internal/config"
 	"github.com/Gunmer/kamino/internal/conflicts"
 	"github.com/Gunmer/kamino/internal/defaults"
-	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/update"
 )
@@ -23,9 +23,9 @@ type CloneOutcome struct {
 	Missing []string
 }
 
-// DeployOutcome is the result of a text deploy.
-type DeployOutcome struct {
-	Result  deploy.DeployResult
+// ImplantOutcome is the result of a text implant.
+type ImplantOutcome struct {
+	Result  implant.ImplantResult
 	Code    int
 	Missing []string
 }
@@ -93,15 +93,15 @@ func ExecuteClone(ctx context.Context, requested *[]string, output string, dryRu
 	return CloneOutcome{Result: result, Code: code, Missing: missing}, nil
 }
 
-// ExecuteDeploy runs the text deploy flow. With installMissing, the missing
+// ExecuteImplant runs the text implant flow. With installMissing, the missing
 // apps that have a recipe for this platform are installed before classification,
 // restricted to the requested ids when any were given.
-func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, dryRun bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue, snapshotsDir string, installMissing bool) (DeployOutcome, error) {
+func ExecuteImplant(ctx context.Context, cloneFile string, requested *[]string, dryRun bool, definitions catalog.Catalog, home string, applicationDirs []string, pathValue, snapshotsDir string, installMissing bool) (ImplantOutcome, error) {
 	directory, err := CatalogDir(home)
 	if err != nil {
-		return DeployOutcome{}, err
+		return ImplantOutcome{}, err
 	}
-	session, err := deploy.PrepareDeploy(cloneFile, deploy.Options{
+	session, err := implant.PrepareImplant(cloneFile, implant.Options{
 		Home:            home,
 		Catalog:         definitions,
 		CatalogDir:      directory,
@@ -111,12 +111,12 @@ func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, d
 		SnapshotsLimit:  snapshotsLimit(home),
 	})
 	if err != nil {
-		return DeployOutcome{}, err
+		return ImplantOutcome{}, err
 	}
 	defer session.Close()
-	deployable := map[string]bool{}
-	for _, item := range session.DeployableApps {
-		deployable[item.ID] = true
+	implantable := map[string]bool{}
+	for _, item := range session.ImplantableApps {
+		implantable[item.ID] = true
 	}
 	if installMissing {
 		installIDs := make([]string, 0)
@@ -125,9 +125,9 @@ func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, d
 				continue
 			}
 			installIDs = append(installIDs, candidate.AppID)
-			deployable[candidate.AppID] = true
+			implantable[candidate.AppID] = true
 		}
-		session.SetInstall(deploy.InstallSettings{
+		session.SetInstall(implant.InstallSettings{
 			AppIDs:    installIDs,
 			Installer: &install.Installer{Runner: install.ExecRunner{}, Home: session.Home},
 			OS:        runtime.GOOS,
@@ -139,7 +139,7 @@ func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, d
 	if requested != nil {
 		chosen := make([]string, 0)
 		for _, id := range *requested {
-			if deployable[id] {
+			if implantable[id] {
 				chosen = append(chosen, id)
 			} else {
 				missing = append(missing, id)
@@ -149,18 +149,18 @@ func ExecuteDeploy(ctx context.Context, cloneFile string, requested *[]string, d
 	}
 	plan, err := session.Plan(ctx, selected, dryRun, ptrValue(requested), nil)
 	if err != nil {
-		return DeployOutcome{}, err
+		return ImplantOutcome{}, err
 	}
-	var result deploy.DeployResult
+	var result implant.ImplantResult
 	if dryRun {
 		result = session.DryRunResult(plan)
 	} else {
 		result, err = session.Apply(ctx, conflicts.ApplyAll(plan.Conflicts), nil)
 		if err != nil {
-			return DeployOutcome{}, err
+			return ImplantOutcome{}, err
 		}
 	}
-	return DeployOutcome{Result: result, Code: deploy.ResultCode(result), Missing: missing}, nil
+	return ImplantOutcome{Result: result, Code: implant.ResultCode(result), Missing: missing}, nil
 }
 
 func containsID(ids []string, id string) bool {

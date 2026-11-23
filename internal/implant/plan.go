@@ -1,4 +1,4 @@
-package deploy
+package implant
 
 import (
 	"context"
@@ -24,9 +24,9 @@ import (
 )
 
 // Plan classifies the chosen apps and builds every content conflict.
-func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun bool, requested []string, progressCallback progress.Callback) (*DeployPlan, error) {
+func (s *ImplantSession) Plan(ctx context.Context, selected *[]string, dryRun bool, requested []string, progressCallback progress.Callback) (*ImplantPlan, error) {
 	if s.closed {
-		return nil, fmt.Errorf("deploy session is closed")
+		return nil, fmt.Errorf("implant session is closed")
 	}
 	if !dryRun {
 		if err := archive.VerifyArchive(ctx, s.CloneFile, s.Manifest, progressCallback); err != nil {
@@ -49,7 +49,7 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 			return nil, err
 		}
 	}
-	entries := make([]DeployEntry, 0)
+	entries := make([]ImplantEntry, 0)
 	conflictList := make([]conflicts.Conflict, 0)
 	unchanged := make([]string, 0)
 	omitted := make([]string, 0)
@@ -59,13 +59,13 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 			notInstalled = append(notInstalled, file.Path)
 		}
 	}
-	deployableIDs := map[string]bool{}
-	for _, app := range s.DeployableApps {
-		deployableIDs[app.ID] = true
+	implantableIDs := map[string]bool{}
+	for _, app := range s.ImplantableApps {
+		implantableIDs[app.ID] = true
 	}
 	missingRequested := make([]string, 0)
 	for _, appID := range requested {
-		if !deployableIDs[appID] {
+		if !implantableIDs[appID] {
 			missingRequested = append(missingRequested, appID)
 		}
 	}
@@ -112,7 +112,7 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 			cloneForClassification := s.cloneContent(app.ID, file, dryRun)
 			status = classifyLocal(*local, file, cloneForClassification)
 		}
-		entries = append(entries, DeployEntry{
+		entries = append(entries, ImplantEntry{
 			AppID: app.ID, Path: file.Path, Destination: destination,
 			Size: file.Size, SHA256: file.SHA256, Mode: file.Mode, Link: file.Link, Status: status,
 		})
@@ -148,7 +148,7 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 		s.clearStaging()
 		return nil, err
 	}
-	changed := make([]DeployEntry, 0)
+	changed := make([]ImplantEntry, 0)
 	for _, entry := range entries {
 		if entry.Status != StatusUnsupported {
 			changed = append(changed, entry)
@@ -156,7 +156,7 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 	}
 	if len(changed) > 0 {
 		if _, err := os.Stat(s.Home); err == nil {
-			toValidate := make([]DeployEntry, 0)
+			toValidate := make([]ImplantEntry, 0)
 			for _, entry := range changed {
 				if entry.Status != StatusIdentical {
 					toValidate = append(toValidate, entry)
@@ -168,7 +168,7 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 			}
 		}
 	}
-	plan := &DeployPlan{
+	plan := &ImplantPlan{
 		Entries:          entries,
 		Notices:          s.Notices,
 		Conflicts:        conflictList,
@@ -184,17 +184,17 @@ func (s *DeploySession) Plan(ctx context.Context, selected *[]string, dryRun boo
 }
 
 // Preview returns the categories that applying decisions would produce.
-func (s *DeploySession) Preview(decisions conflicts.ConflictDecisions) (DeployClassification, error) {
+func (s *ImplantSession) Preview(decisions conflicts.ConflictDecisions) (ImplantClassification, error) {
 	plan, resolved, err := s.resolve(decisions)
 	if err != nil {
-		return DeployClassification{}, err
+		return ImplantClassification{}, err
 	}
 	return classification(plan, resolved), nil
 }
 
 // DryRunResult builds the result of a simulation.
-func (s *DeploySession) DryRunResult(plan *DeployPlan) DeployResult {
-	return DeployResult{
+func (s *ImplantSession) DryRunResult(plan *ImplantPlan) ImplantResult {
+	return ImplantResult{
 		Plan:             plan,
 		Manifest:         s.Manifest,
 		DryRun:           true,
@@ -211,9 +211,9 @@ type activeFile struct {
 	file archive.FileEntry
 }
 
-func (s *DeploySession) activeFiles(selected *[]string) []activeFile {
+func (s *ImplantSession) activeFiles(selected *[]string) []activeFile {
 	active := make([]activeFile, 0)
-	for _, app := range s.DeployableApps {
+	for _, app := range s.ImplantableApps {
 		if selected != nil {
 			found := false
 			for _, id := range *selected {
@@ -233,7 +233,7 @@ func (s *DeploySession) activeFiles(selected *[]string) []activeFile {
 	return active
 }
 
-func (s *DeploySession) cloneContent(appID string, file archive.FileEntry, dryRun bool) []byte {
+func (s *ImplantSession) cloneContent(appID string, file archive.FileEntry, dryRun bool) []byte {
 	if file.Link != nil || file.Size > conflicts.MaxTextBytes {
 		return nil
 	}
@@ -251,7 +251,7 @@ func (s *DeploySession) cloneContent(appID string, file archive.FileEntry, dryRu
 	return archive.ReadFileFromArchive(s.CloneFile, appID, file.Path, conflicts.MaxTextBytes+1)
 }
 
-func (s *DeploySession) buildConflict(appID string, file archive.FileEntry, destination string, local *conflicts.LocalFile, dryRun bool) *conflicts.Conflict {
+func (s *ImplantSession) buildConflict(appID string, file archive.FileEntry, destination string, local *conflicts.LocalFile, dryRun bool) *conflicts.Conflict {
 	if local == nil {
 		return nil
 	}
@@ -262,7 +262,7 @@ func (s *DeploySession) buildConflict(appID string, file archive.FileEntry, dest
 	return conflicts.BuildConflict(appID, file.Path, destination, file, *local, cloneContent)
 }
 
-func (s *DeploySession) resolve(decisions conflicts.ConflictDecisions) (*DeployPlan, []resolvedFile, error) {
+func (s *ImplantSession) resolve(decisions conflicts.ConflictDecisions) (*ImplantPlan, []resolvedFile, error) {
 	if s.plan == nil {
 		return nil, nil, fmt.Errorf("call Plan() before Preview() or Apply()")
 	}
@@ -304,7 +304,7 @@ func (s *DeploySession) resolve(decisions conflicts.ConflictDecisions) (*DeployP
 			}
 			resolved = append(resolved, resolvedFile{
 				path: entry.Path, destination: entry.Destination, content: content, link: link,
-				mode: entry.Mode, category: CategoryDeployed, write: true,
+				mode: entry.Mode, category: CategoryImplanted, write: true,
 			})
 			continue
 		}
@@ -323,7 +323,7 @@ func (s *DeploySession) resolve(decisions conflicts.ConflictDecisions) (*DeployP
 	return s.plan, resolved, nil
 }
 
-func (s *DeploySession) resolveConflict(entry DeployEntry, conflict conflicts.Conflict, decision conflicts.FileDecision) (resolvedFile, error) {
+func (s *ImplantSession) resolveConflict(entry ImplantEntry, conflict conflicts.Conflict, decision conflicts.FileDecision) (resolvedFile, error) {
 	if decision.Action == conflicts.ActionOmit {
 		return resolvedFile{path: entry.Path, destination: entry.Destination, mode: entry.Mode, category: CategoryOmitted}, nil
 	}
@@ -332,7 +332,7 @@ func (s *DeploySession) resolveConflict(entry DeployEntry, conflict conflicts.Co
 		if err != nil {
 			return resolvedFile{}, err
 		}
-		return resolvedFile{path: entry.Path, destination: entry.Destination, content: content, link: link, mode: entry.Mode, category: CategoryDeployed, write: true}, nil
+		return resolvedFile{path: entry.Path, destination: entry.Destination, content: content, link: link, mode: entry.Mode, category: CategoryImplanted, write: true}, nil
 	}
 	if conflict.LocalText == nil || conflict.CloneText == nil {
 		return resolvedFile{}, &kerrors.ConflictError{KaminoError: kerrors.KaminoError{
@@ -363,7 +363,7 @@ func (s *DeploySession) resolveConflict(entry DeployEntry, conflict conflicts.Co
 	}
 	category := CategoryMerged
 	if allClone {
-		category = CategoryDeployed
+		category = CategoryImplanted
 	}
 	content := []byte(merged)
 	return resolvedFile{
@@ -372,7 +372,7 @@ func (s *DeploySession) resolveConflict(entry DeployEntry, conflict conflicts.Co
 	}, nil
 }
 
-func (s *DeploySession) cloneOutput(entry DeployEntry) ([]byte, string, error) {
+func (s *ImplantSession) cloneOutput(entry ImplantEntry) ([]byte, string, error) {
 	if entry.Link != nil {
 		return nil, *entry.Link, nil
 	}
@@ -411,7 +411,7 @@ func readLocal(safe *paths.SafeHome, rel string) (conflicts.LocalFile, error) {
 	}
 }
 
-func classifyLocal(local conflicts.LocalFile, entry archive.FileEntry, cloneContent []byte) DeployStatus {
+func classifyLocal(local conflicts.LocalFile, entry archive.FileEntry, cloneContent []byte) ImplantStatus {
 	if local.Kind == "special" {
 		return StatusUnsupported
 	}
@@ -453,7 +453,7 @@ func validUTF8(data []byte) bool {
 	return strings.ToValidUTF8(string(data), "") == string(data)
 }
 
-func validateDestinations(entries []DeployEntry, home string) error {
+func validateDestinations(entries []ImplantEntry, home string) error {
 	safe, err := paths.NewSafeHome(home, false)
 	if err != nil {
 		return err
@@ -485,15 +485,15 @@ func validateMerges(entries []resolvedFile) error {
 	return nil
 }
 
-func classification(plan *DeployPlan, resolved []resolvedFile) DeployClassification {
-	deployed := make([]string, 0)
+func classification(plan *ImplantPlan, resolved []resolvedFile) ImplantClassification {
+	implanted := make([]string, 0)
 	merged := make([]string, 0)
 	omitted := append([]string{}, plan.Omitted...)
 	unchanged := append([]string{}, plan.Unchanged...)
 	for _, entry := range resolved {
 		switch entry.category {
-		case CategoryDeployed:
-			deployed = append(deployed, entry.path)
+		case CategoryImplanted:
+			implanted = append(implanted, entry.path)
 		case CategoryMerged:
 			merged = append(merged, entry.path)
 		case CategoryOmitted:
@@ -502,8 +502,8 @@ func classification(plan *DeployPlan, resolved []resolvedFile) DeployClassificat
 			unchanged = append(unchanged, entry.path)
 		}
 	}
-	return DeployClassification{
-		Deployed:         deployed,
+	return ImplantClassification{
+		Implanted:        implanted,
 		Merged:           merged,
 		Omitted:          dedupe(omitted),
 		Unchanged:        dedupe(unchanged),

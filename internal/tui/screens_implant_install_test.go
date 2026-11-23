@@ -12,7 +12,7 @@ import (
 
 	"github.com/Gunmer/kamino/internal/archive"
 	"github.com/Gunmer/kamino/internal/catalog"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/texts"
 )
@@ -28,9 +28,9 @@ func (r *noToolRunner) Run(context.Context, string, ...string) ([]byte, error) {
 	return nil, errors.New("no debe ejecutarse")
 }
 
-// installableSession prepares a real deploy session in which the app "demo" is
+// installableSession prepares a real implant session in which the app "demo" is
 // missing and has an installer recipe from the catalog.
-func installableSession(t *testing.T) (*deploy.DeploySession, string) {
+func installableSession(t *testing.T) (*implant.ImplantSession, string) {
 	t.Helper()
 	sourceHome := t.TempDir()
 	home := t.TempDir()
@@ -60,23 +60,23 @@ func installableSession(t *testing.T) (*deploy.DeploySession, string) {
 			{Method: install.MethodInstaller, URL: "https://example.com/demo-install.sh"},
 		},
 	}}
-	session, err := deploy.PrepareDeploy(cloneFile, deploy.Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := implant.PrepareImplant(cloneFile, implant.Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	return session, home
 }
 
-func installTestScreen(t *testing.T) (*App, *deployAppsScreen, *noToolRunner) {
+func installTestScreen(t *testing.T) (*App, *implantAppsScreen, *noToolRunner) {
 	t.Helper()
 	session, _ := installableSession(t)
 	t.Cleanup(session.Close)
 	app := testApp(false, true)
 	runner := &noToolRunner{}
 	app.installRunner = runner
-	app.deploySession = session
+	app.implantSession = session
 	apps := []appChoice{{ID: "demo", Name: "Demo", Selected: true, Count: 1}}
-	screen := &deployAppsScreen{screenBase: screenBase{app: app}, apps: apps}
+	screen := &implantAppsScreen{screenBase: screenBase{app: app}, apps: apps}
 	app.begin(screen)
 	return app, screen, runner
 }
@@ -93,7 +93,7 @@ func TestInstallQuestionAppearsBeforePlanWhenAppHasRecipe(t *testing.T) {
 	}
 }
 
-func TestInstallQuestionDeclineKeepsDeployGoing(t *testing.T) {
+func TestInstallQuestionDeclineKeepsImplantGoing(t *testing.T) {
 	app, screen, runner := installTestScreen(t)
 	send(t, app, keyMsg("enter"))
 	send(t, app, keyMsg("enter"))
@@ -132,9 +132,9 @@ func TestInstallQuestionSpaceMarksAndConfirmStartsPlan(t *testing.T) {
 
 func TestNoInstallQuestionWithoutRecipes(t *testing.T) {
 	app := testApp(false, true)
-	app.deploySession = &deploy.DeploySession{}
+	app.implantSession = &implant.ImplantSession{}
 	apps := []appChoice{{ID: "demo", Name: "Demo", Selected: true, Count: 1}}
-	screen := &deployAppsScreen{screenBase: screenBase{app: app}, apps: apps}
+	screen := &implantAppsScreen{screenBase: screenBase{app: app}, apps: apps}
 	app.begin(screen)
 	send(t, app, keyMsg("enter"))
 	if screen.installing {

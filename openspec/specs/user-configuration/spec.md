@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Permitir que Kamino lea y guarde las rutas de catálogo, clones y holocrones y el límite de holocrones en `~/.config/kamino/config.toml`, con una pantalla de configuración, validación estricta y valores por defecto bajo `vault/`, compartiendo `catalog.dir` y `deploy.snapshots_limit` con la CLI de texto.
+Permitir que Kamino lea y guarde las rutas de catálogo, clones y holocrones y el límite de holocrones en `~/.config/kamino/config.toml`, con una pantalla de configuración, validación estricta y valores por defecto bajo `vault/`, compartiendo `catalog.dir` y `implant.snapshots_limit` con la CLI de texto.
 
 ## Requirements
 
@@ -36,13 +36,13 @@ La TUI DEBE (`MUST`) leer, si existe, `~/.config/kamino/config.toml` al arrancar
 
 ### Requirement: La vía no interactiva lee el catálogo y el límite de holocrones
 
-La vía no interactiva de la CLI NO DEBE (`MUST NOT`) crear, modificar ni guardar `config.toml`. `clone`, `deploy` y `apps` DEBEN (`MUST`) leer `catalog.dir`; `clone` y `deploy` DEBEN (`MUST`) usar los valores integrados para `clone.output_dir` y `deploy.snapshots_dir`, y `deploy` DEBE (`MUST`) leer `deploy.snapshots_limit`. Si el archivo falta o es inválido, DEBEN (`MUST`) usar el catálogo integrado y los valores por defecto sin bloquear; `clone` y `deploy` callan y `apps` avisa.
+La vía no interactiva de la CLI NO DEBE (`MUST NOT`) crear, modificar ni guardar `config.toml`. `clone`, `implant` y `apps` DEBEN (`MUST`) leer `catalog.dir`; `clone` y `implant` DEBEN (`MUST`) usar los valores integrados para `clone.output_dir` y `implant.snapshots_dir`, y `implant` DEBE (`MUST`) leer `implant.snapshots_limit`. Si el archivo falta o es inválido, DEBEN (`MUST`) usar el catálogo integrado y los valores por defecto sin bloquear; `clone` y `implant` callan y `apps` avisa.
 
 #### Scenario: CLI con configuración distinta
 
-- **GIVEN** un `config.toml` válido con `clone.output_dir`, `deploy.snapshots_dir` y `catalog.dir` distintos de los integrados
-- **WHEN** se ejecuta `kamino clone` o `kamino deploy` sin terminal interactiva
-- **THEN** el comando usa los valores integrados para `clone.output_dir` y `deploy.snapshots_dir`
+- **GIVEN** un `config.toml` válido con `clone.output_dir`, `implant.snapshots_dir` y `catalog.dir` distintos de los integrados
+- **WHEN** se ejecuta `kamino clone` o `kamino implant` sin terminal interactiva
+- **THEN** el comando usa los valores integrados para `clone.output_dir` y `implant.snapshots_dir`
 - **AND** no usa esos valores del archivo
 - **AND** sí lee `catalog.dir` para el catálogo de usuario.
 
@@ -51,7 +51,7 @@ La vía no interactiva de la CLI NO DEBE (`MUST NOT`) crear, modificar ni guarda
 - **GIVEN** un `config.toml` válido con `catalog.dir = "~/kamino-apps"` y una definición `miapp.toml`
 - **WHEN** se ejecuta `kamino clone --apps miapp` sin terminal interactiva
 - **THEN** la app se detecta y se incluye en el clon
-- **AND** `kamino deploy` la trata como una app conocida del catálogo.
+- **AND** `kamino implant` la trata como una app conocida del catálogo.
 
 #### Scenario: Catálogo por defecto sin clave
 
@@ -61,14 +61,14 @@ La vía no interactiva de la CLI NO DEBE (`MUST NOT`) crear, modificar ni guarda
 
 #### Scenario: CLI con límite de holocrones configurado
 
-- **GIVEN** un `config.toml` válido con `deploy.snapshots_limit = 2` y tres holocrones en el directorio integrado
-- **WHEN** se ejecuta `kamino deploy` sin terminal interactiva y crea un holocrón
+- **GIVEN** un `config.toml` válido con `implant.snapshots_limit = 2` y tres holocrones en el directorio integrado
+- **WHEN** se ejecuta `kamino implant` sin terminal interactiva y crea un holocrón
 - **THEN** el comando borra los más antiguos hasta dejar dos
 
 #### Scenario: CLI con configuración inválida
 
 - **GIVEN** un `config.toml` con TOML inválido o claves desconocidas
-- **WHEN** se ejecuta `kamino clone`, `kamino deploy` o `kamino update` con salida de texto
+- **WHEN** se ejecuta `kamino clone`, `kamino implant` o `kamino update` con salida de texto
 - **THEN** el comando funciona con el catálogo integrado y los valores por defecto
 - **AND** no informa del archivo.
 
@@ -98,7 +98,7 @@ La TUI NO DEBE (`MUST NOT`) crear `config.toml` al arrancar ni al abrir la panta
 
 - **GIVEN** un HOME sin `~/.config/kamino/config.toml` y la pantalla de configuración abierta
 - **WHEN** se guardan los valores
-- **THEN** se crea el archivo con `catalog.dir`, `clone.output_dir`, `deploy.snapshots_dir` y `deploy.snapshots_limit`
+- **THEN** se crea el archivo con `catalog.dir`, `clone.output_dir`, `implant.snapshots_dir` y `implant.snapshots_limit`
 
 #### Scenario: Guardado con archivo existente
 
@@ -114,7 +114,7 @@ La TUI NO DEBE (`MUST NOT`) crear `config.toml` al arrancar ni al abrir la panta
 
 ### Requirement: Esquema estricto de configuración
 
-El archivo DEBE (`MUST`) ser TOML y admitir solo `catalog.dir`, `clone.output_dir`, `deploy.snapshots_dir` y `deploy.snapshots_limit`. Las tres rutas DEBEN (`MUST`) ser cadenas y `deploy.snapshots_limit` DEBE (`MUST`) ser un entero mayor o igual que 0. DEBE (`MUST`) rechazar TOML inválido, secciones o claves desconocidas, tipos incorrectos, valores vacíos, rutas relativas, rutas con `~usuario` y rutas existentes que no son directorios, con un mensaje que nombre la sección o la clave.
+El archivo DEBE (`MUST`) ser TOML y admitir solo `catalog.dir`, `clone.output_dir`, `implant.snapshots_dir` y `implant.snapshots_limit`. Las tres rutas DEBEN (`MUST`) ser cadenas y `implant.snapshots_limit` DEBE (`MUST`) ser un entero mayor o igual que 0. DEBE (`MUST`) rechazar TOML inválido, secciones o claves desconocidas, tipos incorrectos, valores vacíos, rutas relativas, rutas con `~usuario` y rutas existentes que no son directorios, con un mensaje que nombre la sección o la clave.
 
 #### Scenario: TOML inválido
 
@@ -130,19 +130,19 @@ El archivo DEBE (`MUST`) ser TOML y admitir solo `catalog.dir`, `clone.output_di
 
 #### Scenario: Clave desconocida
 
-- **GIVEN** un archivo con `clone.force`, `deploy.yes` o una clave no documentada
+- **GIVEN** un archivo con `clone.force`, `implant.yes` o una clave no documentada
 - **WHEN** la TUI intenta cargarlo
 - **THEN** rechaza la clave y muestra su nombre
 
 #### Scenario: Límite no entero
 
-- **GIVEN** un archivo con `deploy.snapshots_limit = "5"` o `deploy.snapshots_limit = 2.5`
+- **GIVEN** un archivo con `implant.snapshots_limit = "5"` o `implant.snapshots_limit = 2.5`
 - **WHEN** la TUI intenta cargarlo
 - **THEN** rechaza el valor, muestra que debe ser un entero y abre la pantalla con el error
 
 #### Scenario: Límite negativo
 
-- **GIVEN** un archivo con `deploy.snapshots_limit = -1`
+- **GIVEN** un archivo con `implant.snapshots_limit = -1`
 - **WHEN** la TUI intenta cargarlo
 - **THEN** rechaza el valor y usa los valores por defecto
 
@@ -166,7 +166,7 @@ El archivo DEBE (`MUST`) ser TOML y admitir solo `catalog.dir`, `clone.output_di
 
 ### Requirement: Valores por defecto
 
-Los valores por defecto DEBEN (`MUST`) ser `~/.config/kamino/apps` para `catalog.dir`, `~/.config/kamino/vault/` para `clone.output_dir`, `~/.config/kamino/vault/snapshot/` para `deploy.snapshots_dir` y `5` para `deploy.snapshots_limit`. Una clave ausente DEBE (`MUST`) usar su valor por defecto.
+Los valores por defecto DEBEN (`MUST`) ser `~/.config/kamino/apps` para `catalog.dir`, `~/.config/kamino/vault/` para `clone.output_dir`, `~/.config/kamino/vault/snapshot/` para `implant.snapshots_dir` y `5` para `implant.snapshots_limit`. Una clave ausente DEBE (`MUST`) usar su valor por defecto.
 
 #### Scenario: Valores por defecto del catálogo
 
@@ -182,7 +182,7 @@ Los valores por defecto DEBEN (`MUST`) ser `~/.config/kamino/apps` para `catalog
 
 #### Scenario: Valores por defecto de los holocrones
 
-- **GIVEN** un archivo sin `deploy.snapshots_dir`
+- **GIVEN** un archivo sin `implant.snapshots_dir`
 - **WHEN** un despliegue de la TUI necesita crear un holocrón
 - **THEN** se escribe en `~/.config/kamino/vault/snapshot/`
 
@@ -198,7 +198,7 @@ Los directorios de salida y de holocrones DEBEN (`MUST`) crearse cuando se usan,
 
 #### Scenario: Directorio de holocrones ausente al desplegar
 
-- **GIVEN** `~/.config/kamino/vault/snapshot/` o el `deploy.snapshots_dir` configurado no existe
+- **GIVEN** `~/.config/kamino/vault/snapshot/` o el `implant.snapshots_dir` configurado no existe
 - **WHEN** un despliegue necesita crear un holocrón
 - **THEN** el directorio se crea y el holocrón se escribe en él
 
@@ -223,7 +223,7 @@ Los directorios de salida y de holocrones DEBEN (`MUST`) crearse cuando se usan,
 
 ### Requirement: Precedencia de rutas en la TUI
 
-En la TUI, una ruta escrita manualmente en C2 DEBE (`MUST`) prevalecer sobre `clone.output_dir` y sobre el valor por defecto. Sin ruta manual, `clone.output_dir` DEBE (`MUST`) prevalecer sobre `~/.config/kamino/vault/`. `catalog.dir` y `deploy.snapshots_dir` DEBEN (`MUST`) usar el archivo si existe la clave y, si no, su valor por defecto.
+En la TUI, una ruta escrita manualmente en C2 DEBE (`MUST`) prevalecer sobre `clone.output_dir` y sobre el valor por defecto. Sin ruta manual, `clone.output_dir` DEBE (`MUST`) prevalecer sobre `~/.config/kamino/vault/`. `catalog.dir` y `implant.snapshots_dir` DEBEN (`MUST`) usar el archivo si existe la clave y, si no, su valor por defecto.
 
 #### Scenario: Ruta manual en C2
 
@@ -239,13 +239,13 @@ En la TUI, una ruta escrita manualmente en C2 DEBE (`MUST`) prevalecer sobre `cl
 
 #### Scenario: Sin clave en el archivo
 
-- **GIVEN** un archivo sin `clone.output_dir`, `catalog.dir` o `deploy.snapshots_dir`
+- **GIVEN** un archivo sin `clone.output_dir`, `catalog.dir` o `implant.snapshots_dir`
 - **WHEN** la TUI usa cada valor
 - **THEN** aplica el valor por defecto correspondiente
 
 ### Requirement: Pantalla de configuración
 
-La TUI DEBE (`MUST`) ofrecer una pantalla de Configuración accesible desde el menú principal después de Actualizar, sin atajo de teclado. La pantalla DEBE (`MUST`) mostrar y permitir editar `catalog.dir`, `clone.output_dir`, `deploy.snapshots_dir` y `deploy.snapshots_limit` con sus valores efectivos. El campo del límite DEBE (`MUST`) admitir solo dígitos. `Ctrl+S` DEBE guardar y `Esc` DEBE volver sin guardar.
+La TUI DEBE (`MUST`) ofrecer una pantalla de Configuración accesible desde el menú principal después de Actualizar, sin atajo de teclado. La pantalla DEBE (`MUST`) mostrar y permitir editar `catalog.dir`, `clone.output_dir`, `implant.snapshots_dir` y `implant.snapshots_limit` con sus valores efectivos. El campo del límite DEBE (`MUST`) admitir solo dígitos. `Ctrl+S` DEBE guardar y `Esc` DEBE volver sin guardar.
 
 #### Scenario: Acceso desde el menú
 
@@ -289,7 +289,7 @@ Al guardar, la TUI DEBE (`MUST`) escribir las cuatro claves de forma atómica, c
 
 #### Scenario: Aplicación inmediata
 
-- **GIVEN** una configuración guardada con un `deploy.snapshots_dir` nuevo
+- **GIVEN** una configuración guardada con un `implant.snapshots_dir` nuevo
 - **WHEN** se inicia un despliegue en la misma sesión de la TUI
 - **THEN** el holocrón se escribe en el directorio nuevo sin reiniciar la aplicación
 
@@ -327,7 +327,7 @@ Tras guardar desde la pantalla abierta por un archivo inválido, la TUI DEBE (`M
 
 #### Scenario: Continuar un flujo directo tras corregir
 
-- **GIVEN** `kamino clone` o `kamino deploy` abrió la TUI con una configuración inválida
+- **GIVEN** `kamino clone` o `kamino implant` abrió la TUI con una configuración inválida
 - **WHEN** se corrige y se guarda desde la pantalla de configuración
 - **THEN** la TUI continúa con la primera pantalla del flujo solicitado
 
@@ -349,7 +349,7 @@ El archivo NO DEBE (`MUST NOT`) admitir claves que automaticen `--force`, `--yes
 
 #### Scenario: Intento de fijar force o yes
 
-- **GIVEN** una configuración con `clone.force`, `deploy.yes` o una política de conflictos
+- **GIVEN** una configuración con `clone.force`, `implant.yes` o una política de conflictos
 - **WHEN** la TUI intenta cargarla
 - **THEN** la rechaza por contener claves desconocidas y no la aplica
 
@@ -383,17 +383,17 @@ La configuración NO DEBE (`MUST NOT`) alterar el confinamiento al HOME, la veri
 
 ### Requirement: Retención de holocrones
 
-Cada vez que un despliegue crea un holocrón DEBE (`MUST`) borrar los más antiguos hasta que queden como máximo `deploy.snapshots_limit`, cuyo valor por defecto DEBE (`MUST`) ser 5; un `0` DEBE (`MUST`) conservar todos. Solo DEBEN (`MUST`) ser elegibles los archivos regulares del directorio de holocrones con nombre `<fecha ISO>.tar.gz` o `<fecha ISO>-N.tar.gz`; cualquier otro archivo, directorio o enlace del directorio NO DEBE (`MUST NOT`) tocarse. La poda DEBE (`MUST`) ocurrir después de escribir el holocrón nuevo, así que una escritura fallida NO DEBE (`MUST NOT`) borrar ninguno. Si el excedente no se puede borrar, el despliegue DEBE (`MUST`) abortarse antes de escribir en los destinos. `--dry-run` NO DEBE (`MUST NOT`) borrar holocrones. Dos despliegues que comparten el directorio de holocrones DEBEN (`MUST`) serializarse con un bloqueo exclusivo del directorio, tomado antes de crear el holocrón y liberado al terminar de escribir los destinos; la poda de uno NO DEBE (`MUST NOT`) borrar el holocrón de un despliegue en curso.
+Cada vez que un despliegue crea un holocrón DEBE (`MUST`) borrar los más antiguos hasta que queden como máximo `implant.snapshots_limit`, cuyo valor por defecto DEBE (`MUST`) ser 5; un `0` DEBE (`MUST`) conservar todos. Solo DEBEN (`MUST`) ser elegibles los archivos regulares del directorio de holocrones con nombre `<fecha ISO>.tar.gz` o `<fecha ISO>-N.tar.gz`; cualquier otro archivo, directorio o enlace del directorio NO DEBE (`MUST NOT`) tocarse. La poda DEBE (`MUST`) ocurrir después de escribir el holocrón nuevo, así que una escritura fallida NO DEBE (`MUST NOT`) borrar ninguno. Si el excedente no se puede borrar, el despliegue DEBE (`MUST`) abortarse antes de escribir en los destinos. `--dry-run` NO DEBE (`MUST NOT`) borrar holocrones. Dos despliegues que comparten el directorio de holocrones DEBEN (`MUST`) serializarse con un bloqueo exclusivo del directorio, tomado antes de crear el holocrón y liberado al terminar de escribir los destinos; la poda de uno NO DEBE (`MUST NOT`) borrar el holocrón de un despliegue en curso.
 
 #### Scenario: Despliegue por encima del límite
 
-- **GIVEN** cinco holocrones en el directorio y `deploy.snapshots_limit = 5`
+- **GIVEN** cinco holocrones en el directorio y `implant.snapshots_limit = 5`
 - **WHEN** un despliegue crea el sexto
 - **THEN** se borra el más antiguo y quedan cinco
 
 #### Scenario: Límite desactivado
 
-- **GIVEN** `deploy.snapshots_limit = 0` y diez holocrones
+- **GIVEN** `implant.snapshots_limit = 0` y diez holocrones
 - **WHEN** un despliegue crea otro
 - **THEN** no se borra ninguno
 
@@ -411,7 +411,7 @@ Cada vez que un despliegue crea un holocrón DEBE (`MUST`) borrar los más antig
 
 #### Scenario: Despliegues concurrentes en el mismo directorio
 
-- **GIVEN** dos despliegues simultáneos que comparten el directorio de holocrones y `deploy.snapshots_limit = 1`
+- **GIVEN** dos despliegues simultáneos que comparten el directorio de holocrones y `implant.snapshots_limit = 1`
 - **WHEN** el segundo despliegue intenta podar mientras el primero todavía aplica
 - **THEN** el segundo espera el bloqueo del directorio y el holocrón del primero sigue existiendo hasta que el primero termina
 
@@ -429,11 +429,11 @@ Los holocrones existentes en `~/Library/Application Support/kamino/snapshots/` N
 
 - **GIVEN** un holocrón en `~/Library/Application Support/kamino/snapshots/`
 - **WHEN** se actualiza Kamino y se guarda la nueva configuración
-- **THEN** el holocrón permanece en su ruta original y puede desplegarse con `kamino deploy <ruta>`
+- **THEN** el holocrón permanece en su ruta original y puede desplegarse con `kamino implant <ruta>`
 
 ### Requirement: Campos de la pantalla de configuración
 
-La pantalla de Configuración DEBE (`MUST`) mostrar `catalog.dir`, `clone.output_dir`, `deploy.snapshots_dir` y `deploy.snapshots_limit` con el campo compartido de una sola fila, etiquetas alineadas y foco visible. El foco DEBE empezar en Catálogo y `Tab`/`Mayús+Tab` y las flechas verticales DEBEN moverlo. El límite DEBE admitir solo dígitos. `Ctrl+S` DEBE guardar y `Esc` DEBE volver sin escribir. La pantalla DEBE caber en 80x24.
+La pantalla de Configuración DEBE (`MUST`) mostrar `catalog.dir`, `clone.output_dir`, `implant.snapshots_dir` y `implant.snapshots_limit` con el campo compartido de una sola fila, etiquetas alineadas y foco visible. El foco DEBE empezar en Catálogo y `Tab`/`Mayús+Tab` y las flechas verticales DEBEN moverlo. El límite DEBE admitir solo dígitos. `Ctrl+S` DEBE guardar y `Esc` DEBE volver sin escribir. La pantalla DEBE caber en 80x24.
 
 #### Scenario: Foco inicial en Catálogo
 

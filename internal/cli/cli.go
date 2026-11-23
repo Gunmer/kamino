@@ -23,14 +23,14 @@ import (
 
 var (
 	executeClone        = app.ExecuteClone
-	executeDeploy       = app.ExecuteDeploy
+	executeImplant      = app.ExecuteImplant
 	executeUpdate       = app.ExecuteUpdate
 	executeAppsList     = app.ExecuteAppsList
 	executeAppsValidate = app.ExecuteAppsValidate
 	executeAppsNew      = app.ExecuteAppsNew
 	runMenu             = tui.RunMenu
 	runCloneFlow        = tui.RunCloneFlow
-	runDeployFlow       = tui.RunDeployFlow
+	runImplantFlow      = tui.RunImplantFlow
 	runUpdateFlow       = tui.RunUpdateFlow
 )
 
@@ -93,7 +93,7 @@ func Run(args []string, options Options) int {
 		return 0
 	case "clone":
 		return runCloneCommand(ctx, args[1:], options, interactive)
-	case "implant", "deploy":
+	case "implant":
 		return runImplantCommand(ctx, args[1:], options, interactive)
 	case "update":
 		return runUpdateCommand(ctx, args[1:], options, interactive)
@@ -275,7 +275,7 @@ func runImplantCommand(ctx context.Context, args []string, options Options, inte
 		if info, err := os.Stat(cloneFile); err != nil || !info.Mode().IsRegular() {
 			fileError = "no existe el archivo: " + cloneFile
 		}
-		return runDeployFlow(tui.DeployFlowOptions{
+		return runImplantFlow(tui.ImplantFlowOptions{
 			CloneFile: cloneFile, Requested: requested, Verbose: verbose, FileError: fileError,
 		})
 	}
@@ -283,16 +283,16 @@ func runImplantCommand(ctx context.Context, args []string, options Options, inte
 		fmt.Fprintln(options.Stderr, texts.RequiresYes)
 		return 1
 	}
-	outcome, err := executeDeploy(ctx, cloneFile, requested, dryRun, nil, "", nil, "", "", installMissing)
+	outcome, err := executeImplant(ctx, cloneFile, requested, dryRun, nil, "", nil, "", "", installMissing)
 	if err != nil {
 		var partial *kerrors.PartialApplyError
 		if errors.As(err, &partial) {
 			fmt.Fprintln(options.Stderr, strings.NewReplacer(
 				"{applied}", fmt.Sprintf("%d", len(partial.Applied)),
 				"{failed}", partial.Failed,
-			).Replace(texts.DeployPartial))
+			).Replace(texts.ImplantPartial))
 			if partial.Snapshot != "" {
-				fmt.Fprintln(options.Stderr, strings.ReplaceAll(texts.DeployPartialSnapshot, "{path}", partial.Snapshot))
+				fmt.Fprintln(options.Stderr, strings.ReplaceAll(texts.ImplantPartialSnapshot, "{path}", partial.Snapshot))
 			}
 			return 1
 		}
@@ -302,7 +302,7 @@ func runImplantCommand(ctx context.Context, args []string, options Options, inte
 	for _, appID := range outcome.Missing {
 		fmt.Fprintf(options.Stderr, "aviso: app no implantable o desconocida: %s\n", appID)
 	}
-	ui.PrintDeploySummary(options.Stdout, outcome.Result, verbose)
+	ui.PrintImplantSummary(options.Stdout, outcome.Result, verbose)
 	return outcome.Code
 }
 
@@ -554,9 +554,6 @@ func printMainHelp(w io.Writer) {
 	fmt.Fprintln(w, "  implant  Implanta un clon en este Mac.")
 	fmt.Fprintln(w, "  update   Actualiza kamino a la última versión publicada.")
 	fmt.Fprintln(w, "  apps     Crea y valida definiciones de apps.")
-	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Alias:")
-	fmt.Fprintln(w, "  deploy   Alias de implant (compatibilidad).")
 }
 
 func printCloneHelp(w io.Writer) {
@@ -586,7 +583,6 @@ func printImplantHelp(w io.Writer) {
 	fmt.Fprintln(w, "  --verbose, -v     Salida detallada.")
 	fmt.Fprintln(w, "  --help, -h        Muestra esta ayuda y termina.")
 	fmt.Fprintln(w)
-	fmt.Fprintln(w, "Alias: deploy (compatibilidad).")
 }
 
 func printUpdateHelp(w io.Writer) {
@@ -651,10 +647,10 @@ func printAppsNewHelp(w io.Writer) {
 func completionScript(shell string) string {
 	switch shell {
 	case "zsh":
-		return "#compdef kamino\n_kamino() { _arguments '*: :((clone implant deploy update apps))' }\ncompdef _kamino kamino\n"
+		return "#compdef kamino\n_kamino() { _arguments '*: :((clone implant update apps))' }\ncompdef _kamino kamino\n"
 	case "fish":
-		return "complete -c kamino -f -a 'clone implant deploy update apps'\n"
+		return "complete -c kamino -f -a 'clone implant update apps'\n"
 	default:
-		return "complete -W 'clone implant deploy update apps' kamino\n"
+		return "complete -W 'clone implant update apps' kamino\n"
 	}
 }

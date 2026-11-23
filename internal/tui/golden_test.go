@@ -15,7 +15,7 @@ import (
 	"github.com/Gunmer/kamino/internal/archive"
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/conflicts"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/texts"
 )
@@ -257,8 +257,8 @@ func goldenD0() goldenCase {
 	return goldenCase{
 		name: "d0", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
 		build: func(app *App) Screen {
-			screen := newDeployFileScreen(app, "")
-			screen.candidates = fixtureDeployCandidates()
+			screen := newImplantFileScreen(app, "")
+			screen.candidates = fixtureImplantCandidates()
 			screen.messages = nil
 			return screen
 		},
@@ -269,8 +269,8 @@ func goldenD0Filter() goldenCase {
 	return goldenCase{
 		name: "d0-filter", sizes: [][2]int{{100, 26}}, variants: true,
 		build: func(app *App) Screen {
-			screen := newDeployFileScreen(app, "")
-			screen.candidates = fixtureDeployCandidates()
+			screen := newImplantFileScreen(app, "")
+			screen.candidates = fixtureImplantCandidates()
 			screen.filtering = true
 			screen.filter.SetValue("clone")
 			return screen
@@ -282,8 +282,8 @@ func goldenD0Manual() goldenCase {
 	return goldenCase{
 		name: "d0-manual", sizes: [][2]int{{100, 26}}, variants: true,
 		build: func(app *App) Screen {
-			screen := newDeployFileScreen(app, "")
-			screen.candidates = fixtureDeployCandidates()
+			screen := newImplantFileScreen(app, "")
+			screen.candidates = fixtureImplantCandidates()
 			screen.manual = true
 			return screen
 		},
@@ -294,14 +294,14 @@ func goldenD1() goldenCase {
 	return goldenCase{
 		name: "d1", sizes: [][2]int{{100, 26}}, variants: true,
 		build: func(app *App) Screen {
-			app.deploySession = &deploy.DeploySession{NotInstalledApps: []archive.AppEntry{
+			app.implantSession = &implant.ImplantSession{NotInstalledApps: []archive.AppEntry{
 				{ID: "iterm2", Name: "iterm2"}, {ID: "yazi", Name: "yazi"},
 			}}
 			apps := fixtureApps()[:7]
 			for index := range apps {
 				apps[index].Selected = false
 			}
-			return &deployAppsScreen{
+			return &implantAppsScreen{
 				screenBase: screenBase{app: app}, apps: apps,
 				messages: []Message{{Kind: MessageWarning, Text: texts.D1CloseApps}},
 			}
@@ -313,7 +313,7 @@ func goldenD1Install() goldenCase {
 	return goldenCase{
 		name: "d1-install", sizes: [][2]int{{100, 26}}, variants: true,
 		build: func(app *App) Screen {
-			return &deployAppsScreen{
+			return &implantAppsScreen{
 				screenBase: screenBase{app: app}, installing: true,
 				installChoices: []installChoice{
 					{AppID: "iterm2", Name: "iTerm2", Recipe: install.Recipe{Method: install.MethodBrew, Cask: "iterm2"}, Selected: true},
@@ -330,8 +330,8 @@ func goldenD2() goldenCase {
 		name: "d2", sizes: [][2]int{{100, 26}}, variants: true,
 		build: func(app *App) Screen {
 			app.conflicts = fixtureConflictStates()
-			app.deployPlan = fixtureDeployPlan(app.conflicts)
-			return newDeployConflictsScreen(app)
+			app.implantPlan = fixtureImplantPlan(app.conflicts)
+			return newImplantConflictsScreen(app)
 		},
 	}
 }
@@ -342,8 +342,8 @@ func goldenD3() goldenCase {
 		build: func(app *App) Screen {
 			app.conflicts = fixtureConflictStates()
 			app.conflictIndex = 0
-			app.deployPlan = fixtureDeployPlan(app.conflicts)
-			return newDeployDetailScreen(app)
+			app.implantPlan = fixtureImplantPlan(app.conflicts)
+			return newImplantDetailScreen(app)
 		},
 	}
 }
@@ -356,8 +356,8 @@ func goldenD4() goldenCase {
 			states[0].Rows[0] = conflicts.RowLocal
 			states[1].Action = conflicts.ActionApply
 			app.conflicts = states
-			app.deployPlan = fixtureDeployPlan(states)
-			return newDeployConfirmScreen(app)
+			app.implantPlan = fixtureImplantPlan(states)
+			return newImplantConfirmScreen(app)
 		},
 	}
 }
@@ -366,7 +366,7 @@ func goldenD5() goldenCase {
 	return goldenCase{
 		name: "d5", sizes: [][2]int{{100, 26}},
 		build: func(app *App) Screen {
-			return newDeploySummaryScreen(app, fixtureDeployResult(), false, "")
+			return newImplantSummaryScreen(app, fixtureImplantResult(), false, "")
 		},
 	}
 }
@@ -533,8 +533,8 @@ func goldenHelp() goldenCase {
 		name: "help", sizes: [][2]int{{100, 26}}, variants: true,
 		build: func(app *App) Screen {
 			app.conflicts = fixtureConflictStates()
-			app.deployPlan = fixtureDeployPlan(app.conflicts)
-			target := newDeployConflictsScreen(app)
+			app.implantPlan = fixtureImplantPlan(app.conflicts)
+			target := newImplantConflictsScreen(app)
 			return newHelpScreen(app, target)
 		},
 	}

@@ -212,7 +212,7 @@ func TestPruneSnapshotsTreatsAVanishedSnapshotAsPruned(t *testing.T) {
 	original := removeFile
 	removeFile = func(path string) error {
 		if path == oldest {
-			// Another deployment pruned this snapshot first.
+			// Another implantation pruned this snapshot first.
 			return &os.PathError{Op: "remove", Path: path, Err: os.ErrNotExist}
 		}
 		return original(path)
@@ -300,8 +300,8 @@ func TestCreateSnapshotFailsWhenItsSnapshotVanishes(t *testing.T) {
 		t.Fatal(err)
 	}
 	original := removeFile
-	// Simulate a concurrent deploy whose prune deletes the snapshot this
-	// deployment has just written.
+	// Simulate a concurrent implant whose prune deletes the snapshot this
+	// implantation has just written.
 	removeFile = func(path string) error {
 		if path == older {
 			return os.Remove(filepath.Join(directory, "2026-01-02T00:00:00Z.tar.gz"))
@@ -310,7 +310,7 @@ func TestCreateSnapshotFailsWhenItsSnapshotVanishes(t *testing.T) {
 	}
 	t.Cleanup(func() { removeFile = original })
 	if _, err := CreateSnapshot(context.Background(), []string{target}, home, directory, "2026-01-02T00:00:00Z", 1); err == nil {
-		t.Fatal("a snapshot that vanished during the prune must fail the deploy")
+		t.Fatal("a snapshot that vanished during the prune must fail the implant")
 	}
 }
 

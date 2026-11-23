@@ -28,30 +28,30 @@ El comando `clone` DEBE (`MUST`) aceptar `-a` como alias de `--apps`, `-o` de `-
 
 ### Requirement: Alias de las opciones de despliegue
 
-El comando `deploy` DEBE (`MUST`) aceptar `-a` como alias de `--apps`, `-n` como alias de `--dry-run`, `-y` de `--yes` y `-v` de `--verbose`, con los mismos efectos que las formas largas correspondientes. El archivo de clon sigue siendo un argumento posicional.
+El comando `implant` DEBE (`MUST`) aceptar `-a` como alias de `--apps`, `-n` como alias de `--dry-run`, `-y` de `--yes` y `-v` de `--verbose`, con los mismos efectos que las formas largas correspondientes. El archivo de clon sigue siendo un argumento posicional.
 
 #### Scenario: Confirmación y detalle mediante alias
 
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz -y -v` con un clon válido
+- **WHEN** se ejecuta `kamino implant clon.tar.gz -y -v` con un clon válido
 - **THEN** se utiliza el mismo archivo, la misma selección y el mismo nivel de detalle que con `--yes --verbose`.
 
 #### Scenario: Selección de apps mediante alias
 
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz -a zsh,git`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz -a zsh,git`
 - **THEN** se seleccionan las mismas aplicaciones que con `--apps zsh,git` y no se abre la pantalla de selección.
 
 ### Requirement: Selección de apps en el despliegue
 
-El comando `deploy` DEBE (`MUST`) aceptar `--apps` con una lista de identificadores separados por comas. Solo las apps instaladas y presentes en el manifiesto DEBEN desplegarse. Las apps del manifiesto no instaladas DEBEN informarse y NO DEBEN contar como omitidas ni alterar el código. Los identificadores pedidos con `--apps` que no se puedan cumplir DEBEN avisarse y contarse como omitidos, con código 3. La opción DEBE omitir la pantalla interactiva de selección de apps.
+El comando `implant` DEBE (`MUST`) aceptar `--apps` con una lista de identificadores separados por comas. Solo las apps instaladas y presentes en el manifiesto DEBEN desplegarse. Las apps del manifiesto no instaladas DEBEN informarse y NO DEBEN contar como omitidas ni alterar el código. Los identificadores pedidos con `--apps` que no se puedan cumplir DEBEN avisarse y contarse como omitidos, con código 3. La opción DEBE omitir la pantalla interactiva de selección de apps.
 
 #### Scenario: Despliegue de apps concretas
 
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz --apps zsh,git`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz --apps zsh,git`
 - **THEN** solo se planifican y despliegan `zsh` y `git`, y no se abre la pantalla de selección de apps.
 
 #### Scenario: App solicitada no instalada
 
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz --apps zsh,no-existe`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz --apps zsh,no-existe`
 - **THEN** se avisa de `no-existe`, se despliega `zsh` y el comando termina con código 3 por el elemento omitido.
 
 #### Scenario: App del manifiesto no instalada
@@ -62,7 +62,7 @@ El comando `deploy` DEBE (`MUST`) aceptar `--apps` con una lista de identificado
 
 ### Requirement: Simulación sin escrituras
 
-El alias `-n` DEBE (`MUST`) conservar el comportamiento de `--dry-run` en ambos comandos, sin crear ni modificar archivos de clon, destinos desplegados o holocrones de seguridad. En `deploy`, la simulación NO DEBE abrir la interfaz interactiva; DEBE volcar los conflictos a la salida estándar y usar `--apps` o, en su defecto, todas las apps instaladas. En `clone` con terminal interactiva, la simulación DEBE terminar en C3 sin acción de clonar y sin escribir.
+El alias `-n` DEBE (`MUST`) conservar el comportamiento de `--dry-run` en ambos comandos, sin crear ni modificar archivos de clon, destinos desplegados o holocrones de seguridad. En `implant`, la simulación NO DEBE abrir la interfaz interactiva; DEBE volcar los conflictos a la salida estándar y usar `--apps` o, en su defecto, todas las apps instaladas. En `clone` con terminal interactiva, la simulación DEBE terminar en C3 sin acción de clonar y sin escribir.
 
 #### Scenario: Simulación de una clonación
 
@@ -72,25 +72,25 @@ El alias `-n` DEBE (`MUST`) conservar el comportamiento de `--dry-run` en ambos 
 #### Scenario: Simulación de un despliegue no interactivo
 
 - **GIVEN** un clon válido y una entrada sin terminal interactiva
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz -n` sin `-y`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz -n` sin `-y`
 - **THEN** se permite la simulación sin modificar destinos ni crear holocrones de seguridad, igual que con `--dry-run`.
 
 #### Scenario: Selección interactiva durante la simulación
 
 - **GIVEN** una entrada con terminal interactiva
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz -n` sin `-y`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz -n` sin `-y`
 - **THEN** la simulación no abre la interfaz interactiva, usa `--apps` o todas las apps instaladas y vuelca los conflictos a la salida estándar.
 
 #### Scenario: Simulación con selección explícita
 
 - **GIVEN** un clon válido y una entrada sin terminal interactiva
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz -n --apps zsh`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz -n --apps zsh`
 - **THEN** se muestran los conflictos de `zsh` en la salida estándar, sin abrir la interfaz interactiva y sin modificar destinos ni crear holocrones de seguridad.
 
 #### Scenario: Simulación con todas las apps
 
 - **GIVEN** un clon válido y una entrada sin terminal interactiva
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz -n` sin `--apps`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz -n` sin `--apps`
 - **THEN** se simulan todas las apps instaladas, se muestran sus conflictos en la salida estándar y no se modifica ningún destino ni se crea ningún holocrón de seguridad.
 
 ### Requirement: Confirmación de despliegues no interactivos
@@ -100,19 +100,19 @@ Un despliegue no interactivo DEBE (`MUST`) seguir exigiendo `-y` o `--yes`, salv
 #### Scenario: Despliegue sin confirmación ni simulación
 
 - **GIVEN** una entrada sin terminal interactiva
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz` sin `-y`, `--yes`, `-n` ni `--dry-run`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz` sin `-y`, `--yes`, `-n` ni `--dry-run`
 - **THEN** el comando informa de que se requiere confirmación, termina con código 1 y no inicia el despliegue.
 
 #### Scenario: Despliegue confirmado mediante el alias
 
 - **GIVEN** una entrada sin terminal interactiva y un clon válido
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz -y`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz -y`
 - **THEN** el despliegue procede sin confirmación adicional, sin abrir la revisión interactiva y aplicando los conflictos con el clon, igual que con `--yes`.
 
 #### Scenario: Conflictos con --yes
 
 - **GIVEN** un clon con un conflicto y una entrada sin terminal interactiva
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz --yes`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz --yes`
 - **THEN** el conflicto se resuelve aplicando el clon, sin abrir la interfaz interactiva y sin pedir decisiones.
 
 ### Requirement: Resumen de despliegue con mezclas
@@ -154,7 +154,7 @@ La CLI DEBE (`MUST`) aceptar `-V` como alias de `--version` en el nivel principa
 
 #### Scenario: Consulta de ayuda en cada nivel
 
-- **WHEN** se ejecuta `kamino -h`, `kamino clone -h` o `kamino deploy -h`
+- **WHEN** se ejecuta `kamino -h`, `kamino clone -h` o `kamino implant -h`
 - **THEN** se muestra la ayuda correspondiente, incluidos los nombres cortos y largos de sus opciones, y se termina con código 0 sin ejecutar el comando.
 
 #### Scenario: Ayuda de la opción de fuerza
@@ -217,7 +217,7 @@ En la vía no interactiva, `clone` DEBE (`MUST`) usar `clone-yyyyMMdd.tar.gz` co
 
 ### Requirement: Apertura de la TUI y omisión de pantallas
 
-Con terminal interactiva y sin `KAMINO_PLAIN`, `clone` DEBE (`MUST`) abrir la TUI; `--apps` y `--output` DEBEN omitir C1 y C2 respectivamente, y un valor inválido DEBE abrir la pantalla correspondiente precargada con el error. `deploy` DEBE conservar la vía no interactiva con `--yes` y `--dry-run`; `--apps` DEBE omitir D1.
+Con terminal interactiva y sin `KAMINO_PLAIN`, `clone` DEBE (`MUST`) abrir la TUI; `--apps` y `--output` DEBEN omitir C1 y C2 respectivamente, y un valor inválido DEBE abrir la pantalla correspondiente precargada con el error. `implant` DEBE conservar la vía no interactiva con `--yes` y `--dry-run`; `--apps` DEBE omitir D1.
 
 #### Scenario: Clonación con TUI y argumentos
 
@@ -234,7 +234,7 @@ Con terminal interactiva y sin `KAMINO_PLAIN`, `clone` DEBE (`MUST`) abrir la TU
 #### Scenario: Despliegue no interactivo con TUI disponible
 
 - **GIVEN** una terminal interactiva
-- **WHEN** se ejecuta `kamino deploy clon.tar.gz --yes` o `--dry-run`
+- **WHEN** se ejecuta `kamino implant clon.tar.gz --yes` o `--dry-run`
 - **THEN** no se abre la TUI y se usa la salida de texto
 
 #### Scenario: --apps omite la selección de despliegue
@@ -263,19 +263,19 @@ La ayuda principal DEBE (`MUST`) listar `apps` con sus subcomandos `list`, `vali
 - **THEN** se muestran sus flags, incluidos `--command`, `--bundle-id`, `--path`, `--optional-path`, `--name`, `--force` y `--print`
 - **AND** el comando termina con código 0 sin crear ni modificar archivos.
 
-### Requirement: Comando implant y alias deploy
+### Requirement: Comando implant y alias implant
 
-`kamino implant` DEBE (`MUST`) aplicar un clon en este Mac con el mismo argumento posicional, las mismas opciones, validaciones, resultados y códigos de salida que `kamino deploy`. `kamino deploy` DEBE (`MUST`) seguir disponible como alias exacto y silencioso de `implant`.
+`kamino implant` DEBE (`MUST`) aplicar un clon en este Mac con el mismo argumento posicional, las mismas opciones, validaciones, resultados y códigos de salida que `kamino implant`. `kamino implant` DEBE (`MUST`) seguir disponible como alias exacto y silencioso de `implant`.
 
 #### Scenario: Implantación de un clon
 
 - **GIVEN** un clon válido y una entrada sin terminal interactiva
 - **WHEN** se ejecuta `kamino implant clon.tar.gz --yes`
-- **THEN** se aplican las configuraciones igual que con `kamino deploy clon.tar.gz --yes`, sin abrir la interfaz interactiva y con el mismo código de salida.
+- **THEN** se aplican las configuraciones igual que con `kamino implant clon.tar.gz --yes`, sin abrir la interfaz interactiva y con el mismo código de salida.
 
-#### Scenario: Compatibilidad de deploy
+#### Scenario: Compatibilidad de implant
 
-- **GIVEN** un script existente que invoca `kamino deploy clon.tar.gz -y -v`
+- **GIVEN** un script existente que invoca `kamino implant clon.tar.gz -y -v`
 - **WHEN** se ejecuta el script después del cambio
 - **THEN** el comportamiento, la salida y el código son los mismos que antes y no se exige migración.
 
@@ -283,51 +283,51 @@ La ayuda principal DEBE (`MUST`) listar `apps` con sus subcomandos `list`, `vali
 
 - **GIVEN** un clon que omite una app pedida con `--apps`
 - **WHEN** se ejecuta `kamino implant clon.tar.gz --apps no-existe -y`
-- **THEN** se informa de la app omitida y el comando termina con código 3, igual que con `deploy`.
+- **THEN** se informa de la app omitida y el comando termina con código 3, igual que con `implant`.
 
 #### Scenario: Simulación mediante implant
 
 - **GIVEN** un clon válido y una entrada sin terminal interactiva
 - **WHEN** se ejecuta `kamino implant clon.tar.gz --dry-run`
-- **THEN** se muestran los conflictos sin escribir destinos ni crear holocrón, igual que con `deploy --dry-run`.
+- **THEN** se muestran los conflictos sin escribir destinos ni crear holocrón, igual que con `implant --dry-run`.
 
 ### Requirement: Descubrimiento de implant en ayuda y autocompletado
 
-La ayuda principal DEBE (`MUST`) presentar `implant` como comando principal y mencionar `deploy` como alias de compatibilidad. La ayuda de `implant` DEBE (`MUST`) mostrar las mismas opciones que `deploy` y terminar con código 0. El autocompletado DEBE (`MUST`) incluir `implant` y `deploy` para bash, zsh y fish.
+La ayuda principal DEBE (`MUST`) presentar `implant` como comando principal y mencionar `implant` como alias de compatibilidad. La ayuda de `implant` DEBE (`MUST`) mostrar las mismas opciones que `implant` y terminar con código 0. El autocompletado DEBE (`MUST`) incluir `implant` y `implant` para bash, zsh y fish.
 
 #### Scenario: Ayuda principal con implant
 
 - **WHEN** se ejecuta `kamino -h` o `kamino --help`
-- **THEN** la ayuda muestra `implant` con su descripción, `deploy` como alias y conserva `clone`, `update` y `apps`.
+- **THEN** la ayuda muestra `implant` con su descripción, `implant` como alias y conserva `clone`, `update` y `apps`.
 
 #### Scenario: Ayuda de implant
 
 - **WHEN** se ejecuta `kamino implant -h`
-- **THEN** se muestran el argumento `CLONE_FILE`, las opciones `--apps`, `--dry-run`, `--yes` y `--verbose`, y el alias `deploy`, y el comando termina con código 0 sin aplicar nada.
+- **THEN** se muestran el argumento `CLONE_FILE`, las opciones `--apps`, `--dry-run`, `--yes` y `--verbose`, y el alias `implant`, y el comando termina con código 0 sin aplicar nada.
 
-#### Scenario: Ayuda de deploy como alias
+#### Scenario: Ayuda de implant como alias
 
-- **WHEN** se ejecuta `kamino deploy -h`
-- **THEN** la ayuda indica que `deploy` es un alias de `implant` y muestra las mismas opciones.
+- **WHEN** se ejecuta `kamino implant -h`
+- **THEN** la ayuda indica que `implant` es un alias de `implant` y muestra las mismas opciones.
 
 #### Scenario: Autocompletado con ambos nombres
 
 - **WHEN** se consulta `kamino --show-completion` para bash, zsh o fish
-- **THEN** el script incluye `implant` y `deploy` entre los comandos disponibles.
+- **THEN** el script incluye `implant` y `implant` entre los comandos disponibles.
 
 ### Requirement: Textos de ayuda en español
 
-La ayuda de `clone`, `implant` y `deploy` DEBE (`MUST`) estar en español, incluida la línea final sobre cómo cerrar la ayuda, y los errores de comando desconocido DEBEN (`MUST`) estar en español.
+La ayuda de `clone`, `implant` y `implant` DEBE (`MUST`) estar en español, incluida la línea final sobre cómo cerrar la ayuda, y los errores de comando desconocido DEBEN (`MUST`) estar en español.
 
 #### Scenario: Cierre de la ayuda
 
-- **WHEN** se ejecuta `kamino clone -h`, `kamino implant -h` o `kamino deploy -h`
+- **WHEN** se ejecuta `kamino clone -h`, `kamino implant -h` o `kamino implant -h`
 - **THEN** la última opción de ayuda dice que muestra la ayuda y termina, sin texto en inglés.
 
 #### Scenario: Comando desconocido
 
 - **WHEN** se ejecuta `kamino comando-inexistente`
-- **THEN** el error está en español, enumera los comandos disponibles e incluye `implant` y `deploy` como alias.
+- **THEN** el error está en español, enumera los comandos disponibles e incluye `implant` y `implant` como alias.
 
 ### Requirement: Instalación de apps ausentes en el despliegue
 

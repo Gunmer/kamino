@@ -8,7 +8,7 @@ import (
 
 	"github.com/Gunmer/kamino/internal/clone"
 	"github.com/Gunmer/kamino/internal/conflicts"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/plan"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/update"
@@ -96,10 +96,10 @@ func printSkipped(w io.Writer, skipped []plan.SkippedPath) {
 	}
 }
 
-// PrintDeploySummary prints the deploy summary or the dry-run plan and diffs.
-func PrintDeploySummary(w io.Writer, result deploy.DeployResult, verbose bool) {
+// PrintImplantSummary prints the implant summary or the dry-run plan and diffs.
+func PrintImplantSummary(w io.Writer, result implant.ImplantResult, verbose bool) {
 	if result.DryRun {
-		fmt.Fprintln(w, texts.TitleDeployDryRun)
+		fmt.Fprintln(w, texts.TitleImplantDryRun)
 		printInstalls(w, result.Installs)
 		for _, entry := range result.Plan.Entries {
 			fmt.Fprintf(w, "  [%s] %s\n", entry.Status, entry.Path)
@@ -107,8 +107,8 @@ func PrintDeploySummary(w io.Writer, result deploy.DeployResult, verbose bool) {
 		for _, conflict := range result.Plan.Conflicts {
 			printConflictDiff(w, conflict)
 		}
-		fmt.Fprintln(w, strings.ReplaceAll(texts.DeployOmitted, "{count}", itoa(len(result.Omitted))))
-		fmt.Fprintln(w, strings.ReplaceAll(texts.DeployUnchanged, "{count}", itoa(len(result.Unchanged))))
+		fmt.Fprintln(w, strings.ReplaceAll(texts.ImplantOmitted, "{count}", itoa(len(result.Omitted))))
+		fmt.Fprintln(w, strings.ReplaceAll(texts.ImplantUnchanged, "{count}", itoa(len(result.Unchanged))))
 		fmt.Fprintf(w, "%s: %d\n", texts.NotInstalled, len(result.NotInstalled))
 		for _, notice := range result.Plan.Notices {
 			fmt.Fprintf(w, "  ! %s\n", notice)
@@ -116,23 +116,23 @@ func PrintDeploySummary(w io.Writer, result deploy.DeployResult, verbose bool) {
 		return
 	}
 	printInstalls(w, result.Installs)
-	fmt.Fprintln(w, strings.ReplaceAll(texts.DeployDeployed, "{count}", itoa(len(result.Deployed))))
-	fmt.Fprintln(w, strings.ReplaceAll(texts.DeployHybrids, "{count}", itoa(len(result.Merged))))
-	fmt.Fprintln(w, strings.ReplaceAll(texts.DeployOmitted, "{count}", itoa(len(result.Omitted))))
-	fmt.Fprintln(w, strings.ReplaceAll(texts.DeployUnchanged, "{count}", itoa(len(result.Unchanged))))
+	fmt.Fprintln(w, strings.ReplaceAll(texts.ImplantImplanted, "{count}", itoa(len(result.Implanted))))
+	fmt.Fprintln(w, strings.ReplaceAll(texts.ImplantHybrids, "{count}", itoa(len(result.Merged))))
+	fmt.Fprintln(w, strings.ReplaceAll(texts.ImplantOmitted, "{count}", itoa(len(result.Omitted))))
+	fmt.Fprintln(w, strings.ReplaceAll(texts.ImplantUnchanged, "{count}", itoa(len(result.Unchanged))))
 	fmt.Fprintf(w, "%s: %d\n", texts.NotInstalled, len(result.NotInstalled))
 	if result.Snapshot != "" {
-		fmt.Fprintln(w, strings.ReplaceAll(texts.DeploySnapshotPath, "{path}", result.Snapshot))
-		fmt.Fprintln(w, strings.ReplaceAll(texts.DeployUndo, "{path}", result.Snapshot))
+		fmt.Fprintln(w, strings.ReplaceAll(texts.ImplantSnapshotPath, "{path}", result.Snapshot))
+		fmt.Fprintln(w, strings.ReplaceAll(texts.ImplantUndo, "{path}", result.Snapshot))
 	} else {
-		fmt.Fprintln(w, texts.DeployNoSnapshot)
+		fmt.Fprintln(w, texts.ImplantNoSnapshot)
 	}
 	for _, notice := range result.Plan.Notices {
 		fmt.Fprintf(w, "! %s\n", notice)
 	}
 	if verbose {
 		fmt.Fprintln(w, texts.TitleDetail)
-		for _, path := range result.Deployed {
+		for _, path := range result.Implanted {
 			fmt.Fprintf(w, "  + %s\n", path)
 		}
 		for _, path := range result.Merged {
@@ -148,23 +148,23 @@ func PrintDeploySummary(w io.Writer, result deploy.DeployResult, verbose bool) {
 }
 
 // printInstalls lists what --install-missing did or would do, one line per app.
-func printInstalls(w io.Writer, outcomes []deploy.InstallOutcome) {
+func printInstalls(w io.Writer, outcomes []implant.InstallOutcome) {
 	if len(outcomes) == 0 {
 		return
 	}
-	fmt.Fprintln(w, texts.DeployInstallTitle)
+	fmt.Fprintln(w, texts.ImplantInstallTitle)
 	for _, outcome := range outcomes {
 		switch outcome.Status {
-		case deploy.InstallPlanned:
+		case implant.InstallPlanned:
 			url := ""
 			if outcome.URL != "" {
 				url = " desde " + outcome.URL
 			}
-			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method, "{url}", url).Replace(texts.DeployInstallPlanned))
-		case deploy.InstallDone:
-			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method).Replace(texts.DeployInstallDone))
-		case deploy.InstallFailed:
-			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{reason}", outcome.Reason).Replace(texts.DeployInstallFailed))
+			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method, "{url}", url).Replace(texts.ImplantInstallPlanned))
+		case implant.InstallDone:
+			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method).Replace(texts.ImplantInstallDone))
+		case implant.InstallFailed:
+			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{reason}", outcome.Reason).Replace(texts.ImplantInstallFailed))
 		}
 	}
 }

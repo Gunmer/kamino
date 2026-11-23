@@ -6,14 +6,14 @@ import (
 	"strings"
 
 	"github.com/Gunmer/kamino/internal/conflicts"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/progress"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-func startDeployPlan(app *App, session *deploy.DeploySession, selected []string) tea.Cmd {
+func startImplantPlan(app *App, session *implant.ImplantSession, selected []string) tea.Cmd {
 	ctx, done := app.beginOperation()
 	return func() tea.Msg {
 		events := make(chan operationEvent, 64)
@@ -41,7 +41,7 @@ type conflictState struct {
 	Rows     []conflicts.RowDecision
 }
 
-func newConflictStates(plan *deploy.DeployPlan) []*conflictState {
+func newConflictStates(plan *implant.ImplantPlan) []*conflictState {
 	states := make([]*conflictState, 0, len(plan.Conflicts))
 	for _, conflict := range plan.Conflicts {
 		action := conflicts.ActionReview
@@ -57,31 +57,31 @@ func newConflictStates(plan *deploy.DeployPlan) []*conflictState {
 	return states
 }
 
-type deployConflictsScreen struct {
+type implantConflictsScreen struct {
 	screenBase
 	index    int
 	messages []Message
 }
 
-func newDeployConflictsScreen(app *App) *deployConflictsScreen {
-	screen := &deployConflictsScreen{screenBase: screenBase{app: app}}
+func newImplantConflictsScreen(app *App) *implantConflictsScreen {
+	screen := &implantConflictsScreen{screenBase: screenBase{app: app}}
 	if len(app.conflicts) == 0 {
 		screen.messages = []Message{{Kind: MessageInfo, Text: texts.D2NoConflicts}}
 	}
 	return screen
 }
 
-func (s *deployConflictsScreen) Flow() string { return texts.FlowDeploy }
+func (s *implantConflictsScreen) Flow() string { return texts.FlowImplant }
 
-func (s *deployConflictsScreen) Title() string { return texts.TitleConflictos }
+func (s *implantConflictsScreen) Title() string { return texts.TitleConflictos }
 
-func (s *deployConflictsScreen) Step() (int, int) { return 3, 4 }
+func (s *implantConflictsScreen) Step() (int, int) { return 3, 4 }
 
-func (s *deployConflictsScreen) Messages() []Message { return s.messages }
+func (s *implantConflictsScreen) Messages() []Message { return s.messages }
 
-func (s *deployConflictsScreen) Keys() []key.Binding { return deployConflictsKeys() }
+func (s *implantConflictsScreen) Keys() []key.Binding { return implantConflictsKeys() }
 
-func (s *deployConflictsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+func (s *implantConflictsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	keyMessage, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return s, nil
@@ -114,21 +114,21 @@ func (s *deployConflictsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		if len(states) > 0 {
 			s.app.conflictIndex = s.index
 			s.setAction(s.index, conflicts.ActionReview)
-			return s, pushScreen(newDeployDetailScreen(s.app))
+			return s, pushScreen(newImplantDetailScreen(s.app))
 		}
 	case "enter":
 		if missing := s.missing(); len(missing) > 0 {
 			s.messages = []Message{{Kind: MessageWarning, Text: strings.ReplaceAll(texts.D2Pending, "{paths}", strings.Join(missing, ", "))}}
 			return s, nil
 		}
-		return s, pushScreen(newDeployConfirmScreen(s.app))
+		return s, pushScreen(newImplantConfirmScreen(s.app))
 	case "esc":
 		return s, popScreen()
 	}
 	return s, nil
 }
 
-func (s *deployConflictsScreen) setAction(index int, action conflicts.FileAction) {
+func (s *implantConflictsScreen) setAction(index int, action conflicts.FileAction) {
 	if index < 0 || index >= len(s.app.conflicts) {
 		return
 	}
@@ -139,7 +139,7 @@ func (s *deployConflictsScreen) setAction(index int, action conflicts.FileAction
 	}
 }
 
-func (s *deployConflictsScreen) missing() []string {
+func (s *implantConflictsScreen) missing() []string {
 	missing := make([]string, 0)
 	for _, state := range s.app.conflicts {
 		if state.Action == "" {
@@ -159,15 +159,15 @@ func (s *deployConflictsScreen) missing() []string {
 	return missing
 }
 
-func (s *deployConflictsScreen) View(width, height int) string {
+func (s *implantConflictsScreen) View(width, height int) string {
 	lines := []string{
-		"  " + s.app.theme.Styles.Primary.Render(texts.DeployConflictsTitle),
+		"  " + s.app.theme.Styles.Primary.Render(texts.ImplantConflictsTitle),
 	}
-	if s.app.deployPlan != nil {
-		counts := deployCounts(s.app.deployPlan)
-		notices := len(s.app.deployPlan.Notices)
-		if s.app.deploySession != nil {
-			notices += len(s.app.deploySession.Warnings)
+	if s.app.implantPlan != nil {
+		counts := implantCounts(s.app.implantPlan)
+		notices := len(s.app.implantPlan.Notices)
+		if s.app.implantSession != nil {
+			notices += len(s.app.implantSession.Warnings)
 		}
 		summary := strings.NewReplacer(
 			"{new}", fmt.Sprintf("%d", counts["new"]),
@@ -226,7 +226,7 @@ func (s *deployConflictsScreen) View(width, height int) string {
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
 }
 
-func deployCounts(plan *deploy.DeployPlan) map[string]int {
+func implantCounts(plan *implant.ImplantPlan) map[string]int {
 	result := map[string]int{"new": 0, "perfect": len(plan.Unchanged), "unsupported": len(plan.Omitted)}
 	seen := map[string]bool{}
 	for _, entry := range plan.Entries {
@@ -234,14 +234,14 @@ func deployCounts(plan *deploy.DeployPlan) map[string]int {
 			continue
 		}
 		seen[entry.Path] = true
-		if entry.Status == deploy.StatusNew {
+		if entry.Status == implant.StatusNew {
 			result["new"]++
 		}
 	}
 	return result
 }
 
-func (s *deployConflictsScreen) actionLabel(state *conflictState) string {
+func (s *implantConflictsScreen) actionLabel(state *conflictState) string {
 	switch state.Action {
 	case conflicts.ActionApply:
 		return texts.D2ActionApply
@@ -278,7 +278,7 @@ type fileRow struct {
 	Changed       bool
 }
 
-type deployDetailScreen struct {
+type implantDetailScreen struct {
 	screenBase
 	conflictIndex int
 	index         int
@@ -289,8 +289,8 @@ type deployDetailScreen struct {
 	messages      []Message
 }
 
-func newDeployDetailScreen(app *App) *deployDetailScreen {
-	screen := &deployDetailScreen{screenBase: screenBase{app: app}, conflictIndex: app.conflictIndex}
+func newImplantDetailScreen(app *App) *implantDetailScreen {
+	screen := &implantDetailScreen{screenBase: screenBase{app: app}, conflictIndex: app.conflictIndex}
 	if screen.conflictIndex >= len(app.conflicts) {
 		screen.conflictIndex = 0
 	}
@@ -322,24 +322,24 @@ func lineDigits(conflict conflicts.Conflict) int {
 	return digits
 }
 
-func (s *deployDetailScreen) Flow() string { return texts.FlowDeploy }
+func (s *implantDetailScreen) Flow() string { return texts.FlowImplant }
 
-func (s *deployDetailScreen) Title() string { return texts.TitleConflictos }
+func (s *implantDetailScreen) Title() string { return texts.TitleConflictos }
 
-func (s *deployDetailScreen) Step() (int, int) { return 3, 4 }
+func (s *implantDetailScreen) Step() (int, int) { return 3, 4 }
 
-func (s *deployDetailScreen) Messages() []Message { return s.messages }
+func (s *implantDetailScreen) Messages() []Message { return s.messages }
 
-func (s *deployDetailScreen) Keys() []key.Binding { return deployDetailKeys(s.whole) }
+func (s *implantDetailScreen) Keys() []key.Binding { return implantDetailKeys(s.whole) }
 
-func (s *deployDetailScreen) state() *conflictState {
+func (s *implantDetailScreen) state() *conflictState {
 	if len(s.app.conflicts) == 0 {
 		return nil
 	}
 	return s.app.conflicts[s.conflictIndex]
 }
 
-func (s *deployDetailScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+func (s *implantDetailScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	keyMessage, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return s, nil
@@ -386,7 +386,7 @@ func (s *deployDetailScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	return s, nil
 }
 
-func (s *deployDetailScreen) updateWhole(state *conflictState, keyMessage tea.KeyMsg) (Screen, tea.Cmd) {
+func (s *implantDetailScreen) updateWhole(state *conflictState, keyMessage tea.KeyMsg) (Screen, tea.Cmd) {
 	switch keyMessage.String() {
 	case "up", "k":
 		s.wholeIndex = (s.wholeIndex + 1) % 2
@@ -408,7 +408,7 @@ func (s *deployDetailScreen) updateWhole(state *conflictState, keyMessage tea.Ke
 	return s, nil
 }
 
-func (s *deployDetailScreen) setRow(row fileRow, decision conflicts.RowDecision) {
+func (s *implantDetailScreen) setRow(row fileRow, decision conflicts.RowDecision) {
 	state := s.state()
 	if state == nil || row.DecisionIndex < 0 || row.DecisionIndex >= len(state.Rows) {
 		return
@@ -416,7 +416,7 @@ func (s *deployDetailScreen) setRow(row fileRow, decision conflicts.RowDecision)
 	state.Rows[row.DecisionIndex] = decision
 }
 
-func (s *deployDetailScreen) setBlock(state *conflictState, block int, decision conflicts.RowDecision) {
+func (s *implantDetailScreen) setBlock(state *conflictState, block int, decision conflicts.RowDecision) {
 	if block < 0 {
 		return
 	}
@@ -434,13 +434,13 @@ func (s *deployDetailScreen) setBlock(state *conflictState, block int, decision 
 	}
 }
 
-func (s *deployDetailScreen) setAll(state *conflictState, decision conflicts.RowDecision) {
+func (s *implantDetailScreen) setAll(state *conflictState, decision conflicts.RowDecision) {
 	for index := range state.Rows {
 		state.Rows[index] = decision
 	}
 }
 
-func (s *deployDetailScreen) moveBlock(rows []fileRow, direction int) {
+func (s *implantDetailScreen) moveBlock(rows []fileRow, direction int) {
 	if len(rows) == 0 {
 		return
 	}
@@ -539,10 +539,10 @@ func trimLine(value string) string {
 	return strings.TrimSuffix(strings.TrimSuffix(value, "\n"), "\r")
 }
 
-func (s *deployDetailScreen) View(width, height int) string {
+func (s *implantDetailScreen) View(width, height int) string {
 	state := s.state()
 	if state == nil {
-		return Fit([]string{texts.DeployConflictsTitle}, width, height, s.app.theme.Symbols.Ellipsis)
+		return Fit([]string{texts.ImplantConflictsTitle}, width, height, s.app.theme.Symbols.Ellipsis)
 	}
 	if s.whole {
 		return s.viewWhole(state, width, height)
@@ -586,7 +586,7 @@ func (s *deployDetailScreen) View(width, height int) string {
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
 }
 
-func (s *deployDetailScreen) viewWhole(state *conflictState, width, height int) string {
+func (s *implantDetailScreen) viewWhole(state *conflictState, width, height int) string {
 	reason := texts.D3BinaryReason
 	switch state.Conflict.Kind {
 	case conflicts.KindLarge:
@@ -636,7 +636,7 @@ func chosenCounts(rows []fileRow, state *conflictState) (int, int) {
 	return left, right
 }
 
-func (s *deployDetailScreen) cell(state *conflictState, row fileRow, cloneSide bool, digits, width int, focused bool) string {
+func (s *implantDetailScreen) cell(state *conflictState, row fileRow, cloneSide bool, digits, width int, focused bool) string {
 	number := row.LocalNo
 	text := row.LocalText
 	if cloneSide {

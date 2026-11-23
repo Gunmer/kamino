@@ -120,7 +120,7 @@ func cloneReviewKeys(phase clonePhase, hasSkipped, canCopy bool) []key.Binding {
 	}
 }
 
-func deployFileKeys(manual, filtering bool, valueLength int) []key.Binding {
+func implantFileKeys(manual, filtering bool, valueLength int) []key.Binding {
 	if manual || filtering {
 		keys := []key.Binding{}
 		if manual {
@@ -143,7 +143,7 @@ func deployFileKeys(manual, filtering bool, valueLength int) []key.Binding {
 	}
 }
 
-func deployAppsKeys(preparing bool) []key.Binding {
+func implantAppsKeys(preparing bool) []key.Binding {
 	if preparing {
 		return []key.Binding{
 			bind([]string{"esc", "ctrl+c"}, "Esc/Ctrl+C", texts.KeyCancel),
@@ -158,7 +158,7 @@ func deployAppsKeys(preparing bool) []key.Binding {
 	}
 }
 
-func deployConflictsKeys() []key.Binding {
+func implantConflictsKeys() []key.Binding {
 	return []key.Binding{
 		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
 		bind([]string{"r"}, "r", texts.KeyReview),
@@ -169,7 +169,7 @@ func deployConflictsKeys() []key.Binding {
 	}
 }
 
-func deployDetailKeys(whole bool) []key.Binding {
+func implantDetailKeys(whole bool) []key.Binding {
 	if whole {
 		return []key.Binding{
 			bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
@@ -187,7 +187,7 @@ func deployDetailKeys(whole bool) []key.Binding {
 	}
 }
 
-func deployConfirmKeys() []key.Binding {
+func implantConfirmKeys() []key.Binding {
 	return []key.Binding{
 		bind([]string{"left", "right"}, "←→", texts.KeyMove),
 		bind([]string{"enter"}, "Enter", texts.KeyAccept),
@@ -195,7 +195,7 @@ func deployConfirmKeys() []key.Binding {
 	}
 }
 
-func deploySummaryKeys(hasSnapshot bool) []key.Binding {
+func implantSummaryKeys(hasSnapshot bool) []key.Binding {
 	keys := []key.Binding{}
 	if hasSnapshot {
 		keys = append(keys, bind([]string{"c"}, "c", texts.KeyCopySnapshot))

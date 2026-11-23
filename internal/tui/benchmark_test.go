@@ -40,7 +40,7 @@ func BenchmarkD3LargeFile(b *testing.B) {
 	conflict, decisions := largeConflict(20000)
 	app := testApp(false, true)
 	app.conflicts = []*conflictState{{Conflict: conflict, Action: conflicts.ActionReview, Rows: decisions}}
-	screen := newDeployDetailScreen(app)
+	screen := newImplantDetailScreen(app)
 	b.ResetTimer()
 	for index := 0; index < b.N; index++ {
 		_ = screen.View(96, 35)

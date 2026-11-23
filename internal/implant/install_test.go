@@ -1,4 +1,4 @@
-package deploy
+package implant
 
 import (
 	"context"
@@ -100,13 +100,13 @@ func installSettings(ids []string, runner install.Runner, home string) InstallSe
 func TestInstallRunsBeforeClassificationAndReclassifiesInstalledApp(t *testing.T) {
 	cloneFile, bin, home, definitions := installFixture(t, "alpha")
 	runner := &fakeBrew{bin: bin}
-	session, err := PrepareDeploy(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer session.Close()
-	if len(session.DeployableApps) != 0 || len(session.NotInstalledApps) != 1 {
-		t.Fatalf("alpha debe empezar ausente: %d desplegables, %d ausentes", len(session.DeployableApps), len(session.NotInstalledApps))
+	if len(session.ImplantableApps) != 0 || len(session.NotInstalledApps) != 1 {
+		t.Fatalf("alpha debe empezar ausente: %d desplegables, %d ausentes", len(session.ImplantableApps), len(session.NotInstalledApps))
 	}
 	session.SetInstall(installSettings([]string{"alpha"}, runner, home))
 	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
@@ -123,7 +123,7 @@ func TestInstallRunsBeforeClassificationAndReclassifiesInstalledApp(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Deployed) != 1 || ResultCode(result) != 0 {
+	if len(result.Implanted) != 1 || ResultCode(result) != 0 {
 		t.Fatalf("la app instalada debe recibir su configuración con código 0: %+v", result)
 	}
 	if data, _ := os.ReadFile(filepath.Join(home, ".config/alpha/config")); string(data) != "value=2\n" {
@@ -139,7 +139,7 @@ func TestInstallHappensBeforeClassificationSoDefaultConfigIsSeen(t *testing.T) {
 		_ = os.MkdirAll(dir, 0o755)
 		_ = os.WriteFile(filepath.Join(dir, "config"), []byte("default=1\n"), 0o644)
 	}}
-	session, err := PrepareDeploy(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ func TestInstallHappensBeforeClassificationSoDefaultConfigIsSeen(t *testing.T) {
 func TestInstallFailureOmitsOnlyThatAppAndExitsWithThree(t *testing.T) {
 	cloneFile, bin, home, definitions := installFixture(t, "alpha", "beta")
 	runner := &fakeBrew{bin: bin, failFor: map[string]bool{"beta": true}}
-	session, err := PrepareDeploy(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -174,7 +174,7 @@ func TestInstallFailureOmitsOnlyThatAppAndExitsWithThree(t *testing.T) {
 	if len(plan.Installs) != 2 || plan.Installs[1].Status != InstallFailed {
 		t.Fatalf("beta debe quedar como instalación fallida: %+v", plan.Installs)
 	}
-	if len(result.Deployed) != 1 {
+	if len(result.Implanted) != 1 {
 		t.Fatalf("alpha debe desplegarse aunque beta falle: %+v", result)
 	}
 	if _, err := os.Stat(filepath.Join(home, ".config/beta/config")); !os.IsNotExist(err) {
@@ -188,7 +188,7 @@ func TestInstallFailureOmitsOnlyThatAppAndExitsWithThree(t *testing.T) {
 func TestInstallNeverRunsWhenArchiveIsInvalid(t *testing.T) {
 	cloneFile, bin, home, definitions := installFixture(t, "alpha")
 	runner := &fakeBrew{bin: bin}
-	session, err := PrepareDeploy(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestInstallNeverRunsWhenArchiveIsInvalid(t *testing.T) {
 func TestInstallDryRunOnlyPlans(t *testing.T) {
 	cloneFile, bin, home, definitions := installFixture(t, "alpha")
 	runner := &fakeBrew{bin: bin}
-	session, err := PrepareDeploy(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -230,7 +230,7 @@ func TestInstallDryRunOnlyPlans(t *testing.T) {
 func TestInstallIgnoresRecipesFromTheClone(t *testing.T) {
 	cloneFile, bin, home, definitions := installFixture(t, "alpha")
 	runner := &fakeBrew{bin: bin}
-	session, err := PrepareDeploy(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +249,7 @@ func TestInstallIgnoresRecipesFromTheClone(t *testing.T) {
 
 func TestInstallCandidatesOnlyListMissingAppsWithRecipes(t *testing.T) {
 	cloneFile, bin, home, definitions := installFixture(t, "alpha")
-	session, err := PrepareDeploy(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}

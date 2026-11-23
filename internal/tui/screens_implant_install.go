@@ -4,7 +4,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/charmbracelet/bubbles/key"
@@ -22,9 +22,9 @@ type installChoice struct {
 
 // beginInstallQuestion switches the apps screen into the install question when
 // some missing app has a recipe for this Mac. It returns false when there is
-// nothing to ask, so the deploy goes straight to the plan.
-func (s *deployAppsScreen) beginInstallQuestion(selected []string) bool {
-	candidates := s.app.deploySession.InstallCandidates(runtime.GOOS, runtime.GOARCH)
+// nothing to ask, so the implant goes straight to the plan.
+func (s *implantAppsScreen) beginInstallQuestion(selected []string) bool {
+	candidates := s.app.implantSession.InstallCandidates(runtime.GOOS, runtime.GOARCH)
 	if len(candidates) == 0 {
 		return false
 	}
@@ -42,8 +42,8 @@ func (s *deployAppsScreen) beginInstallQuestion(selected []string) bool {
 }
 
 // updateInstall handles keys in the install question. Escape returns to the app
-// choice; declining an app never cancels the deploy.
-func (s *deployAppsScreen) updateInstall(keyMessage tea.KeyMsg) (Screen, tea.Cmd) {
+// choice; declining an app never cancels the implant.
+func (s *implantAppsScreen) updateInstall(keyMessage tea.KeyMsg) (Screen, tea.Cmd) {
 	count := len(s.installChoices)
 	switch keyMessage.String() {
 	case "up", "k":
@@ -78,7 +78,7 @@ func (s *deployAppsScreen) updateInstall(keyMessage tea.KeyMsg) (Screen, tea.Cmd
 
 // confirmInstalls hands the chosen installs to the session and starts the plan,
 // which runs them after the archive is verified and before classification.
-func (s *deployAppsScreen) confirmInstalls() (Screen, tea.Cmd) {
+func (s *implantAppsScreen) confirmInstalls() (Screen, tea.Cmd) {
 	chosen := make([]string, 0)
 	for _, choice := range s.installChoices {
 		if choice.Selected {
@@ -86,9 +86,9 @@ func (s *deployAppsScreen) confirmInstalls() (Screen, tea.Cmd) {
 		}
 	}
 	s.installing = false
-	s.app.deploySession.SetInstall(deploy.InstallSettings{
+	s.app.implantSession.SetInstall(implant.InstallSettings{
 		AppIDs:    chosen,
-		Installer: &install.Installer{Runner: s.app.installRunner, Home: s.app.deploySession.Home},
+		Installer: &install.Installer{Runner: s.app.installRunner, Home: s.app.implantSession.Home},
 		OS:        runtime.GOOS,
 		Arch:      runtime.GOARCH,
 	})
@@ -97,10 +97,10 @@ func (s *deployAppsScreen) confirmInstalls() (Screen, tea.Cmd) {
 	s.current = 0
 	s.total = 0
 	s.messages = []Message{{Kind: MessageWarning, Text: texts.D1Verifying}}
-	return s, startDeployPlan(s.app, s.app.deploySession, selected)
+	return s, startImplantPlan(s.app, s.app.implantSession, selected)
 }
 
-func (s *deployAppsScreen) viewInstall(width, height int) string {
+func (s *implantAppsScreen) viewInstall(width, height int) string {
 	lines := []string{"  " + s.app.theme.Styles.Primary.Render(texts.D1Title), "", "  " + texts.D1InstallQ, "  " + texts.D1InstallHint, ""}
 	lineWidth := width - 8
 	if lineWidth < 20 {
@@ -127,7 +127,7 @@ func (s *deployAppsScreen) viewInstall(width, height int) string {
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
 }
 
-func deployInstallKeys() []key.Binding {
+func implantInstallKeys() []key.Binding {
 	return []key.Binding{
 		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
 		bind([]string{" "}, "Espacio", texts.KeyMark),

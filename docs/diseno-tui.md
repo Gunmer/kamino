@@ -256,12 +256,12 @@ a 76; en 140+ sube a 120.
 | C1       | `kamino · Clonar · Apps`       | 1 de 3  | sí     | clone-tui        |
 | C2       | `kamino · Clonar · Destino`    | 2 de 3  | sí     | clone-tui        |
 | C3       | `kamino · Clonar · Revisión` / `Resultado` | 3 de 3 | sí | clone-tui |
-| D0       | `kamino · Implantar · Clon`    | 1 de 4  | sí     | deploy-conflicts |
-| D1       | `kamino · Implantar · Apps`    | 2 de 4  | sí     | deploy-conflicts |
-| D2       | `kamino · Implantar · Conflictos` | 3 de 4 | sí    | deploy-conflicts |
-| D3       | `kamino · Implantar · Conflictos` | 3 de 4 | sí    | deploy-conflicts |
-| D4       | `kamino · Implantar · Confirmación` | 4 de 4 | sí  | deploy-conflicts |
-| D5       | `kamino · Implantar · Resumen` | no      | sí     | deploy-conflicts |
+| D0       | `kamino · Implantar · Clon`    | 1 de 4  | sí     | implant-conflicts |
+| D1       | `kamino · Implantar · Apps`    | 2 de 4  | sí     | implant-conflicts |
+| D2       | `kamino · Implantar · Conflictos` | 3 de 4 | sí    | implant-conflicts |
+| D3       | `kamino · Implantar · Conflictos` | 3 de 4 | sí    | implant-conflicts |
+| D4       | `kamino · Implantar · Confirmación` | 4 de 4 | sí  | implant-conflicts |
+| D5       | `kamino · Implantar · Resumen` | no      | sí     | implant-conflicts |
 | U1       | `kamino · Actualización`       | no      | sí     | self-update      |
 | Settings | `kamino · Configuración`       | no      | sí     | user-configuration |
 | A1       | `kamino · Configuración · Añadir app` | no | sí    | app-authoring    |
@@ -809,8 +809,8 @@ Notas:
   escribirán. Un híbrido que compone idéntico al local cae en «Sin cambios» y no
   se cuenta como protegido.
 - El aviso de cerrar apps va en la zona de mensajes, no en el body.
-- La tabla se calcula con `DeploySession.Preview(decisions)` y
-  `DeployPlan.Entries`, deduplicando por `Path` igual que `resolve`: la primera
+- La tabla se calcula con `ImplantSession.Preview(decisions)` y
+  `ImplantPlan.Entries`, deduplicando por `Path` igual que `resolve`: la primera
   app gana. Así los totales coinciden con el núcleo.
 - Las acciones son horizontales, con Retirada preseleccionada. No hay atajo de
   una tecla para implantar: hay que mover el foco y pulsar Enter.
@@ -1208,7 +1208,7 @@ fila. La maqueta usa `>` para `▌` y `|` para la celda en vídeo inverso.
 | `tui-navigation` | Frame, pila, contrato `Screen`, footer/ayuda desde `Keys()`, altura, menú, terminal pequeña |
 | `tui-ansi-theme` | Solo ANSI, jerarquía, `theme.Styles`, `NO_COLOR`, ASCII, `ansi-light` |
 | `clone-tui` | C1 como tabla y campo de filtro; C2 con tres opciones de carpeta, campos «Destino» y «Nombre» y diálogo Sobrescribir/Cambiar nombre/Volver; C3 absorbe C4: revisión, progreso y resultado en la misma tabla; el flujo sigue en tres pasos |
-| `deploy-conflicts` | D2 como tabla, D3 con archivo completo, D4 por app y protegidos |
+| `implant-conflicts` | D2 como tabla, D3 con archivo completo, D4 por app y protegidos |
 | `docs/diseno-tecnico.md` | Sustituir «ANSI propio, sin framework» por Bubble Tea/Lip Gloss y el contrato de pantalla |
 | `docs/diseno-funcional.md` | Actualizar C1, C3/C4, D3 y D4 |
 | `AGENTS.md` | Retirar el invariante «sin framework» y describir el nuevo runtime |

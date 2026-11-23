@@ -18,9 +18,9 @@ import (
 	"github.com/Gunmer/kamino/internal/clone"
 	"github.com/Gunmer/kamino/internal/config"
 	"github.com/Gunmer/kamino/internal/defaults"
-	"github.com/Gunmer/kamino/internal/deploy"
 	"github.com/Gunmer/kamino/internal/detect"
 	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/paths"
 	"github.com/Gunmer/kamino/internal/progress"
@@ -49,7 +49,7 @@ type AppOptions struct {
 	Version         string
 	MenuMode        bool
 	Clone           CloneFlowOptions
-	Deploy          DeployFlowOptions
+	Implant         ImplantFlowOptions
 	UpdateQuery     func(context.Context) (update.Check, error)
 	UpdateRun       func(context.Context, progress.Callback) (update.Result, error)
 	// Editor opens an authoring draft. Tests inject a fake; nil uses the
@@ -90,17 +90,17 @@ type App struct {
 	cloneDryRun  bool
 	cloneVerbose bool
 
-	deployOptions DeployFlowOptions
-	deploySession *deploy.DeploySession
-	deployPlan    *deploy.DeployPlan
-	deployResult  *deploy.DeployResult
-	conflicts     []*conflictState
-	conflictIndex int
+	implantOptions ImplantFlowOptions
+	implantSession *implant.ImplantSession
+	implantPlan    *implant.ImplantPlan
+	implantResult  *implant.ImplantResult
+	conflicts      []*conflictState
+	conflictIndex  int
 
 	updateQuery func(context.Context) (update.Check, error)
 	updateRun   func(context.Context, progress.Callback) (update.Result, error)
 	editor      func(string) tea.Cmd
-	// installRunner executes the installation recipes chosen in the deploy flow.
+	// installRunner executes the installation recipes chosen in the implant flow.
 	installRunner install.Runner
 
 	settings     config.AppConfig
@@ -115,7 +115,7 @@ type App struct {
 }
 
 type startCloneMsg struct{}
-type startDeployMsg struct{}
+type startImplantMsg struct{}
 type startUpdateMsg struct{}
 type startSettingsMsg struct{}
 type startAuthoringMsg struct{}
@@ -128,8 +128,8 @@ type operationStartedMsg struct {
 type operationEvent struct {
 	progress progress.Event
 	clone    *clone.CloneResult
-	deploy   *deploy.DeployResult
-	plan     *deploy.DeployPlan
+	implant  *implant.ImplantResult
+	plan     *implant.ImplantPlan
 	update   *update.Result
 	err      error
 	done     bool
@@ -174,7 +174,7 @@ func NewApp(options AppOptions) *App {
 		width: 80, height: 24, theme: currentTheme, frame: newFrame(currentTheme),
 		home: home, catalog: options.Catalog, applicationDirs: options.ApplicationDirs,
 		pathValue: options.PathValue, cwd: cwd, now: now, phrase: phrase, version: buildVersion,
-		menuMode: options.MenuMode, cloneOptions: options.Clone, deployOptions: options.Deploy,
+		menuMode: options.MenuMode, cloneOptions: options.Clone, implantOptions: options.Implant,
 		cloneForce: options.Clone.Force, cloneDryRun: options.Clone.DryRun,
 		cloneVerbose: options.Clone.Verbose, cloneOutput: options.Clone.Output,
 		updateQuery: options.UpdateQuery, updateRun: options.UpdateRun,
@@ -284,8 +284,8 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case startCloneMsg:
 		a.startClone()
 		return a, a.Init()
-	case startDeployMsg:
-		a.startDeploy()
+	case startImplantMsg:
+		a.startImplant()
 		return a, a.Init()
 	case startUpdateMsg:
 		a.startUpdate()
@@ -486,19 +486,19 @@ func (a *App) startClone() {
 	a.begin(appsScreen)
 }
 
-func (a *App) startDeploy() {
+func (a *App) startImplant() {
 	if !a.loadCatalog() {
 		return
 	}
-	a.deploySession = nil
-	a.deployPlan = nil
-	a.deployResult = nil
-	fileScreen := newDeployFileScreen(a, "")
-	if a.deployOptions.FileError != "" {
-		fileScreen.messages = []Message{{Kind: MessageError, Text: a.deployOptions.FileError}}
+	a.implantSession = nil
+	a.implantPlan = nil
+	a.implantResult = nil
+	fileScreen := newImplantFileScreen(a, "")
+	if a.implantOptions.FileError != "" {
+		fileScreen.messages = []Message{{Kind: MessageError, Text: a.implantOptions.FileError}}
 	}
-	if a.deployOptions.CloneFile != "" && a.deployOptions.FileError == "" {
-		a.begin(newDeployAppsScreen(a, a.deployOptions.CloneFile, true))
+	if a.implantOptions.CloneFile != "" && a.implantOptions.FileError == "" {
+		a.begin(newImplantAppsScreen(a, a.implantOptions.CloneFile, true))
 		a.stack = append(a.stack, fileScreen)
 		return
 	}
@@ -581,17 +581,17 @@ func (a *App) finishClone() {
 	a.finish(code, mission)
 }
 
-func (a *App) finishDeploy() {
+func (a *App) finishImplant() {
 	code := 0
-	if a.deployResult != nil {
-		code = deploy.ResultCode(*a.deployResult)
+	if a.implantResult != nil {
+		code = implant.ResultCode(*a.implantResult)
 	}
 	mission := ""
-	if a.deployResult != nil {
-		mission = fmt.Sprintf("implantación: %d implantados, %d híbridos", len(a.deployResult.Deployed), len(a.deployResult.Merged))
+	if a.implantResult != nil {
+		mission = fmt.Sprintf("implantación: %d implantados, %d híbridos", len(a.implantResult.Implanted), len(a.implantResult.Merged))
 	}
-	if a.deploySession != nil {
-		a.deploySession.Close()
+	if a.implantSession != nil {
+		a.implantSession.Close()
 	}
 	a.finish(code, mission)
 }
@@ -632,8 +632,8 @@ func (a *App) formatDate(value time.Time) string {
 
 func (a *App) snapshotPath() (string, error) {
 	directory := ""
-	if a.deploySession != nil {
-		resolved, err := a.deploySession.SnapshotDirectory()
+	if a.implantSession != nil {
+		resolved, err := a.implantSession.SnapshotDirectory()
 		if err != nil {
 			return "", err
 		}

@@ -20,7 +20,7 @@ const lockName = ".snapshot.lock"
 const lockPoll = 50 * time.Millisecond
 
 // Lock takes an exclusive advisory lock on the snapshots directory so two
-// concurrent deploys cannot prune each other's recovery snapshot. It waits
+// concurrent implants cannot prune each other's recovery snapshot. It waits
 // until the lock is available or ctx is cancelled, and returns a release
 // function.
 func Lock(ctx context.Context, directory string) (func() error, error) {

@@ -1,4 +1,4 @@
-package deploy
+package implant
 
 import (
 	"context"
@@ -14,7 +14,7 @@ import (
 const (
 	// InstallPlanned marks an app that a dry run would install. Nothing runs.
 	InstallPlanned = "planned"
-	// InstallDone marks an app installed and detected during this deploy.
+	// InstallDone marks an app installed and detected during this implant.
 	InstallDone = "installed"
 	// InstallFailed marks an app whose installation failed. It stays omitted.
 	InstallFailed = "failed"
@@ -49,7 +49,7 @@ type InstallCandidate struct {
 // InstallCandidates lists the missing apps that may be offered for installation
 // on the given platform, in manifest order. Clone data never adds a recipe: the
 // recipe always comes from the catalog definition.
-func (s *DeploySession) InstallCandidates(goos, goarch string) []InstallCandidate {
+func (s *ImplantSession) InstallCandidates(goos, goarch string) []InstallCandidate {
 	candidates := make([]InstallCandidate, 0)
 	for _, app := range s.NotInstalledApps {
 		definition := s.definitions[app.ID]
@@ -67,14 +67,14 @@ func (s *DeploySession) InstallCandidates(goos, goarch string) []InstallCandidat
 
 // SetInstall selects which missing apps Plan installs. It must be called before
 // Plan; without it Plan installs nothing.
-func (s *DeploySession) SetInstall(settings InstallSettings) {
+func (s *ImplantSession) SetInstall(settings InstallSettings) {
 	s.install = &settings
 }
 
 // installMissing runs the chosen installations after the archive is verified
-// and before classification and snapshot. Installed apps move to the deployable
+// and before classification and snapshot. Installed apps move to the implantable
 // set when their detectors confirm them; failures stay omitted.
-func (s *DeploySession) installMissing(ctx context.Context, dryRun bool) ([]InstallOutcome, error) {
+func (s *ImplantSession) installMissing(ctx context.Context, dryRun bool) ([]InstallOutcome, error) {
 	if s.install == nil || len(s.install.AppIDs) == 0 {
 		return nil, nil
 	}
@@ -98,7 +98,7 @@ func (s *DeploySession) installMissing(ctx context.Context, dryRun bool) ([]Inst
 		}
 		outcomes = append(outcomes, outcome)
 		if installed {
-			s.DeployableApps = append(s.DeployableApps, app)
+			s.ImplantableApps = append(s.ImplantableApps, app)
 		} else {
 			remaining = append(remaining, app)
 		}
@@ -107,7 +107,7 @@ func (s *DeploySession) installMissing(ctx context.Context, dryRun bool) ([]Inst
 	return outcomes, nil
 }
 
-func (s *DeploySession) installApp(ctx context.Context, app archive.AppEntry, dryRun bool) (InstallOutcome, bool, error) {
+func (s *ImplantSession) installApp(ctx context.Context, app archive.AppEntry, dryRun bool) (InstallOutcome, bool, error) {
 	outcome := InstallOutcome{AppID: app.ID}
 	definition := s.definitions[app.ID]
 	if definition == nil || len(definition.Install) == 0 {

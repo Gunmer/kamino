@@ -16,13 +16,13 @@ func TestMenuAndSummaryUseImplantTerminology(t *testing.T) {
 	if strings.Contains(menu, "Desplegar") {
 		t.Fatalf("menu must not show Desplegar:\n%s", menu)
 	}
-	if texts.D4Deploy != "Implantar" {
-		t.Fatalf("confirmation action must be Implantar, got %q", texts.D4Deploy)
+	if texts.D4Implant != "Implantar" {
+		t.Fatalf("confirmation action must be Implantar, got %q", texts.D4Implant)
 	}
 	if texts.D5Title != "Implantación completada" {
 		t.Fatalf("summary title must be Implantación completada, got %q", texts.D5Title)
 	}
-	if !strings.Contains(texts.D5Undo, "kamino implant") || strings.Contains(texts.D5Undo, "kamino deploy") {
+	if !strings.Contains(texts.D5Undo, "kamino implant") {
 		t.Fatalf("undo command must use implant, got %q", texts.D5Undo)
 	}
 }

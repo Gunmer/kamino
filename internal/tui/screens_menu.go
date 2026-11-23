@@ -37,7 +37,7 @@ func (s *menuScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		case 0:
 			return s, func() tea.Msg { return startCloneMsg{} }
 		case 1:
-			return s, func() tea.Msg { return startDeployMsg{} }
+			return s, func() tea.Msg { return startImplantMsg{} }
 		case 2:
 			return s, func() tea.Msg { return startUpdateMsg{} }
 		case 3:
@@ -70,8 +70,8 @@ func (s *menuScreen) View(width, height int) string {
 	if len(lines) > 0 {
 		lines = append(lines, "")
 	}
-	options := []string{texts.MenuClone, texts.MenuDeploy, texts.MenuUpdate, texts.MenuConfig, texts.MenuExit}
-	helps := []string{texts.MenuCloneHelp, texts.MenuDeployHelp, texts.MenuUpdateHelp, texts.MenuConfigHelp, texts.MenuExitHelp}
+	options := []string{texts.MenuClone, texts.MenuImplant, texts.MenuUpdate, texts.MenuConfig, texts.MenuExit}
+	helps := []string{texts.MenuCloneHelp, texts.MenuImplantHelp, texts.MenuUpdateHelp, texts.MenuConfigHelp, texts.MenuExitHelp}
 	for index, option := range options {
 		marker := "  "
 		style := s.app.theme.Styles.Secondary

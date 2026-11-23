@@ -1,4 +1,4 @@
-package deploy
+package implant
 
 import (
 	"os"

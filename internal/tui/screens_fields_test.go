@@ -135,7 +135,7 @@ func TestC2ErrorMarksFieldAndClearsOnFix(t *testing.T) {
 func TestD0FilterAndManualFields(t *testing.T) {
 	home := t.TempDir()
 	app := NewApp(AppOptions{Home: home, Cwd: home, Now: fixedNow, ThemeName: "ansi-dark"})
-	screen := newDeployFileScreen(app, "")
+	screen := newImplantFileScreen(app, "")
 	app.begin(screen)
 
 	send(t, app, keyMsg("/"))
@@ -212,7 +212,7 @@ func TestD0FilterAndManualFields(t *testing.T) {
 		t.Fatal("a valid manual path must continue")
 	}
 	send(t, app, execute(t, command))
-	if _, ok := app.current.(*deployAppsScreen); !ok {
+	if _, ok := app.current.(*implantAppsScreen); !ok {
 		t.Fatalf("expected D1 after a valid path, got %T", app.current)
 	}
 }
@@ -400,15 +400,15 @@ func TestSingleEditingCursorPerScreen(t *testing.T) {
 			screen.focus = 1
 			return screen
 		}, 0},
-		{"d0-table", func(app *App) Screen { return newDeployFileScreen(app, "") }, 0},
+		{"d0-table", func(app *App) Screen { return newImplantFileScreen(app, "") }, 0},
 		{"d0-filter", func(app *App) Screen {
-			screen := newDeployFileScreen(app, "")
+			screen := newImplantFileScreen(app, "")
 			screen.filtering = true
 			screen.filter.SetValue("clone")
 			return screen
 		}, 1},
 		{"d0-manual", func(app *App) Screen {
-			screen := newDeployFileScreen(app, "")
+			screen := newImplantFileScreen(app, "")
 			screen.manual = true
 			screen.manualPath.SetValue("/tmp/clone.tar.gz")
 			return screen

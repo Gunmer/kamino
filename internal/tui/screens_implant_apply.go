@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/Gunmer/kamino/internal/conflicts"
-	"github.com/Gunmer/kamino/internal/deploy"
 	kerrors "github.com/Gunmer/kamino/internal/errors"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/progress"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/charmbracelet/bubbles/key"
@@ -24,7 +24,7 @@ type appSummary struct {
 	Unchanged int
 }
 
-type deployConfirmScreen struct {
+type implantConfirmScreen struct {
 	screenBase
 	rows       []appSummary
 	totals     appSummary
@@ -38,10 +38,10 @@ type deployConfirmScreen struct {
 	previewErr string
 }
 
-func newDeployConfirmScreen(app *App) *deployConfirmScreen {
-	screen := &deployConfirmScreen{
+func newImplantConfirmScreen(app *App) *implantConfirmScreen {
+	screen := &implantConfirmScreen{
 		screenBase: screenBase{app: app},
-		actions:    []string{texts.D4Abort, texts.D4Retreat, texts.D4Deploy},
+		actions:    []string{texts.D4Abort, texts.D4Retreat, texts.D4Implant},
 		index:      1,
 		messages:   []Message{{Kind: MessageWarning, Text: texts.D4CloseApps}},
 	}
@@ -49,31 +49,31 @@ func newDeployConfirmScreen(app *App) *deployConfirmScreen {
 	return screen
 }
 
-func (s *deployConfirmScreen) Flow() string { return texts.FlowDeploy }
+func (s *implantConfirmScreen) Flow() string { return texts.FlowImplant }
 
-func (s *deployConfirmScreen) Title() string { return texts.TitleConfirm }
+func (s *implantConfirmScreen) Title() string { return texts.TitleConfirm }
 
-func (s *deployConfirmScreen) Step() (int, int) { return 4, 4 }
+func (s *implantConfirmScreen) Step() (int, int) { return 4, 4 }
 
-func (s *deployConfirmScreen) Messages() []Message { return s.messages }
+func (s *implantConfirmScreen) Messages() []Message { return s.messages }
 
-func (s *deployConfirmScreen) Keys() []key.Binding { return deployConfirmKeys() }
+func (s *implantConfirmScreen) Keys() []key.Binding { return implantConfirmKeys() }
 
-func (s *deployConfirmScreen) build() {
+func (s *implantConfirmScreen) build() {
 	app := s.app
-	if app.deployPlan == nil {
+	if app.implantPlan == nil {
 		return
 	}
-	decisions := app.deployDecisions()
-	if app.deploySession != nil {
-		if _, err := app.deploySession.Preview(decisions); err != nil {
+	decisions := app.implantDecisions()
+	if app.implantSession != nil {
+		if _, err := app.implantSession.Preview(decisions); err != nil {
 			s.previewErr = err.Error()
 			s.messages = append(s.messages, Message{Kind: MessageError, Text: err.Error()})
 		}
 	}
 	names := map[string]string{}
-	if app.deploySession != nil && app.deploySession.Manifest != nil {
-		for _, entry := range app.deploySession.Manifest.Apps {
+	if app.implantSession != nil && app.implantSession.Manifest != nil {
+		for _, entry := range app.implantSession.Manifest.Apps {
 			names[entry.ID] = entry.Name
 			if names[entry.ID] == "" {
 				names[entry.ID] = entry.ID
@@ -87,7 +87,7 @@ func (s *deployConfirmScreen) build() {
 	for _, state := range app.conflicts {
 		conflictByPath[state.Conflict.Path] = state
 	}
-	for _, entry := range app.deployPlan.Entries {
+	for _, entry := range app.implantPlan.Entries {
 		if seen[entry.Path] {
 			continue
 		}
@@ -106,13 +106,13 @@ func (s *deployConfirmScreen) build() {
 			order = append(order, entry.AppID)
 		}
 		switch entry.Status {
-		case deploy.StatusNew:
+		case implant.StatusNew:
 			summary.New++
-		case deploy.StatusIdentical:
+		case implant.StatusIdentical:
 			summary.Unchanged++
-		case deploy.StatusUnsupported:
+		case implant.StatusUnsupported:
 			summary.Omitted++
-		case deploy.StatusDifferent:
+		case implant.StatusDifferent:
 			state := conflictByPath[entry.Path]
 			if state == nil {
 				summary.Replaced++
@@ -175,7 +175,7 @@ func (s *deployConfirmScreen) build() {
 	}
 }
 
-func (s *deployConfirmScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+func (s *implantConfirmScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	if s.applying {
 		if event, ok := msg.(operationEvent); ok {
 			return s.handleApply(event)
@@ -205,8 +205,8 @@ func (s *deployConfirmScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	case "enter":
 		switch s.index {
 		case 0:
-			if s.app.deploySession != nil {
-				s.app.deploySession.Close()
+			if s.app.implantSession != nil {
+				s.app.implantSession.Close()
 			}
 			if s.app.menuMode {
 				return s, func() tea.Msg { return menuMsg{} }
@@ -219,21 +219,21 @@ func (s *deployConfirmScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 				s.messages = []Message{{Kind: MessageError, Text: s.previewErr}}
 				return s, nil
 			}
-			if s.app.deploySession == nil {
+			if s.app.implantSession == nil {
 				s.messages = []Message{{Kind: MessageError, Text: texts.StatusReviewDefault}}
 				return s, nil
 			}
 			s.applying = true
-			s.messages = []Message{{Kind: MessageWarning, Text: texts.DeployApplying}}
-			return s, startDeployApply(s.app)
+			s.messages = []Message{{Kind: MessageWarning, Text: texts.ImplantApplying}}
+			return s, startImplantApply(s.app)
 		}
 	}
 	return s, nil
 }
 
-func startDeployApply(app *App) tea.Cmd {
-	decisions := app.deployDecisions()
-	session := app.deploySession
+func startImplantApply(app *App) tea.Cmd {
+	decisions := app.implantDecisions()
+	session := app.implantSession
 	ctx, done := app.beginOperation()
 	return func() tea.Msg {
 		events := make(chan operationEvent, 64)
@@ -246,7 +246,7 @@ func startDeployApply(app *App) tea.Cmd {
 				}
 			})
 			if err == nil {
-				events <- operationEvent{deploy: &result}
+				events <- operationEvent{implant: &result}
 			}
 			events <- operationEvent{err: err, done: true}
 			close(events)
@@ -255,9 +255,9 @@ func startDeployApply(app *App) tea.Cmd {
 	}
 }
 
-func (s *deployConfirmScreen) handleApply(event operationEvent) (Screen, tea.Cmd) {
-	if event.deploy != nil {
-		s.app.deployResult = event.deploy
+func (s *implantConfirmScreen) handleApply(event operationEvent) (Screen, tea.Cmd) {
+	if event.implant != nil {
+		s.app.implantResult = event.implant
 	}
 	if !event.done {
 		if s.events != nil {
@@ -273,17 +273,17 @@ func (s *deployConfirmScreen) handleApply(event operationEvent) (Screen, tea.Cmd
 		}
 		var partial *kerrors.PartialApplyError
 		if errors.As(event.err, &partial) {
-			result := deploy.DeployResult{Snapshot: partial.Snapshot, Deployed: partial.Applied}
-			return s, pushScreen(newDeploySummaryScreen(s.app, &result, true, partial.Failed))
+			result := implant.ImplantResult{Snapshot: partial.Snapshot, Implanted: partial.Applied}
+			return s, pushScreen(newImplantSummaryScreen(s.app, &result, true, partial.Failed))
 		}
-		return s, showError(texts.ErrorApplyingDeploy, texts.ErrorNothingWritten, texts.StatusReviewDefault, event.err.Error())
+		return s, showError(texts.ErrorApplyingImplant, texts.ErrorNothingWritten, texts.StatusReviewDefault, event.err.Error())
 	}
-	return s, pushScreen(newDeploySummaryScreen(s.app, s.app.deployResult, false, ""))
+	return s, pushScreen(newImplantSummaryScreen(s.app, s.app.implantResult, false, ""))
 }
 
-func (s *deployConfirmScreen) View(width, height int) string {
+func (s *implantConfirmScreen) View(width, height int) string {
 	lines := []string{
-		"  " + s.app.theme.Styles.Primary.Render(texts.DeployConfirmTitle),
+		"  " + s.app.theme.Styles.Primary.Render(texts.ImplantConfirmTitle),
 		"",
 	}
 	numberWidth := 10
@@ -334,12 +334,12 @@ func (s *deployConfirmScreen) View(width, height int) string {
 	}
 	lines = append(lines, "  "+strings.Join(actions, "        "))
 	if s.applying {
-		lines = append(lines, "", "  "+s.app.theme.Styles.Warning.Render(texts.DeployApplying))
+		lines = append(lines, "", "  "+s.app.theme.Styles.Warning.Render(texts.ImplantApplying))
 	}
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
 }
 
-func (s *deployConfirmScreen) rowLine(row appSummary, appWidth, numberWidth, gap int) string {
+func (s *implantConfirmScreen) rowLine(row appSummary, appWidth, numberWidth, gap int) string {
 	cells := []int{row.New, row.Replaced, row.Hybrid, row.Omitted, row.Unchanged}
 	line := "  " + PadRight(Truncate(row.Name, appWidth, s.app.theme.Symbols.Ellipsis), appWidth)
 	for _, cell := range cells {
@@ -362,7 +362,7 @@ func (s *deployConfirmScreen) rowLine(row appSummary, appWidth, numberWidth, gap
 	return line
 }
 
-func (a *App) deployDecisions() conflicts.ConflictDecisions {
+func (a *App) implantDecisions() conflicts.ConflictDecisions {
 	decisions := conflicts.ConflictDecisions{Decisions: map[string]conflicts.FileDecision{}}
 	for _, state := range a.conflicts {
 		rows := make([]conflicts.RowDecision, len(state.Rows))

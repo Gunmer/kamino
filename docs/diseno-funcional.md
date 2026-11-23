@@ -30,7 +30,7 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   y las flechas verticales mueven el foco, `←`/`→` el cursor dentro del valor, `Ctrl+S` valida y
   guarda, y `Esc` vuelve sin escribir. El archivo
   `~/.config/kamino/config.toml` lo leen la TUI y la CLI: `catalog.dir` y
-  `deploy.snapshots_limit` son compartidos; `clone.output_dir` y `deploy.snapshots_dir` solo los
+  `implant.snapshots_limit` son compartidos; `clone.output_dir` y `implant.snapshots_dir` solo los
   usa la TUI. Si el archivo falta o es inválido, la CLI usa el catálogo integrado y los valores por
   defecto. El archivo se crea solo al guardar. Después de los cuatro campos, Configuración ofrece
   la acción «Añadir app», que abre el flujo de autoría y vuelve a Configuración al terminar.
@@ -139,9 +139,9 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
   preseleccionada, y no existe un atajo de una tecla para aplicar. El aviso de cerrar apps va en la
   zona de mensajes. Volver o cancelar no escribe ni crea holocrón.
 - El holocrón se guarda por defecto en `~/.config/kamino/vault/snapshot/`, o en el
-  `deploy.snapshots_dir` configurado para la TUI, y se crea solo si hay al menos un destino existente
+  `implant.snapshots_dir` configurado para la TUI, y se crea solo si hay al menos un destino existente
   que proteger. Después de escribirlo se borran los más antiguos hasta dejar
-  `deploy.snapshots_limit` (5 por defecto; `0` conserva todos): solo archivos regulares
+  `implant.snapshots_limit` (5 por defecto; `0` conserva todos): solo archivos regulares
   `<fecha>.tar.gz` y `<fecha>-N.tar.gz` del directorio, nunca otros archivos, directorios o enlaces.
   Dos implantaciones simultáneas sobre el mismo directorio se serializan con un bloqueo exclusivo: la
   poda nunca borra el holocrón de una implantación que todavía está aplicando. Antes de escribir se revalidan los
@@ -290,7 +290,7 @@ Barra de progreso, resumen final (qué se clonó, qué se omitió y por qué), c
 | `undo` | Revierte la última implantación |
 | `verify` | Comprueba la integridad de un clon |
 
-`deploy` se conserva como alias de `implant`.
+`implant` se conserva como alias de `implant`.
 
 Opciones comunes: `--dry-run`, `--apps`, `--output`, `--force`, `--encrypt`, `--yes`, `--verbose`.
 

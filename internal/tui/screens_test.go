@@ -9,12 +9,12 @@ import (
 
 	"github.com/Gunmer/kamino/internal/archive"
 	"github.com/Gunmer/kamino/internal/conflicts"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/version"
 )
 
-func TestDeployCandidatesOrderAndSources(t *testing.T) {
+func TestImplantCandidatesOrderAndSources(t *testing.T) {
 	home := t.TempDir()
 	cwd := filepath.Join(home, ".config", "kamino", "vault")
 	if err := os.MkdirAll(cwd, 0o755); err != nil {
@@ -33,7 +33,7 @@ func TestDeployCandidatesOrderAndSources(t *testing.T) {
 	if err := os.Chtimes(second, time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC), time.Date(2026, 11, 12, 10, 0, 0, 0, time.UTC)); err != nil {
 		t.Fatal(err)
 	}
-	candidates, messages := discoverDeployCandidates(home, cwd)
+	candidates, messages := discoverImplantCandidates(home, cwd)
 	if len(candidates) != 2 {
 		t.Fatalf("same directory must be deduplicated, got %d", len(candidates))
 	}
@@ -45,7 +45,7 @@ func TestDeployCandidatesOrderAndSources(t *testing.T) {
 	}
 }
 
-func TestDeployCandidatesReportUnreadableSource(t *testing.T) {
+func TestImplantCandidatesReportUnreadableSource(t *testing.T) {
 	home := t.TempDir()
 	vault := filepath.Join(home, ".config", "kamino", "vault")
 	if err := os.MkdirAll(filepath.Dir(vault), 0o755); err != nil {
@@ -54,19 +54,19 @@ func TestDeployCandidatesReportUnreadableSource(t *testing.T) {
 	if err := os.WriteFile(vault, []byte("not a directory"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, messages := discoverDeployCandidates(home, t.TempDir())
+	_, messages := discoverImplantCandidates(home, t.TempDir())
 	if len(messages) == 0 || messages[0].Kind != MessageWarning {
 		t.Fatalf("unreadable source must produce a warning: %#v", messages)
 	}
 }
 
-func TestDeployAppsSelectionAndPreparation(t *testing.T) {
+func TestImplantAppsSelectionAndPreparation(t *testing.T) {
 	app := testApp(false, true)
 	apps := fixtureApps()[:3]
 	for index := range apps {
 		apps[index].Selected = false
 	}
-	screen := &deployAppsScreen{screenBase: screenBase{app: app}, apps: apps}
+	screen := &implantAppsScreen{screenBase: screenBase{app: app}, apps: apps}
 	app.begin(screen)
 	send(t, app, keyMsg(" "))
 	if !screen.apps[0].Selected {
@@ -87,17 +87,17 @@ func TestDeployAppsSelectionAndPreparation(t *testing.T) {
 	}
 }
 
-func TestDeployPreparedMessageBuildsApps(t *testing.T) {
+func TestImplantPreparedMessageBuildsApps(t *testing.T) {
 	app := testApp(false, true)
-	app.deployOptions.Requested = &[]string{"herdr"}
-	screen := &deployAppsScreen{screenBase: screenBase{app: app}, preparing: true}
+	app.implantOptions.Requested = &[]string{"herdr"}
+	screen := &implantAppsScreen{screenBase: screenBase{app: app}, preparing: true}
 	app.begin(screen)
-	session := &deploy.DeploySession{
-		DeployableApps:   []archive.AppEntry{{ID: "herdr", Name: "herdr", Files: make([]archive.FileEntry, 3)}},
+	session := &implant.ImplantSession{
+		ImplantableApps:  []archive.AppEntry{{ID: "herdr", Name: "herdr", Files: make([]archive.FileEntry, 3)}},
 		NotInstalledApps: []archive.AppEntry{{ID: "yazi", Name: "yazi"}},
 		Warnings:         []string{"aviso"},
 	}
-	send(t, app, deployPreparedMsg{session: session})
+	send(t, app, implantPreparedMsg{session: session})
 	if screen.preparing || len(screen.apps) != 1 {
 		t.Fatalf("prepared message not applied: %#v", screen)
 	}
@@ -109,16 +109,16 @@ func TestDeployPreparedMessageBuildsApps(t *testing.T) {
 	}
 }
 
-func TestDeployAppsSkipsSelectionWithRequested(t *testing.T) {
+func TestImplantAppsSkipsSelectionWithRequested(t *testing.T) {
 	app := testApp(false, true)
 	requested := []string{"herdr"}
-	app.deployOptions.Requested = &requested
-	screen := newDeployAppsScreen(app, "/tmp/clone.tar.gz", true)
+	app.implantOptions.Requested = &requested
+	screen := newImplantAppsScreen(app, "/tmp/clone.tar.gz", true)
 	app.begin(screen)
-	session := &deploy.DeploySession{
-		DeployableApps: []archive.AppEntry{{ID: "herdr", Name: "herdr", Files: make([]archive.FileEntry, 3)}},
+	session := &implant.ImplantSession{
+		ImplantableApps: []archive.AppEntry{{ID: "herdr", Name: "herdr", Files: make([]archive.FileEntry, 3)}},
 	}
-	command := send(t, app, deployPreparedMsg{session: session})
+	command := send(t, app, implantPreparedMsg{session: session})
 	if !screen.planning || command == nil {
 		t.Fatalf("--apps must skip the selection table: planning=%v command=%v", screen.planning, command)
 	}
@@ -132,7 +132,7 @@ func TestNonTextConflictStartsUndecided(t *testing.T) {
 		AppID: "test", Path: ".config/bin", Destination: "/Users/test/.config/bin",
 		Kind: conflicts.KindBinary,
 	}
-	plan := &deploy.DeployPlan{Conflicts: []conflicts.Conflict{binary}}
+	plan := &implant.ImplantPlan{Conflicts: []conflicts.Conflict{binary}}
 	states := newConflictStates(plan)
 	if len(states) != 1 || states[0].Action != "" {
 		t.Fatalf("non-text conflict must wait for an explicit decision, got %#v", states)
@@ -146,7 +146,7 @@ func TestD3DeletionKeepsOriginalSide(t *testing.T) {
 	state := &conflictState{Conflict: conflict, Action: conflicts.ActionReview, Rows: conflicts.ReviewAll(conflict, conflicts.RowClone).Rows}
 	app := testApp(false, true)
 	app.conflicts = []*conflictState{state}
-	screen := newDeployDetailScreen(app)
+	screen := newImplantDetailScreen(app)
 	rows := screen.rows
 	var removal fileRow
 	for _, row := range rows {
@@ -173,7 +173,7 @@ func TestD3ArrowKeysChooseVersion(t *testing.T) {
 	app := testApp(false, true)
 	app.conflicts = fixtureConflictStates()
 	app.conflictIndex = 0
-	screen := newDeployDetailScreen(app)
+	screen := newImplantDetailScreen(app)
 	app.begin(screen)
 	state := screen.state()
 	row := screen.rows[screen.index]
@@ -191,7 +191,7 @@ func TestD3BlockAndFileActions(t *testing.T) {
 	app := testApp(false, true)
 	app.conflicts = fixtureConflictStates()
 	app.conflictIndex = 0
-	screen := newDeployDetailScreen(app)
+	screen := newImplantDetailScreen(app)
 	app.begin(screen)
 	state := screen.state()
 	firstBlock := screen.rows[screen.index].Block
@@ -227,7 +227,7 @@ func TestD3ScrollFollowsCursor(t *testing.T) {
 	app := testApp(false, true)
 	app.conflicts = fixtureConflictStates()
 	app.conflictIndex = 0
-	screen := newDeployDetailScreen(app)
+	screen := newImplantDetailScreen(app)
 	screen.index = len(screen.rows) - 1
 	view := renderCase(app, screen, 100, 24)
 	if !strings.Contains(view, "arriba") {
@@ -244,7 +244,7 @@ func TestD2WholeFileReviewIsStillPending(t *testing.T) {
 		Conflict: conflicts.Conflict{AppID: "test", Path: ".config/bin", Destination: "/Users/test/.config/bin", Kind: conflicts.KindBinary},
 		Action:   conflicts.ActionReview,
 	}}
-	screen := newDeployConflictsScreen(app)
+	screen := newImplantConflictsScreen(app)
 	app.begin(screen)
 	command := send(t, app, keyMsg("enter"))
 	if command != nil || len(screen.messages) == 0 || screen.messages[0].Kind != MessageWarning {
@@ -254,12 +254,12 @@ func TestD2WholeFileReviewIsStillPending(t *testing.T) {
 
 func TestD5IncompleteVariant(t *testing.T) {
 	app := testApp(false, true)
-	result := &deploy.DeployResult{Deployed: []string{"a"}, Snapshot: "/Users/test/snapshot.tar.gz"}
-	app.deployResult = result
-	screen := newDeploySummaryScreen(app, result, true, ".config/test")
+	result := &implant.ImplantResult{Implanted: []string{"a"}, Snapshot: "/Users/test/snapshot.tar.gz"}
+	app.implantResult = result
+	screen := newImplantSummaryScreen(app, result, true, ".config/test")
 	app.begin(screen)
 	if len(screen.messages) == 0 || screen.messages[0].Kind != MessageError {
-		t.Fatal("incomplete deploy must show an ERROR")
+		t.Fatal("incomplete implant must show an ERROR")
 	}
 	view := renderCase(app, screen, 100, 26)
 	if !strings.Contains(view, texts.D5Incomplete) {
@@ -267,7 +267,7 @@ func TestD5IncompleteVariant(t *testing.T) {
 	}
 	send(t, app, keyMsg("enter"))
 	if app.ExitCode() != 1 {
-		t.Fatalf("incomplete deploy must exit 1, got %d", app.ExitCode())
+		t.Fatalf("incomplete implant must exit 1, got %d", app.ExitCode())
 	}
 }
 

@@ -7,21 +7,21 @@
 - Antes de terminar, ejecuta las mismas comprobaciones que CI, en este orden:
   `gofmt -l .` (vacío), `go vet ./...`, `golangci-lint run ./...` (si está instalado) y
   `go test ./... -race`.
-- Ejecuta una prueba concreta con `go test ./internal/deploy -run TestName`.
+- Ejecuta una prueba concreta con `go test ./internal/implant -run TestName`.
 
 ## Arquitectura
 
 - El módulo es `github.com/Gunmer/kamino`; el binario es `cmd/kamino`, el comando de release es
   `cmd/release` y los paquetes internos viven en `internal/`.
 - `internal/cli` solo traduce argumentos, salida y códigos. `internal/app` contiene los flujos
-  compartidos; `internal/clone`, `internal/deploy` y `internal/update` son casos de uso;
+  compartidos; `internal/clone`, `internal/implant` y `internal/update` son casos de uso;
   `internal/texts`, `internal/ui` y `internal/tui` presentan.
 - Las definiciones integradas están en `internal/catalog/apps/*.toml` y se cargan con `go:embed`.
   Se combinan con los TOML del usuario en `~/.config/kamino/apps/`; las definiciones del usuario
   reemplazan las integradas con el mismo id. `internal/catalog/apps/` es la única copia del
   catálogo.
 - `internal/archive` es responsable del manifiesto versionado y del formato del archivo;
-  `internal/plan` planifica la clonación y `internal/deploy` clasifica y aplica el despliegue.
+  `internal/plan` planifica la clonación y `internal/implant` clasifica y aplica el despliegue.
 - `internal/paths.SafeHome` usa `openat`/`O_NOFOLLOW`; no se debe degradar a comprobaciones léxicas.
 - La TUI usa Bubble Tea, Lip Gloss y `bubbles` (`key`, `help`). `internal/tui/theme` centraliza
   tokens, símbolos y estilos ANSI; `internal/tui/frame.go` posee cabecera, body, mensajes, pie y

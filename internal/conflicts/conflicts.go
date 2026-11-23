@@ -1,4 +1,4 @@
-// Package conflicts detects, diffs, composes and validates deploy conflicts.
+// Package conflicts detects, diffs, composes and validates implant conflicts.
 package conflicts
 
 import (

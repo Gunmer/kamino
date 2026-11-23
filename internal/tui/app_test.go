@@ -18,7 +18,7 @@ import (
 	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/config"
 	"github.com/Gunmer/kamino/internal/conflicts"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/progress"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/Gunmer/kamino/internal/update"
@@ -517,7 +517,7 @@ func TestD3InsertionOmissionAndCounters(t *testing.T) {
 	state := &conflictState{Conflict: conflict, Action: conflicts.ActionReview, Rows: conflicts.ReviewAll(conflict, conflicts.RowClone).Rows}
 	app := testApp(false, true)
 	app.conflicts = []*conflictState{state}
-	screen := newDeployDetailScreen(app)
+	screen := newImplantDetailScreen(app)
 	if len(state.Rows) != 1 {
 		t.Fatalf("expected one decision, got %d", len(state.Rows))
 	}
@@ -545,7 +545,7 @@ func TestD3SingleDecisionAndLongLine(t *testing.T) {
 	state := &conflictState{Conflict: conflict, Action: conflicts.ActionReview, Rows: conflicts.ReviewAll(conflict, conflicts.RowClone).Rows}
 	app := testApp(false, true)
 	app.conflicts = []*conflictState{state}
-	screen := newDeployDetailScreen(app)
+	screen := newImplantDetailScreen(app)
 	first := screen.rows[0]
 	screen.setRow(first, conflicts.RowLocal)
 	for index, row := range screen.rows {
@@ -581,7 +581,7 @@ func TestD3ViewportOnlyRendersVisibleRows(t *testing.T) {
 	state := &conflictState{Conflict: conflict, Action: conflicts.ActionReview, Rows: conflicts.ReviewAll(conflict, conflicts.RowClone).Rows}
 	app := testApp(false, true)
 	app.conflicts = []*conflictState{state}
-	screen := newDeployDetailScreen(app)
+	screen := newImplantDetailScreen(app)
 	view := renderCase(app, screen, 100, 30)
 	if !strings.Contains(view, "line-0") {
 		t.Fatal("visible window missing first row")
@@ -597,11 +597,11 @@ func TestD4AggregationTotalsAndDedup(t *testing.T) {
 	states[1].Action = conflicts.ActionApply
 	app := testApp(false, true)
 	app.conflicts = states
-	app.deployPlan = fixtureDeployPlan(states)
-	app.deployPlan.Entries = append(app.deployPlan.Entries, deploy.DeployEntry{
-		AppID: "otra", Path: states[0].Conflict.Path, Status: deploy.StatusNew,
+	app.implantPlan = fixtureImplantPlan(states)
+	app.implantPlan.Entries = append(app.implantPlan.Entries, implant.ImplantEntry{
+		AppID: "otra", Path: states[0].Conflict.Path, Status: implant.StatusNew,
 	})
-	screen := newDeployConfirmScreen(app)
+	screen := newImplantConfirmScreen(app)
 	if screen.totals.New != 1 {
 		t.Fatalf("shared path must be counted once, totals=%#v", screen.totals)
 	}
@@ -616,7 +616,7 @@ func TestD4AggregationTotalsAndDedup(t *testing.T) {
 	}
 	send(t, app, keyMsg("d"))
 	if screen.applying {
-		t.Fatal("no single key may deploy")
+		t.Fatal("no single key may implant")
 	}
 }
 
@@ -628,8 +628,8 @@ func TestD4IdenticalHybridIsUnchanged(t *testing.T) {
 	}
 	app := testApp(false, true)
 	app.conflicts = states
-	app.deployPlan = fixtureDeployPlan(states)
-	screen := newDeployConfirmScreen(app)
+	app.implantPlan = fixtureImplantPlan(states)
+	screen := newImplantConfirmScreen(app)
 	if screen.rows[0].Hybrid != 0 {
 		t.Fatalf("an identical hybrid must not be a hybrid: %#v", screen.rows[0])
 	}
@@ -641,8 +641,8 @@ func TestD4IdenticalHybridIsUnchanged(t *testing.T) {
 func TestD2ActionsAndMissingDecision(t *testing.T) {
 	app := testApp(false, true)
 	app.conflicts = fixtureConflictStates()
-	app.deployPlan = fixtureDeployPlan(app.conflicts)
-	screen := newDeployConflictsScreen(app)
+	app.implantPlan = fixtureImplantPlan(app.conflicts)
+	screen := newImplantConflictsScreen(app)
 	app.begin(screen)
 	send(t, app, keyMsg("c"))
 	if app.conflicts[0].Action != conflicts.ActionApply {
@@ -661,12 +661,12 @@ func TestD2ActionsAndMissingDecision(t *testing.T) {
 
 func TestD5CategoriesCopyAndCode(t *testing.T) {
 	app := testApp(false, true)
-	result := fixtureDeployResult()
-	app.deployResult = result
-	screen := newDeploySummaryScreen(app, result, false, "")
+	result := fixtureImplantResult()
+	app.implantResult = result
+	screen := newImplantSummaryScreen(app, result, false, "")
 	app.begin(screen)
 	view := renderCase(app, screen, 100, 26)
-	for _, label := range []string{texts.D5Deployed, texts.D5Hybrids, texts.D5Omitted, texts.D5Unchanged, texts.D5NotInstalled, texts.D5Protected} {
+	for _, label := range []string{texts.D5Implanted, texts.D5Hybrids, texts.D5Omitted, texts.D5Unchanged, texts.D5NotInstalled, texts.D5Protected} {
 		if !strings.Contains(view, label) {
 			t.Fatalf("missing %q in summary", label)
 		}
@@ -812,7 +812,7 @@ func TestCtrlCAfterNoReturnIsIgnored(t *testing.T) {
 	}
 }
 
-func TestDeployAggregationWithSession(t *testing.T) {
+func TestImplantAggregationWithSession(t *testing.T) {
 	source := t.TempDir()
 	cloneFile := filepath.Join(t.TempDir(), "clone.tar.gz")
 	buildClone(t, source, cloneFile)
@@ -824,7 +824,7 @@ func TestDeployAggregationWithSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	bin, _, definitions := fakeCatalog(t)
-	session, err := deploy.PrepareDeploy(cloneFile, deploy.Options{
+	session, err := implant.PrepareImplant(cloneFile, implant.Options{
 		Home: destination, Catalog: definitions, Path: bin,
 	})
 	if err != nil {
@@ -838,10 +838,10 @@ func TestDeployAggregationWithSession(t *testing.T) {
 	states := newConflictStates(plan)
 	app := NewApp(AppOptions{Home: destination, Cwd: destination, Now: fixedNow, ThemeName: "ansi-dark"})
 	app.catalog = definitions
-	app.deploySession = session
-	app.deployPlan = plan
+	app.implantSession = session
+	app.implantPlan = plan
 	app.conflicts = states
-	screen := newDeployConfirmScreen(app)
+	screen := newImplantConfirmScreen(app)
 	if screen.previewErr != "" {
 		t.Fatalf("Preview rejected the decisions: %s", screen.previewErr)
 	}
@@ -850,7 +850,7 @@ func TestDeployAggregationWithSession(t *testing.T) {
 	}
 }
 
-func TestDeployFlowEndToEnd(t *testing.T) {
+func TestImplantFlowEndToEnd(t *testing.T) {
 	source := t.TempDir()
 	cloneFile := filepath.Join(t.TempDir(), "clone.tar.gz")
 	buildClone(t, source, cloneFile)
@@ -864,14 +864,14 @@ func TestDeployFlowEndToEnd(t *testing.T) {
 	bin, _, definitions := fakeCatalog(t)
 	app := NewApp(AppOptions{
 		Home: destination, Cwd: destination, Catalog: definitions, PathValue: bin,
-		Now: fixedNow, ThemeName: "ansi-dark", Deploy: DeployFlowOptions{CloneFile: cloneFile},
+		Now: fixedNow, ThemeName: "ansi-dark", Implant: ImplantFlowOptions{CloneFile: cloneFile},
 	})
-	app.startDeploy()
-	if _, ok := app.current.(*deployAppsScreen); !ok {
+	app.startImplant()
+	if _, ok := app.current.(*implantAppsScreen); !ok {
 		t.Fatalf("expected D1 preparing, got %T", app.current)
 	}
 	send(t, app, execute(t, app.Init()))
-	if _, ok := app.current.(*deployAppsScreen); !ok {
+	if _, ok := app.current.(*implantAppsScreen); !ok {
 		t.Fatalf("expected D1 apps, got %T", app.current)
 	}
 	send(t, app, keyMsg("a"))
@@ -881,18 +881,18 @@ func TestDeployFlowEndToEnd(t *testing.T) {
 	for command != nil {
 		message = execute(t, command)
 		command = send(t, app, message)
-		if _, ok := app.current.(*deployConflictsScreen); ok {
+		if _, ok := app.current.(*implantConflictsScreen); ok {
 			break
 		}
 	}
-	if _, ok := app.current.(*deployConflictsScreen); !ok {
+	if _, ok := app.current.(*implantConflictsScreen); !ok {
 		t.Fatalf("expected D2, got %T", app.current)
 	}
 	send(t, app, execute(t, send(t, app, keyMsg("enter"))))
-	if _, ok := app.current.(*deployConfirmScreen); !ok {
+	if _, ok := app.current.(*implantConfirmScreen); !ok {
 		t.Fatalf("expected D4, got %T", app.current)
 	}
-	confirm := app.current.(*deployConfirmScreen)
+	confirm := app.current.(*implantConfirmScreen)
 	confirm.index = 2
 	command = send(t, app, keyMsg("enter"))
 	message = execute(t, command)
@@ -900,11 +900,11 @@ func TestDeployFlowEndToEnd(t *testing.T) {
 	for command != nil {
 		message = execute(t, command)
 		command = send(t, app, message)
-		if _, ok := app.current.(*deploySummaryScreen); ok {
+		if _, ok := app.current.(*implantSummaryScreen); ok {
 			break
 		}
 	}
-	if _, ok := app.current.(*deploySummaryScreen); !ok {
+	if _, ok := app.current.(*implantSummaryScreen); !ok {
 		t.Fatalf("expected D5, got %T", app.current)
 	}
 	data, err := os.ReadFile(filepath.Join(destination, ".config", "test", "config"))
@@ -912,7 +912,7 @@ func TestDeployFlowEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(data) != "value=2\n" {
-		t.Fatalf("unexpected deployed content: %q", data)
+		t.Fatalf("unexpected implanted content: %q", data)
 	}
 	send(t, app, keyMsg("enter"))
 	if app.ExitCode() != 0 {

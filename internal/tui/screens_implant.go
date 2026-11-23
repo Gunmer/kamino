@@ -10,13 +10,13 @@ import (
 
 	"github.com/Gunmer/kamino/internal/config"
 	"github.com/Gunmer/kamino/internal/defaults"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/texts"
 	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-type deployCandidate struct {
+type implantCandidate struct {
 	Path   string
 	Name   string
 	Origin string
@@ -24,9 +24,9 @@ type deployCandidate struct {
 	Size   int64
 }
 
-type deployFileScreen struct {
+type implantFileScreen struct {
 	screenBase
-	candidates []deployCandidate
+	candidates []implantCandidate
 	index      int
 	filter     field
 	filtering  bool
@@ -35,20 +35,20 @@ type deployFileScreen struct {
 	messages   []Message
 }
 
-func newDeployFileScreen(app *App, initialError string) *deployFileScreen {
-	screen := &deployFileScreen{
+func newImplantFileScreen(app *App, initialError string) *implantFileScreen {
+	screen := &implantFileScreen{
 		screenBase: screenBase{app: app},
 		filter:     field{Label: texts.FieldFilter, Placeholder: texts.FieldFilterPlaceholder},
 		manualPath: field{Label: texts.FieldPath, Placeholder: texts.FieldManualPlaceholder},
 	}
-	screen.candidates, screen.messages = discoverDeployCandidates(app.home, app.cwd)
+	screen.candidates, screen.messages = discoverImplantCandidates(app.home, app.cwd)
 	if initialError != "" {
 		screen.messages = append(screen.messages, Message{Kind: MessageError, Text: initialError})
 	}
 	return screen
 }
 
-func discoverDeployCandidates(home, cwd string) ([]deployCandidate, []Message) {
+func discoverImplantCandidates(home, cwd string) ([]implantCandidate, []Message) {
 	messages := make([]Message, 0)
 	vault, err := defaults.VaultDir(home)
 	if err != nil {
@@ -58,11 +58,11 @@ func discoverDeployCandidates(home, cwd string) ([]deployCandidate, []Message) {
 		path   string
 		origin string
 	}{
-		{vault, texts.DeployOriginDefault},
-		{cwd, texts.DeployOriginCWD},
+		{vault, texts.ImplantOriginDefault},
+		{cwd, texts.ImplantOriginCWD},
 	}
 	seen := map[string]bool{}
-	candidates := make([]deployCandidate, 0)
+	candidates := make([]implantCandidate, 0)
 	for _, source := range sources {
 		if source.path == "" {
 			continue
@@ -72,7 +72,7 @@ func discoverDeployCandidates(home, cwd string) ([]deployCandidate, []Message) {
 			if !os.IsNotExist(err) {
 				messages = append(messages, Message{Kind: MessageWarning, Text: strings.NewReplacer(
 					"{origin}", source.origin, "{path}", source.path, "{message}", err.Error(),
-				).Replace(texts.DeploySourceUnreadable)})
+				).Replace(texts.ImplantSourceUnreadable)})
 			}
 			continue
 		}
@@ -93,7 +93,7 @@ func discoverDeployCandidates(home, cwd string) ([]deployCandidate, []Message) {
 				continue
 			}
 			seen[path] = true
-			candidates = append(candidates, deployCandidate{
+			candidates = append(candidates, implantCandidate{
 				Path: path, Name: entry.Name(), Origin: source.origin,
 				Date: info.ModTime(), Size: info.Size(),
 			})
@@ -108,29 +108,29 @@ func discoverDeployCandidates(home, cwd string) ([]deployCandidate, []Message) {
 	return candidates, messages
 }
 
-func (s *deployFileScreen) Flow() string { return texts.FlowDeploy }
+func (s *implantFileScreen) Flow() string { return texts.FlowImplant }
 
-func (s *deployFileScreen) Title() string { return texts.TitleClon }
+func (s *implantFileScreen) Title() string { return texts.TitleClon }
 
-func (s *deployFileScreen) Step() (int, int) { return 1, 4 }
+func (s *implantFileScreen) Step() (int, int) { return 1, 4 }
 
-func (s *deployFileScreen) Messages() []Message { return s.messages }
+func (s *implantFileScreen) Messages() []Message { return s.messages }
 
-func (s *deployFileScreen) Keys() []key.Binding {
+func (s *implantFileScreen) Keys() []key.Binding {
 	length := 0
 	if s.manual {
 		length = len([]rune(s.manualPath.Value))
 	} else if s.filtering {
 		length = len([]rune(s.filter.Value))
 	}
-	return deployFileKeys(s.manual, s.filtering, length)
+	return implantFileKeys(s.manual, s.filtering, length)
 }
 
-func (s *deployFileScreen) visible() []deployCandidate {
+func (s *implantFileScreen) visible() []implantCandidate {
 	if s.filter.Value == "" {
 		return s.candidates
 	}
-	result := make([]deployCandidate, 0)
+	result := make([]implantCandidate, 0)
 	query := strings.ToLower(s.filter.Value)
 	for _, candidate := range s.candidates {
 		if strings.Contains(strings.ToLower(candidate.Path), query) || strings.Contains(strings.ToLower(candidate.Origin), query) {
@@ -140,7 +140,7 @@ func (s *deployFileScreen) visible() []deployCandidate {
 	return result
 }
 
-func (s *deployFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+func (s *implantFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	keyMessage, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return s, nil
@@ -154,7 +154,7 @@ func (s *deployFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 			path := strings.TrimSpace(s.manualPath.Value)
 			if path == "" {
 				s.manualPath.Invalid = true
-				s.messages = []Message{{Kind: MessageError, Text: texts.DeployNoFile}}
+				s.messages = []Message{{Kind: MessageError, Text: texts.ImplantNoFile}}
 				return s, nil
 			}
 			if info, err := os.Stat(path); err != nil || !info.Mode().IsRegular() {
@@ -162,7 +162,7 @@ func (s *deployFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 				s.messages = []Message{{Kind: MessageError, Text: strings.ReplaceAll(texts.D0ManualError, "{path}", path)}}
 				return s, nil
 			}
-			return s, pushScreen(newDeployAppsScreen(s.app, path, true))
+			return s, pushScreen(newImplantAppsScreen(s.app, path, true))
 		case "left":
 			s.manualPath.MoveCursor(-1)
 		case "right":
@@ -217,17 +217,17 @@ func (s *deployFileScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		s.manualPath.Invalid = false
 	case "enter":
 		if len(visible) == 0 {
-			s.messages = []Message{{Kind: MessageWarning, Text: texts.DeployNoFile}}
+			s.messages = []Message{{Kind: MessageWarning, Text: texts.ImplantNoFile}}
 			return s, nil
 		}
-		return s, pushScreen(newDeployAppsScreen(s.app, visible[s.index%len(visible)].Path, true))
+		return s, pushScreen(newImplantAppsScreen(s.app, visible[s.index%len(visible)].Path, true))
 	case "esc":
 		return s, popScreen()
 	}
 	return s, nil
 }
 
-func (s *deployFileScreen) clearManualError() {
+func (s *implantFileScreen) clearManualError() {
 	s.manualPath.Invalid = false
 	kept := make([]Message, 0, len(s.messages))
 	for _, message := range s.messages {
@@ -238,7 +238,7 @@ func (s *deployFileScreen) clearManualError() {
 	s.messages = kept
 }
 
-func (s *deployFileScreen) View(width, height int) string {
+func (s *implantFileScreen) View(width, height int) string {
 	lines := []string{"  " + s.app.theme.Styles.Primary.Render(texts.D0Title)}
 	if s.manual {
 		options := fieldOptions{
@@ -305,12 +305,12 @@ func (s *deployFileScreen) View(width, height int) string {
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
 }
 
-type deployPreparedMsg struct {
-	session *deploy.DeploySession
+type implantPreparedMsg struct {
+	session *implant.ImplantSession
 	err     error
 }
 
-type deployAppsScreen struct {
+type implantAppsScreen struct {
 	screenBase
 	cloneFile     string
 	preparing     bool
@@ -322,86 +322,86 @@ type deployAppsScreen struct {
 	current       int
 	total         int
 	events        <-chan operationEvent
-	plan          *deploy.DeployPlan
+	plan          *implant.ImplantPlan
 	// installing shows the install question before the plan; pendingSelected
-	// keeps the apps the user chose to deploy meanwhile.
+	// keeps the apps the user chose to implant meanwhile.
 	installing      bool
 	installChoices  []installChoice
 	installIndex    int
 	pendingSelected []string
 }
 
-func newDeployAppsScreen(app *App, cloneFile string, preparing bool) *deployAppsScreen {
-	screen := &deployAppsScreen{
+func newImplantAppsScreen(app *App, cloneFile string, preparing bool) *implantAppsScreen {
+	screen := &implantAppsScreen{
 		screenBase: screenBase{app: app}, cloneFile: cloneFile, preparing: preparing,
-		skipSelection: app.deployOptions.Requested != nil && len(*app.deployOptions.Requested) > 0,
+		skipSelection: app.implantOptions.Requested != nil && len(*app.implantOptions.Requested) > 0,
 	}
 	return screen
 }
 
-func (s *deployAppsScreen) Flow() string { return texts.FlowDeploy }
+func (s *implantAppsScreen) Flow() string { return texts.FlowImplant }
 
-func (s *deployAppsScreen) Title() string { return texts.TitleApps }
+func (s *implantAppsScreen) Title() string { return texts.TitleApps }
 
-func (s *deployAppsScreen) Step() (int, int) { return 2, 4 }
+func (s *implantAppsScreen) Step() (int, int) { return 2, 4 }
 
-func (s *deployAppsScreen) Messages() []Message { return s.messages }
+func (s *implantAppsScreen) Messages() []Message { return s.messages }
 
-func (s *deployAppsScreen) Keys() []key.Binding {
+func (s *implantAppsScreen) Keys() []key.Binding {
 	if s.installing {
-		return deployInstallKeys()
+		return implantInstallKeys()
 	}
-	return deployAppsKeys(s.preparing || s.planning)
+	return implantAppsKeys(s.preparing || s.planning)
 }
 
-func (s *deployAppsScreen) Operation() string {
+func (s *implantAppsScreen) Operation() string {
 	if s.preparing {
-		return texts.OperationDeployPreparing
+		return texts.OperationImplantPreparing
 	}
 	if s.planning {
 		if s.total > 0 {
-			return strings.NewReplacer("{current}", fmt.Sprintf("%d", s.current), "{total}", fmt.Sprintf("%d", s.total)).Replace(texts.OperationDeployProgress)
+			return strings.NewReplacer("{current}", fmt.Sprintf("%d", s.current), "{total}", fmt.Sprintf("%d", s.total)).Replace(texts.OperationImplantProgress)
 		}
-		return texts.OperationDeployPlanning
+		return texts.OperationImplantPlanning
 	}
 	return ""
 }
 
-func (s *deployAppsScreen) Init() tea.Cmd {
+func (s *implantAppsScreen) Init() tea.Cmd {
 	if s.preparing {
-		return prepareDeployCmd(s.app, s.cloneFile)
+		return prepareImplantCmd(s.app, s.cloneFile)
 	}
 	return nil
 }
 
-func prepareDeployCmd(app *App, cloneFile string) tea.Cmd {
+func prepareImplantCmd(app *App, cloneFile string) tea.Cmd {
 	loaded := config.LoadConfig(app.home, "")
-	options := deploy.Options{
+	options := implant.Options{
 		Home: app.home, Catalog: app.catalog, ApplicationDirs: app.applicationDirs,
 		Path: app.pathValue, SnapshotsDir: loaded.Config.SnapshotsDir, SnapshotsLimit: loaded.Config.SnapshotsLimit,
 	}
 	return func() tea.Msg {
-		session, err := deploy.PrepareDeploy(cloneFile, options)
-		return deployPreparedMsg{session: session, err: err}
+		session, err := implant.PrepareImplant(cloneFile, options)
+		return implantPreparedMsg{session: session, err: err}
 	}
 }
 
-func (s *deployAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
+func (s *implantAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	switch value := msg.(type) {
-	case deployPreparedMsg:
+	case implantPreparedMsg:
 		s.preparing = false
 		if value.err != nil {
 			return s, showError(texts.ErrorInvalidClone, texts.ErrorNothingWritten, texts.TitleRetryAdvice, value.err.Error())
 		}
-		s.app.deploySession = value.session
+		s.app.implantSession = value.session
 		requested := map[string]bool{}
-		if s.app.deployOptions.Requested != nil {
-			for _, id := range *s.app.deployOptions.Requested {
+		if s.app.implantOptions.Requested != nil {
+			for _, id := range *s.app.implantOptions.Requested {
 				requested[id] = true
 			}
 		}
-		s.apps = make([]appChoice, 0, len(value.session.DeployableApps))
-		for _, item := range value.session.DeployableApps {
+		s.apps = make([]appChoice, 0, len(value.session.ImplantableApps))
+		for _, item := range value.session.ImplantableApps {
 			s.apps = append(s.apps, appChoice{
 				ID: item.ID, Name: item.Name, Detected: true, Selected: requested[item.ID],
 				Count: len(item.Files),
@@ -423,7 +423,7 @@ func (s *deployAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 			}
 			s.planning = true
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.D1Verifying}}
-			return s, startDeployPlan(s.app, s.app.deploySession, selected)
+			return s, startImplantPlan(s.app, s.app.implantSession, selected)
 		}
 		return s, nil
 	case operationStartedMsg:
@@ -492,7 +492,7 @@ func (s *deployAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.D1NoneSelected}}
 			return s, nil
 		}
-		if s.app.deploySession == nil {
+		if s.app.implantSession == nil {
 			return s, nil
 		}
 		if s.beginInstallQuestion(selected) {
@@ -502,12 +502,12 @@ func (s *deployAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		s.current = 0
 		s.total = 0
 		s.messages = []Message{{Kind: MessageWarning, Text: texts.D1Verifying}}
-		return s, startDeployPlan(s.app, s.app.deploySession, selected)
+		return s, startImplantPlan(s.app, s.app.implantSession, selected)
 	}
 	return s, nil
 }
 
-func (s *deployAppsScreen) handlePlanEvent(event operationEvent) (Screen, tea.Cmd) {
+func (s *implantAppsScreen) handlePlanEvent(event operationEvent) (Screen, tea.Cmd) {
 	if event.progress.Total > 0 {
 		s.current = event.progress.Current
 		s.total = event.progress.Total
@@ -527,18 +527,18 @@ func (s *deployAppsScreen) handlePlanEvent(event operationEvent) (Screen, tea.Cm
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.StatusPreparingCancelled}}
 			return s, nil
 		}
-		return s, showError(texts.ErrorPreparingDeploy, texts.ErrorNothingWritten, texts.StatusReviewDefault, event.err.Error())
+		return s, showError(texts.ErrorPreparingImplant, texts.ErrorNothingWritten, texts.StatusReviewDefault, event.err.Error())
 	}
 	if s.plan == nil {
-		return s, showError(texts.ErrorPreparingDeploy, texts.ErrorNothingWritten, texts.StatusReviewDefault, texts.ErrorEmptyPlan)
+		return s, showError(texts.ErrorPreparingImplant, texts.ErrorNothingWritten, texts.StatusReviewDefault, texts.ErrorEmptyPlan)
 	}
-	s.app.deployPlan = s.plan
+	s.app.implantPlan = s.plan
 	s.app.conflicts = newConflictStates(s.plan)
 	s.app.conflictIndex = 0
-	return s, pushScreen(newDeployConflictsScreen(s.app))
+	return s, pushScreen(newImplantConflictsScreen(s.app))
 }
 
-func (s *deployAppsScreen) View(width, height int) string {
+func (s *implantAppsScreen) View(width, height int) string {
 	lines := []string{"  " + s.app.theme.Styles.Primary.Render(texts.D1Title)}
 	if s.preparing {
 		lines = append(lines, "", "  "+texts.D1Preparing, "  "+texts.D1Verifying)
@@ -596,8 +596,8 @@ func (s *deployAppsScreen) View(width, height int) string {
 		lines = append(lines, "  "+s.app.theme.Styles.Tertiary.Render(texts.D1NoApps))
 	}
 	var notInstalled []string
-	if s.app.deploySession != nil {
-		for _, item := range s.app.deploySession.NotInstalledApps {
+	if s.app.implantSession != nil {
+		for _, item := range s.app.implantSession.NotInstalledApps {
 			notInstalled = append(notInstalled, item.Name)
 		}
 	}

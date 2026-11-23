@@ -8,7 +8,7 @@ corresponda a las apps que estén instaladas.
 
 Distribución Go estática implementada: `clone` e `implant` funcionales con catálogo declarativo,
 detección de apps, archivado `tar.gz` con manifiesto y checksums, CLI interactiva y revisión de
-conflictos por líneas dentro de cada bloque en una TUI ANSI propia. `deploy` se conserva como alias
+conflictos por líneas dentro de cada bloque en una TUI ANSI propia. `implant` se conserva como alias
 de `implant`. El binario es autocontenido.
 
 ## Requisitos
@@ -148,7 +148,7 @@ kamino implant clone-<aaaammdd>.tar.gz   # TUI: apps, conflictos y confirmación
 kamino update                # TUI: consulta, descarga y reemplazo
 ```
 
-`implant` es la forma principal para aplicar un clon; `deploy` sigue disponible como alias de
+`implant` es la forma principal para aplicar un clon; `implant` sigue disponible como alias de
 compatibilidad con los mismos argumentos y opciones.
 
 `-h` es alias de `--help` en el nivel principal y en `clone`, `implant` y `update`, y `-V` es
@@ -183,7 +183,7 @@ usa `--output` para conservar la ruta anterior. Los holocrones nuevos se guardan
 implantar indicando su ruta.
 
 Cada implantación crea su holocrón y después borra los más antiguos hasta dejar
-`deploy.snapshots_limit` (5 por defecto; `0` conserva todos). Solo se borran archivos regulares con
+`implant.snapshots_limit` (5 por defecto; `0` conserva todos). Solo se borran archivos regulares con
 nombre `<fecha>.tar.gz` o `<fecha>-N.tar.gz` del directorio de holocrones: cualquier otro archivo,
 directorio o enlace queda intacto. Si el holocrón nuevo no se pudo escribir no se borra ninguno, y
 si el excedente no se puede borrar la implantación se detiene antes de escribir en los destinos.
@@ -205,7 +205,7 @@ Con terminal interactiva, `clone` abre la TUI si no se definió `KAMINO_PLAIN`. 
 `--output` omite C2 y ambos juntos pasan directamente a la revisión C3. Un valor inválido abre la
 pantalla correspondiente precargada con el error. `--dry-run` termina en C3 sin acción de clonar.
 
-En `implant` —y en su alias `deploy`—, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes`
+En `implant` —y en su alias `implant`—, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes`
 y `-v` a `--verbose`; el archivo del clon sigue siendo un argumento posicional:
 
 ```bash
@@ -312,8 +312,8 @@ ver y editar las tres rutas y el límite de holocrones en una pantalla. Cada val
 etiqueta alineada: `Tab`/`Mayús+Tab` y `↑`/`↓` mueven el foco, `←`/`→` el cursor dentro del valor y
 el límite solo admite dígitos. La pantalla se guarda con `Ctrl+S`; `Esc` vuelve sin escribir. Un
 valor inválido marca su campo y muestra el `ERROR` en la zona de mensajes sin desplazar las filas.
-`catalog.dir` y `deploy.snapshots_limit` los comparten la TUI y la CLI de texto; `clone.output_dir`
-y `deploy.snapshots_dir` solo los usa la TUI. Si el archivo falta o es inválido, la CLI usa el
+`catalog.dir` y `implant.snapshots_limit` los comparten la TUI y la CLI de texto; `clone.output_dir`
+y `implant.snapshots_dir` solo los usa la TUI. Si el archivo falta o es inválido, la CLI usa el
 catálogo integrado y los valores por defecto sin bloquear; los comandos `apps` muestran el aviso y
 la ruta efectiva.
 
@@ -324,7 +324,7 @@ dir = "~/.config/kamino/apps"
 [clone]
 output_dir = "~/.config/kamino/vault"
 
-[deploy]
+[implant]
 snapshots_dir = "~/.config/kamino/vault/snapshot"
 snapshots_limit = 5
 ```
@@ -333,11 +333,11 @@ snapshots_limit = 5
 | --- | --- | --- |
 | `catalog.dir` | `~/.config/kamino/apps` | Definiciones TOML de apps del usuario; las usan la TUI y la CLI |
 | `clone.output_dir` | `~/.config/kamino/vault` | Directorio propuesto en C2 y destino del clon en la TUI |
-| `deploy.snapshots_dir` | `~/.config/kamino/vault/snapshot` | Directorio de los holocrones en la TUI |
-| `deploy.snapshots_limit` | `5` | Holocrones que se conservan; `0` no borra ninguno. Lo aplican la TUI y la CLI |
+| `implant.snapshots_dir` | `~/.config/kamino/vault/snapshot` | Directorio de los holocrones en la TUI |
+| `implant.snapshots_limit` | `5` | Holocrones que se conservan; `0` no borra ninguno. Lo aplican la TUI y la CLI |
 
 El archivo es opcional y se crea solo al guardar desde la pantalla. Admite únicamente esas cuatro
-claves: las tres rutas deben ser cadenas y `deploy.snapshots_limit` un entero mayor o igual que 0.
+claves: las tres rutas deben ser cadenas y `implant.snapshots_limit` un entero mayor o igual que 0.
 Un TOML inválido, una sección o clave desconocida, un tipo incorrecto, una ruta relativa,
 `~usuario` o una ruta existente que no sea un directorio se rechazan. Si el archivo es inválido al
 arrancar, la TUI abre Configuración con el error y los valores legibles; no lo sobrescribe hasta
@@ -521,7 +521,7 @@ internal/
 ├── defaults/          # rutas por defecto compartidas
 ├── config/            # configuración TOML compartida con la CLI
 ├── clone/             # plan_clone y write_clone
-├── deploy/            # sesión, plan, clasificación y aplicación
+├── implant/            # sesión, plan, clasificación y aplicación
 ├── update/            # consulta, descarga/verificación y reemplazo
 ├── conflicts/         # SequenceMatcher, diff, composición y validación
 ├── progress/          # contrato de progreso y cancelación

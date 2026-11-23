@@ -1,4 +1,4 @@
-package deploy
+package implant
 
 import (
 	"context"
@@ -17,11 +17,11 @@ import (
 	"github.com/Gunmer/kamino/internal/snapshot"
 )
 
-func deployFixture(t *testing.T) (sourceHome, appBin, cloneFile string, definitions catalog.Catalog) {
+func implantFixture(t *testing.T) (sourceHome, appBin, cloneFile string, definitions catalog.Catalog) {
 	t.Helper()
 	sourceHome = t.TempDir()
 	appBin = t.TempDir()
-	command := "kamino-deploy-test"
+	command := "kamino-implant-test"
 	if err := os.WriteFile(filepath.Join(appBin, command), []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -71,10 +71,10 @@ func checksum(data []byte) (string, error) {
 	return hex.EncodeToString(digest[:]), nil
 }
 
-func TestDeployNewAndIdentical(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantNewAndIdentical(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
-	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -89,15 +89,15 @@ func TestDeployNewAndIdentical(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(result.Deployed) != 1 {
-		t.Fatalf("expected deployed file: %#v", result)
+	if len(result.Implanted) != 1 {
+		t.Fatalf("expected implanted file: %#v", result)
 	}
 	if data, _ := os.ReadFile(filepath.Join(destination, ".config/test/config")); string(data) != "value=2\n" {
 		t.Fatalf("unexpected destination content: %q", data)
 	}
 	session.Close()
 
-	session, _ = PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin})
+	session, _ = PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin})
 	plan, err = session.Plan(context.Background(), nil, false, nil, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -108,9 +108,9 @@ func TestDeployNewAndIdentical(t *testing.T) {
 	session.Close()
 }
 
-func conflictExecution(t *testing.T) (string, string, string, catalog.Catalog, *DeploySession, *DeployPlan) {
+func conflictExecution(t *testing.T) (string, string, string, catalog.Catalog, *ImplantSession, *ImplantPlan) {
 	t.Helper()
-	_, bin, cloneFile, definitions := deployFixture(t)
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
 		t.Fatal(err)
@@ -118,7 +118,7 @@ func conflictExecution(t *testing.T) (string, string, string, catalog.Catalog, *
 	if err := os.WriteFile(filepath.Join(destination, ".config/test/config"), []byte("value=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, err := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +132,7 @@ func conflictExecution(t *testing.T) (string, string, string, catalog.Catalog, *
 	return destination, bin, cloneFile, definitions, session, plan
 }
 
-func TestDeployConflictApply(t *testing.T) {
+func TestImplantConflictApply(t *testing.T) {
 	destination, _, _, _, session, plan := conflictExecution(t)
 	defer session.Close()
 	result, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
@@ -147,7 +147,7 @@ func TestDeployConflictApply(t *testing.T) {
 	}
 }
 
-func TestDeployConflictOmit(t *testing.T) {
+func TestImplantConflictOmit(t *testing.T) {
 	destination, _, _, _, session, plan := conflictExecution(t)
 	defer session.Close()
 	omitted, err := session.Apply(context.Background(), conflicts.OmitAll(plan.Conflicts), nil)
@@ -162,7 +162,7 @@ func TestDeployConflictOmit(t *testing.T) {
 	}
 }
 
-func TestDeployConflictReview(t *testing.T) {
+func TestImplantConflictReview(t *testing.T) {
 	_, _, _, _, session, plan := conflictExecution(t)
 	defer session.Close()
 	review := conflicts.ReviewAll(plan.Conflicts[0], conflicts.RowClone)
@@ -172,22 +172,22 @@ func TestDeployConflictReview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(merged.Deployed) != 1 {
+	if len(merged.Implanted) != 1 {
 		t.Fatalf("expected reviewed write: %#v", merged)
 	}
 }
 
-func TestDeployDryRunDoesNotWrite(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantDryRunDoesNotWrite(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
-	session, _ := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin})
+	session, _ := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin})
 	defer session.Close()
 	plan, err := session.Plan(context.Background(), nil, true, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	result := session.DryRunResult(plan)
-	if !result.DryRun || len(result.Deployed) != 0 {
+	if !result.DryRun || len(result.Implanted) != 0 {
 		t.Fatalf("unexpected dry run: %#v", result)
 	}
 	if _, err := os.Stat(filepath.Join(destination, ".config/test/config")); !os.IsNotExist(err) {
@@ -195,8 +195,8 @@ func TestDeployDryRunDoesNotWrite(t *testing.T) {
 	}
 }
 
-func TestDeployConcurrentChange(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantConcurrentChange(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
 		t.Fatal(err)
@@ -205,7 +205,7 @@ func TestDeployConcurrentChange(t *testing.T) {
 	if err := os.WriteFile(target, []byte("value=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	session, _ := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
+	session, _ := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	defer session.Close()
 	plan, err := session.Plan(context.Background(), nil, false, nil, nil)
 	if err != nil {
@@ -221,8 +221,8 @@ func TestDeployConcurrentChange(t *testing.T) {
 	}
 }
 
-func TestDeployPrunesSnapshotsByLimit(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantPrunesSnapshotsByLimit(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	snapshots := t.TempDir()
 	var last string
 	for index := 0; index < 3; index++ {
@@ -233,7 +233,7 @@ func TestDeployPrunesSnapshotsByLimit(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(destination, ".config/test/config"), []byte("value=1\n"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 2})
+		session, err := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 2})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -269,8 +269,8 @@ func TestDeployPrunesSnapshotsByLimit(t *testing.T) {
 	}
 }
 
-func TestDeployDryRunDoesNotPrune(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantDryRunDoesNotPrune(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
 	snapshots := t.TempDir()
 	for _, name := range []string{"2026-01-01T00:00:00Z.tar.gz", "2026-01-02T00:00:00Z.tar.gz", "2026-01-03T00:00:00Z.tar.gz"} {
@@ -284,7 +284,7 @@ func TestDeployDryRunDoesNotPrune(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(destination, ".config/test/config"), []byte("value=1\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 1})
+	session, err := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestDeployDryRunDoesNotPrune(t *testing.T) {
 		t.Fatal(err)
 	}
 	result := session.DryRunResult(plan)
-	if !result.DryRun || len(result.Deployed) != 0 {
+	if !result.DryRun || len(result.Implanted) != 0 {
 		t.Fatalf("unexpected dry run: %#v", result)
 	}
 	entries, err := os.ReadDir(snapshots)
@@ -306,8 +306,8 @@ func TestDeployDryRunDoesNotPrune(t *testing.T) {
 	}
 }
 
-func TestDeploySnapshotFailureAbortsBeforeWriting(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantSnapshotFailureAbortsBeforeWriting(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
 		t.Fatal(err)
@@ -321,7 +321,7 @@ func TestDeploySnapshotFailureAbortsBeforeWriting(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(snapshots, 0o755) })
-	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 1})
+	session, err := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,15 +331,15 @@ func TestDeploySnapshotFailureAbortsBeforeWriting(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil); err == nil {
-		t.Fatal("a failing snapshot must abort the deploy")
+		t.Fatal("a failing snapshot must abort the implant")
 	}
 	if data, err := os.ReadFile(target); err != nil || string(data) != "value=1\n" {
 		t.Fatalf("destinations must not be written when the snapshot fails: %q %v", data, err)
 	}
 }
 
-func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantWaitsForTheSnapshotLock(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
 		t.Fatal(err)
@@ -353,7 +353,7 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 1})
+	session, err := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots, SnapshotsLimit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -363,7 +363,7 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 		t.Fatal(err)
 	}
 	type outcome struct {
-		result DeployResult
+		result ImplantResult
 		err    error
 	}
 	done := make(chan outcome, 1)
@@ -373,7 +373,7 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 	}()
 	select {
 	case got := <-done:
-		t.Fatalf("the deploy must wait for the snapshots lock: %#v %v", got.result, got.err)
+		t.Fatalf("the implant must wait for the snapshots lock: %#v %v", got.result, got.err)
 	case <-time.After(150 * time.Millisecond):
 	}
 	if data, err := os.ReadFile(target); err != nil || string(data) != "value=1\n" {
@@ -388,13 +388,13 @@ func TestDeployWaitsForTheSnapshotLock(t *testing.T) {
 			t.Fatal(got.err)
 		}
 		if got.result.Snapshot == "" {
-			t.Fatal("the deploy must create its snapshot once the lock is free")
+			t.Fatal("the implant must create its snapshot once the lock is free")
 		}
 		if data, _ := os.ReadFile(target); string(data) != "value=2\n" {
 			t.Fatalf("unexpected destination content: %q", data)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatal("the deploy must continue once the lock is released")
+		t.Fatal("the implant must continue once the lock is released")
 	}
 }
 
@@ -419,8 +419,8 @@ func cancelledError(err error) bool {
 	return errors.As(err, &target)
 }
 
-func TestDeployDetectsChangeWhileWaitingForTheSnapshotLock(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantDetectsChangeWhileWaitingForTheSnapshotLock(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
 		t.Fatal(err)
@@ -434,7 +434,7 @@ func TestDeployDetectsChangeWhileWaitingForTheSnapshotLock(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	session, err := PrepareDeploy(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots})
+	session, err := PrepareImplant(cloneFile, Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: snapshots})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -450,7 +450,7 @@ func TestDeployDetectsChangeWhileWaitingForTheSnapshotLock(t *testing.T) {
 	}()
 	select {
 	case err := <-done:
-		t.Fatalf("the deploy must wait for the snapshots lock: %v", err)
+		t.Fatalf("the implant must wait for the snapshots lock: %v", err)
 	case <-time.After(150 * time.Millisecond):
 	}
 	if err := os.WriteFile(target, []byte("changed=1\n"), 0o644); err != nil {
@@ -466,15 +466,15 @@ func TestDeployDetectsChangeWhileWaitingForTheSnapshotLock(t *testing.T) {
 			t.Fatalf("expected concurrent change, got %v", err)
 		}
 	case <-time.After(10 * time.Second):
-		t.Fatal("the deploy must finish once the lock is released")
+		t.Fatal("the implant must finish once the lock is released")
 	}
 	if data, _ := os.ReadFile(target); string(data) != "changed=1\n" {
 		t.Fatalf("the concurrent edit must survive: %q", data)
 	}
 }
 
-func TestDeployingASnapshotRestoresThePreviousState(t *testing.T) {
-	_, bin, cloneFile, definitions := deployFixture(t)
+func TestImplantingASnapshotRestoresThePreviousState(t *testing.T) {
+	_, bin, cloneFile, definitions := implantFixture(t)
 	destination := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(destination, ".config/test"), 0o755); err != nil {
 		t.Fatal(err)
@@ -484,7 +484,7 @@ func TestDeployingASnapshotRestoresThePreviousState(t *testing.T) {
 		t.Fatal(err)
 	}
 	options := Options{Home: destination, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()}
-	session, err := PrepareDeploy(cloneFile, options)
+	session, err := PrepareImplant(cloneFile, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,14 +495,14 @@ func TestDeployingASnapshotRestoresThePreviousState(t *testing.T) {
 	}
 	result, err := session.Apply(context.Background(), conflicts.ApplyAll(plan.Conflicts), nil)
 	if err != nil || result.Snapshot == "" {
-		t.Fatalf("deploy failed: %+v %v", result, err)
+		t.Fatalf("implant failed: %+v %v", result, err)
 	}
 	if data, _ := os.ReadFile(target); string(data) != "value=2\n" {
-		t.Fatalf("the deploy must change the file: %q", data)
+		t.Fatalf("the implant must change the file: %q", data)
 	}
 
 	options.SnapshotsDir = t.TempDir()
-	restore, err := PrepareDeploy(result.Snapshot, options)
+	restore, err := PrepareImplant(result.Snapshot, options)
 	if err != nil {
 		t.Fatal(err)
 	}

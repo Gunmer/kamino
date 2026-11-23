@@ -82,7 +82,7 @@ func TestCloneUsesCustomCatalogDir(t *testing.T) {
 	}
 }
 
-func TestDeployUsesCustomCatalogDir(t *testing.T) {
+func TestImplantUsesCustomCatalogDir(t *testing.T) {
 	home := t.TempDir()
 	custom := filepath.Join(home, "kamino-apps")
 	writeTestConfig(t, home, "[catalog]\ndir = \""+custom+"\"\n")
@@ -102,7 +102,7 @@ func TestDeployUsesCustomCatalogDir(t *testing.T) {
 	writeTestExecutable(t, bin, "miapp-test")
 	cloneFile := filepath.Join(t.TempDir(), "clone.tar.gz")
 	writeTestClone(t, cloneFile, "miapp")
-	outcome, err := ExecuteDeploy(context.Background(), cloneFile, nil, true, nil, home, nil, bin, "", false)
+	outcome, err := ExecuteImplant(context.Background(), cloneFile, nil, true, nil, home, nil, bin, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestDeployUsesCustomCatalogDir(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("custom app missing from deploy plan: %#v", outcome.Result.Plan.Entries)
+		t.Fatalf("custom app missing from implant plan: %#v", outcome.Result.Plan.Entries)
 	}
 }
 

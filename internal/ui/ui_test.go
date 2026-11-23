@@ -7,7 +7,7 @@ import (
 
 	"github.com/Gunmer/kamino/internal/archive"
 	"github.com/Gunmer/kamino/internal/clone"
-	"github.com/Gunmer/kamino/internal/deploy"
+	"github.com/Gunmer/kamino/internal/implant"
 	"github.com/Gunmer/kamino/internal/plan"
 )
 
@@ -30,16 +30,16 @@ func TestCloneSummaryWithoutRejectionsPrintsNoSkippedBlock(t *testing.T) {
 	}
 }
 
-func TestDeploySummaryShowsInstallPlanInDryRun(t *testing.T) {
-	result := deploy.DeployResult{
+func TestImplantSummaryShowsInstallPlanInDryRun(t *testing.T) {
+	result := implant.ImplantResult{
 		DryRun: true,
-		Plan:   &deploy.DeployPlan{},
-		Installs: []deploy.InstallOutcome{
-			{AppID: "alpha", Method: "installer", URL: "https://example.com/i.sh", Status: deploy.InstallPlanned},
+		Plan:   &implant.ImplantPlan{},
+		Installs: []implant.InstallOutcome{
+			{AppID: "alpha", Method: "installer", URL: "https://example.com/i.sh", Status: implant.InstallPlanned},
 		},
 	}
 	var out bytes.Buffer
-	PrintDeploySummary(&out, result, false)
+	PrintImplantSummary(&out, result, false)
 	want := "Se instalaría: alpha con installer desde https://example.com/i.sh"
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("la simulación debe mostrar la instalación:\n%s", out.String())

@@ -1,5 +1,5 @@
-// Package deploy plans and applies a clone deployment with snapshots.
-package deploy
+// Package implant plans and applies a clone implantation with snapshots.
+package implant
 
 import (
 	"context"
@@ -13,28 +13,28 @@ import (
 	"github.com/Gunmer/kamino/internal/progress"
 )
 
-// DeployStatus classifies a manifest file against its destination.
-type DeployStatus string
+// ImplantStatus classifies a manifest file against its destination.
+type ImplantStatus string
 
 const (
-	StatusNew         DeployStatus = "new"
-	StatusIdentical   DeployStatus = "identical"
-	StatusDifferent   DeployStatus = "different"
-	StatusUnsupported DeployStatus = "unsupported"
+	StatusNew         ImplantStatus = "new"
+	StatusIdentical   ImplantStatus = "identical"
+	StatusDifferent   ImplantStatus = "different"
+	StatusUnsupported ImplantStatus = "unsupported"
 )
 
 // ResultCategory is the final outcome of an active manifest file.
 type ResultCategory string
 
 const (
-	CategoryDeployed  ResultCategory = "deployed"
+	CategoryImplanted ResultCategory = "implanted"
 	CategoryMerged    ResultCategory = "merged"
 	CategoryOmitted   ResultCategory = "omitted"
 	CategoryUnchanged ResultCategory = "unchanged"
 )
 
-// DeployEntry is a manifest file classified for deployment.
-type DeployEntry struct {
+// ImplantEntry is a manifest file classified for implantation.
+type ImplantEntry struct {
 	AppID       string
 	Path        string
 	Destination string
@@ -42,12 +42,12 @@ type DeployEntry struct {
 	SHA256      *string
 	Mode        string
 	Link        *string
-	Status      DeployStatus
+	Status      ImplantStatus
 }
 
-// DeployPlan is the deploy plan.
-type DeployPlan struct {
-	Entries          []DeployEntry
+// ImplantPlan is the implant plan.
+type ImplantPlan struct {
+	Entries          []ImplantEntry
 	Notices          []string
 	Conflicts        []conflicts.Conflict
 	Omitted          []string
@@ -57,14 +57,14 @@ type DeployPlan struct {
 	Installs         []InstallOutcome
 }
 
-// DeployResult is the result of a deploy.
-type DeployResult struct {
-	Plan             *DeployPlan
+// ImplantResult is the result of a implant.
+type ImplantResult struct {
+	Plan             *ImplantPlan
 	Manifest         *archive.Manifest
 	Output           string
 	DryRun           bool
 	Snapshot         string
-	Deployed         []string
+	Implanted        []string
 	Merged           []string
 	Omitted          []string
 	Unchanged        []string
@@ -74,9 +74,9 @@ type DeployResult struct {
 	SnapshotFiles    int
 }
 
-// DeployClassification is the prospective result of applying decisions.
-type DeployClassification struct {
-	Deployed         []string
+// ImplantClassification is the prospective result of applying decisions.
+type ImplantClassification struct {
+	Implanted        []string
 	Merged           []string
 	Omitted          []string
 	Unchanged        []string
@@ -84,8 +84,8 @@ type DeployClassification struct {
 	MissingRequested []string
 }
 
-// ResultCode returns the exit code of a finished deploy.
-func ResultCode(result DeployResult) int {
+// ResultCode returns the exit code of a finished implant.
+func ResultCode(result ImplantResult) int {
 	if len(result.Omitted) > 0 || len(result.MissingRequested) > 0 || hasFailedInstall(result.Installs) {
 		return 3
 	}
@@ -101,7 +101,7 @@ func hasFailedInstall(outcomes []InstallOutcome) bool {
 	return false
 }
 
-// Options controls PrepareDeploy.
+// Options controls PrepareImplant.
 type Options struct {
 	Home            string
 	Catalog         catalog.Catalog
@@ -109,23 +109,23 @@ type Options struct {
 	ApplicationDirs []string
 	Path            string
 	SnapshotsDir    string
-	// SnapshotsLimit is how many snapshots survive the next deploy; zero keeps all.
+	// SnapshotsLimit is how many snapshots survive the next implant; zero keeps all.
 	SnapshotsLimit int
 }
 
-// DeploySession is a prepared deploy with plan, preview and apply steps.
-type DeploySession struct {
+// ImplantSession is a prepared implant with plan, preview and apply steps.
+type ImplantSession struct {
 	CloneFile        string
 	Home             string
 	Manifest         *archive.Manifest
-	DeployableApps   []archive.AppEntry
+	ImplantableApps  []archive.AppEntry
 	NotInstalledApps []archive.AppEntry
 	SnapshotsDir     string
 	SnapshotsLimit   int
 	Notices          []string
 	Warnings         []string
 	staging          string
-	plan             *DeployPlan
+	plan             *ImplantPlan
 	fingerprints     map[string]fingerprint
 	closed           bool
 	definitions      catalog.Catalog
@@ -135,15 +135,15 @@ type DeploySession struct {
 }
 
 // SnapshotDirectory is where the previous-state snapshot will be written.
-func (s *DeploySession) SnapshotDirectory() (string, error) {
+func (s *ImplantSession) SnapshotDirectory() (string, error) {
 	if s.SnapshotsDir != "" {
 		return s.SnapshotsDir, nil
 	}
 	return defaults.SnapshotsDir(s.Home)
 }
 
-// PrepareDeploy reads the manifest and splits deployable and missing apps.
-func PrepareDeploy(cloneFile string, options Options) (*DeploySession, error) {
+// PrepareImplant reads the manifest and splits implantable and missing apps.
+func PrepareImplant(cloneFile string, options Options) (*ImplantSession, error) {
 	root, err := paths.ResolveHome(options.Home)
 	if err != nil {
 		return nil, err
@@ -167,20 +167,20 @@ func PrepareDeploy(cloneFile string, options Options) (*DeploySession, error) {
 	if err != nil {
 		return nil, err
 	}
-	deployable := make([]archive.AppEntry, 0)
+	implantable := make([]archive.AppEntry, 0)
 	missing := make([]archive.AppEntry, 0)
 	for _, app := range manifest.Apps {
 		if isAppInstalled(app, definitions, options.ApplicationDirs, options.Path, root) {
-			deployable = append(deployable, app)
+			implantable = append(implantable, app)
 		} else {
 			missing = append(missing, app)
 		}
 	}
-	session := &DeploySession{
+	session := &ImplantSession{
 		CloneFile:        cloneFile,
 		Home:             root,
 		Manifest:         manifest,
-		DeployableApps:   deployable,
+		ImplantableApps:  implantable,
 		NotInstalledApps: missing,
 		SnapshotsDir:     options.SnapshotsDir,
 		SnapshotsLimit:   options.SnapshotsLimit,
@@ -195,23 +195,23 @@ func PrepareDeploy(cloneFile string, options Options) (*DeploySession, error) {
 }
 
 // Close removes the staging directory.
-func (s *DeploySession) Close() {
+func (s *ImplantSession) Close() {
 	s.clearStaging()
 	s.closed = true
 }
 
-func (s *DeploySession) clearStaging() {
+func (s *ImplantSession) clearStaging() {
 	if s.staging != "" {
 		_ = os.RemoveAll(s.staging)
 		s.staging = ""
 	}
 }
 
-func (s *DeploySession) resetStaging(ctx context.Context, progressCallback progress.Callback) error {
+func (s *ImplantSession) resetStaging(ctx context.Context, progressCallback progress.Callback) error {
 	if s.staging != "" {
 		_ = os.RemoveAll(s.staging)
 	}
-	directory, err := os.MkdirTemp("", "kamino-deploy-")
+	directory, err := os.MkdirTemp("", "kamino-implant-")
 	if err != nil {
 		return err
 	}

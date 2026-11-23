@@ -1,4 +1,4 @@
-# deploy-conflicts Specification
+# implant-conflicts Specification
 
 ## Purpose
 
@@ -613,7 +613,7 @@ La última fila de D0 DEBE (`MUST`) ser `Otro archivo...` y DEBE (`MUST`) revela
 
 #### Scenario: Flujo directo con archivo inválido
 
-- **GIVEN** una invocación de `kamino deploy` con un archivo inexistente o inválido
+- **GIVEN** una invocación de `kamino implant` con un archivo inexistente o inválido
 - **WHEN** se abre D0
 - **THEN** el campo de ruta aparece precargado con esa ruta, muestra el error y la lista de clones sigue disponible
 

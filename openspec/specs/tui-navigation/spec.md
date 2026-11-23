@@ -8,7 +8,7 @@ Definir la experiencia transversal de la interfaz interactiva: apertura, menú, 
 
 ### Requirement: Terminología visible de implantación
 
-La TUI DEBE (`MUST`) usar «Implantar» como nombre visible de la acción que aplica un clon y «implantación» como sustantivo del flujo. Las pantallas, botones, mensajes, resúmenes y la orden de deshacer DEBEN (`MUST`) usar esa terminología; `deploy` NO DEBE (`MUST NOT`) aparecer como etiqueta principal de la TUI.
+La TUI DEBE (`MUST`) usar «Implantar» como nombre visible de la acción que aplica un clon y «implantación» como sustantivo del flujo. Las pantallas, botones, mensajes, resúmenes y la orden de deshacer DEBEN (`MUST`) usar esa terminología; `implant` NO DEBE (`MUST NOT`) aparecer como etiqueta principal de la TUI.
 
 #### Scenario: Menú con Implantar
 
@@ -53,7 +53,7 @@ La interfaz interactiva DEBE (`MUST`) ser una sola aplicación con menú y flujo
 #### Scenario: Comando directo no vuelve al menú
 
 - **GIVEN** una terminal interactiva
-- **WHEN** se ejecuta `kamino clone`, `kamino implant` o el alias `kamino deploy`
+- **WHEN** se ejecuta `kamino clone`, `kamino implant` o el alias `kamino implant`
 - **THEN** el flujo termina con el código del comando y no muestra el menú al finalizar
 
 ### Requirement: Menú principal

@@ -1,4 +1,4 @@
-package deploy
+package implant
 
 import (
 	"context"
@@ -13,16 +13,16 @@ import (
 )
 
 // Apply applies the decisions with a snapshot and atomic per-file writes.
-func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictDecisions, progressCallback progress.Callback) (DeployResult, error) {
+func (s *ImplantSession) Apply(ctx context.Context, decisions conflicts.ConflictDecisions, progressCallback progress.Callback) (ImplantResult, error) {
 	if s.closed {
-		return DeployResult{}, fmt.Errorf("deploy session is closed")
+		return ImplantResult{}, fmt.Errorf("implant session is closed")
 	}
 	plan, resolved, err := s.resolve(decisions)
 	if err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	if err := validateMerges(resolved); err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	writes := make([]resolvedFile, 0)
 	for _, item := range resolved {
@@ -31,7 +31,7 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 		}
 	}
 	if len(writes) == 0 {
-		return DeployResult{
+		return ImplantResult{
 			Plan:             plan,
 			Manifest:         s.Manifest,
 			Output:           s.CloneFile,
@@ -44,16 +44,16 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 	}
 	safe, err := paths.NewSafeHome(s.Home, false)
 	if err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	for _, item := range writes {
 		if err := progress.EnsureNotCancelled(ctx); err != nil {
 			_ = safe.Close()
-			return DeployResult{}, err
+			return ImplantResult{}, err
 		}
 		if err := s.verifyUnchanged(safe, item.path); err != nil {
 			_ = safe.Close()
-			return DeployResult{}, err
+			return ImplantResult{}, err
 		}
 	}
 	_ = safe.Close()
@@ -63,41 +63,41 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 		destinations = append(destinations, item.destination)
 	}
 	// Hold the snapshots directory for the whole snapshot-and-apply window so a
-	// concurrent deploy cannot prune the recovery snapshot of this one.
+	// concurrent implant cannot prune the recovery snapshot of this one.
 	directory, err := s.SnapshotDirectory()
 	if err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	release, err := snapshot.Lock(ctx, directory)
 	if err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	defer func() { _ = release() }()
 	// Waiting for the lock can take long: check again before the snapshot.
 	if err := s.verifyAll(writes); err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	protected, err := snapshot.SnapshotFiles(ctx, destinations, s.Home)
 	if err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	if err := progress.EnsureNotCancelled(ctx); err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	snapshotPath, err := snapshot.CreateSnapshot(ctx, destinations, s.Home, directory, "", s.SnapshotsLimit)
 	if err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	if err := s.writeResolved(writes, snapshotPath, progressCallback); err != nil {
-		return DeployResult{}, err
+		return ImplantResult{}, err
 	}
 	result := classification(plan, resolved)
-	return DeployResult{
+	return ImplantResult{
 		Plan:             plan,
 		Manifest:         s.Manifest,
 		Output:           s.CloneFile,
 		Snapshot:         snapshotPath,
-		Deployed:         result.Deployed,
+		Implanted:        result.Implanted,
 		Merged:           result.Merged,
 		Omitted:          result.Omitted,
 		Unchanged:        result.Unchanged,
@@ -110,7 +110,7 @@ func (s *DeploySession) Apply(ctx context.Context, decisions conflicts.ConflictD
 
 // verifyUnchanged fails when the destination no longer matches the state the
 // plan was built from.
-func (s *DeploySession) verifyUnchanged(safe *paths.SafeHome, rel string) error {
+func (s *ImplantSession) verifyUnchanged(safe *paths.SafeHome, rel string) error {
 	current, err := fingerprintOf(safe, rel)
 	if err != nil {
 		return err
@@ -124,7 +124,7 @@ func (s *DeploySession) verifyUnchanged(safe *paths.SafeHome, rel string) error 
 	return nil
 }
 
-func (s *DeploySession) verifyAll(entries []resolvedFile) error {
+func (s *ImplantSession) verifyAll(entries []resolvedFile) error {
 	safe, err := paths.NewSafeHome(s.Home, false)
 	if err != nil {
 		return err
@@ -138,7 +138,7 @@ func (s *DeploySession) verifyAll(entries []resolvedFile) error {
 	return nil
 }
 
-func (s *DeploySession) writeResolved(entries []resolvedFile, snapshotPath string, progressCallback progress.Callback) error {
+func (s *ImplantSession) writeResolved(entries []resolvedFile, snapshotPath string, progressCallback progress.Callback) error {
 	applied := make([]string, 0, len(entries))
 	total := len(entries)
 	safe, err := paths.NewSafeHome(s.Home, false)

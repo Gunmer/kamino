@@ -1,4 +1,4 @@
-// Package plan expands catalog definitions into a clone or deploy plan.
+// Package plan expands catalog definitions into a clone or implant plan.
 package plan
 
 import (

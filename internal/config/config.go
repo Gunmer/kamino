@@ -18,9 +18,9 @@ import (
 const (
 	CatalogKey   = "catalog.dir"
 	CloneKey     = "clone.output_dir"
-	SnapshotsKey = "deploy.snapshots_dir"
+	SnapshotsKey = "implant.snapshots_dir"
 	// SnapshotsLimitKey is how many snapshots are kept.
-	SnapshotsLimitKey = "deploy.snapshots_limit"
+	SnapshotsLimitKey = "implant.snapshots_limit"
 )
 
 // DefaultSnapshotsLimit is how many snapshots are kept when nothing is configured.
@@ -29,7 +29,7 @@ const DefaultSnapshotsLimit = 5
 var sectionKeys = map[string]map[string]string{
 	"catalog": {"dir": CatalogKey},
 	"clone":   {"output_dir": CloneKey},
-	"deploy":  {"snapshots_dir": SnapshotsKey, "snapshots_limit": SnapshotsLimitKey},
+	"implant": {"snapshots_dir": SnapshotsKey, "snapshots_limit": SnapshotsLimitKey},
 }
 
 // AppConfig holds the three effective paths and the snapshot limit.
@@ -37,7 +37,7 @@ type AppConfig struct {
 	CatalogDir     string
 	CloneOutputDir string
 	SnapshotsDir   string
-	// SnapshotsLimit is how many snapshots survive the next deploy; zero keeps all.
+	// SnapshotsLimit is how many snapshots survive the next implant; zero keeps all.
 	SnapshotsLimit int
 }
 
@@ -291,7 +291,7 @@ func serialize(config AppConfig) string {
 		"dir = " + tomlString(config.CatalogDir) + "\n\n" +
 		"[clone]\n" +
 		"output_dir = " + tomlString(config.CloneOutputDir) + "\n\n" +
-		"[deploy]\n" +
+		"[implant]\n" +
 		"snapshots_dir = " + tomlString(config.SnapshotsDir) + "\n" +
 		"snapshots_limit = " + strconv.Itoa(config.SnapshotsLimit) + "\n"
 }
