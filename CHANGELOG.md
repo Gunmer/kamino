@@ -2,6 +2,13 @@
 
 <!-- version list -->
 
+## v0.17.0 (2026-11-24)
+
+### Funcionalidades
+
+- add apps customize and Personalizar app screen ([`293f5a2`](https://github.com/Gunmer/kamino/commit/293f5a23dd4af0ee5babb84366e0234c8a533590))
+- add npm and github-release install methods ([`ec4b5d5`](https://github.com/Gunmer/kamino/commit/ec4b5d5259de97bb240c324db91855fdeebf3033))
+
 ## v0.16.0 (2026-11-23)
 
 ### Documentación
@@ -270,6 +277,7 @@
 ## v0.1.0 (2026-10-31)
 
 - Versión inicial
+
 
 
 
