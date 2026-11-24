@@ -212,3 +212,41 @@ func ExecuteAppsNew(home string, options AppsNewOptions, applicationDirs []strin
 	}
 	return outcome, nil
 }
+
+// AppsCustomizeOptions carries the flags of `kamino apps customize`.
+type AppsCustomizeOptions struct {
+	ID    string
+	Force bool
+	Print bool
+}
+
+// ExecuteAppsCustomize copies the built-in definition of one app into the user
+// catalog, or returns its TOML when Print is set.
+func ExecuteAppsCustomize(home string, options AppsCustomizeOptions) (AppsNewOutcome, error) {
+	data, err := catalog.EmbeddedSource(options.ID)
+	if err != nil {
+		return AppsNewOutcome{}, err
+	}
+	definition, err := catalog.Parse(options.ID+".toml", data)
+	if err != nil {
+		return AppsNewOutcome{}, err
+	}
+	outcome := AppsNewOutcome{Content: string(data), Definition: definition}
+	if options.Print {
+		return outcome, nil
+	}
+	directory, loaded, err := catalogResolution(home)
+	if err != nil {
+		return AppsNewOutcome{}, err
+	}
+	outcome.Directory = directory
+	outcome.ConfigError = loaded.Error
+	result, err := catalog.CreateDefinition(directory, data, options.Force)
+	if err != nil {
+		return AppsNewOutcome{}, err
+	}
+	outcome.Path = result.Path
+	outcome.Definition = result.Definition
+	outcome.Warnings = result.Warnings
+	return outcome, nil
+}

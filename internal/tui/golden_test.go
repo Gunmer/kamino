@@ -394,6 +394,13 @@ func goldenA1Intro() goldenCase {
 	}
 }
 
+func goldenA1Customize() goldenCase {
+	return goldenCase{
+		name: "a1-customize", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
+		build: func(app *App) Screen { return newCustomizeSelectScreen(app) },
+	}
+}
+
 func goldenA1Confirm() goldenCase {
 	return goldenCase{
 		name: "a1-confirm", sizes: [][2]int{{100, 26}}, variants: true,
@@ -633,6 +640,7 @@ func TestGoldenD4(t *testing.T)        { runGolden(t, goldenD4()) }
 func TestGoldenD5(t *testing.T)        { runGolden(t, goldenD5()) }
 func TestGoldenA1(t *testing.T) {
 	runGolden(t, goldenA1Intro())
+	runGolden(t, goldenA1Customize())
 	runGolden(t, goldenA1Confirm())
 	runGolden(t, goldenA1Done())
 }

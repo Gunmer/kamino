@@ -1,0 +1,24 @@
+kamino · Configuración · Personalizar app
+[2m────────────────────────────────────────────────────────────────────────────────[0m
+    [1mPersonalizar app[0m
+    [2mElige una app integrada; se abrirá su definición completa en tu editor.[0m
+    [2mLa copia reemplaza a la integrada y no recibe sus cambios futuros.[0m
+  
+    ▌ [1mbat[0m [2m(bat)[0m
+      Claude Code [2m(claude-code)[0m
+      Codex [2m(codex)[0m
+      Copilot CLI [2m(copilot-cli)[0m
+      Gemini CLI [2m(gemini-cli)[0m
+      Gentle Shell [2m(gentle-shell)[0m
+      Ghostty [2m(ghostty)[0m
+      Git [2m(git)[0m
+      GitHub CLI [2m(github-cli)[0m
+      Glow [2m(glow)[0m
+      herdr [2m(herdr)[0m
+      LazyGit [2m(lazygit)[0m
+      Micro [2m(micro)[0m
+      Oh My Zsh [2m(oh-my-zsh)[0m
+      OpenCode [2m(opencode)[0m
+      OpenSpec [2m(openspec)[0m
+[2m────────────────────────────────────────────────────────────────────────────────[0m
+↑/↓ [2mmover[0m[2m   [0mEnter [2melegir[0m[2m   [0mEsc [2mvolver[0m                                    ? [2mayuda[0m

@@ -90,6 +90,13 @@ kamino apps list
   o no coincide, no se instala nada. Sin `checksums` solo hay HTTPS y el origen GitHub, y la
   confirmación y `--dry-run` lo avisan. El fichero de sumas viene del mismo origen: detecta
   corrupción, no un release comprometido.
+- `apps customize <id>` copia la definición integrada de `<id>` (con sus `[[install]]` y
+  comentarios) a `<id>.toml` en el catálogo del usuario, para editarla. Admite `--print` (TOML a
+  stdout, sin archivos) y `--force` (reemplaza `<id>.toml`). Un id que no es integrado termina con
+  código 2; un archivo existente sin `--force` o un id declarado en otro archivo, con código 1.
+  La copia reemplaza por completo a la integrada y no recibe sus cambios futuros (p. ej. recetas
+  nuevas): revisa `kamino apps customize <id> --print` tras actualizar Kamino si quieres
+  incorporarlas.
 - `apps list` muestra el catálogo fusionado con el origen (`integrado` o `usuario`) y el estado de
   cada archivo. Un archivo inválido se muestra con `ERROR` y no impide listar el resto.
 - `apps new` usa el código 2 para uso incorrecto (`ID` ausente, falta de detección o de rutas) y el
@@ -98,6 +105,8 @@ kamino apps list
   Crea un borrador oculto, abre `$VISUAL`, `$EDITOR` o `vi`, valida al volver y solo guarda si la
   definición es válida. Si el id reemplaza una app integrada o el archivo ya existe, pide
   confirmación. El borrador no se guarda si se cancela y el flujo vuelve a Configuración.
+- En la TUI, «Personalizar app» (la fila siguiente en Configuración) lista las apps integradas y
+  abre el mismo flujo con el borrador ya relleno con su definición integrada.
 - La plantilla incluye la lista estándar de exclusiones de credenciales, cachés e historiales. Los
   campos avanzados (`optional_patterns`, `env_paths`, `xdg_paths`, `install_marker`,
   `command_aliases`) aparecen comentados como ejemplo.
