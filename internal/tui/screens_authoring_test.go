@@ -358,3 +358,93 @@ func authoringContent(id, name string) string {
 	}
 	return content
 }
+
+func TestSettingsCustomizeSeedsDraftWithBuiltinDefinition(t *testing.T) {
+	home := t.TempDir()
+	app := NewApp(AppOptions{Home: home, Cwd: home, Now: fixedNow, ThemeName: "ansi-dark", MenuMode: true})
+	app.startMenu()
+	app.startSettings("")
+	settings := app.current.(*settingsScreen)
+	settings.focus = customizeRow
+	send(t, app, execute(t, send(t, app, keyMsg("enter"))))
+	selector, ok := app.current.(*customizeSelectScreen)
+	if !ok {
+		t.Fatalf("expected the selector, got %T", app.current)
+	}
+	for index, choice := range selector.apps {
+		if choice.ID == "codex" {
+			selector.cursor = index
+		}
+	}
+	send(t, app, execute(t, send(t, app, keyMsg("enter"))))
+	screen, ok := app.current.(*appAuthoringScreen)
+	if !ok {
+		t.Fatalf("expected the authoring screen, got %T", app.current)
+	}
+	draft, err := os.ReadFile(screen.draftPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := catalog.EmbeddedSource("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(draft) != string(want) || !strings.Contains(string(draft), "[[install]]") {
+		t.Fatalf("the draft must be the built-in TOML:\n%s", draft)
+	}
+	navigate(t, app, keyMsg("esc"))
+	if _, ok := app.current.(*settingsScreen); !ok {
+		t.Fatalf("discarding must return to settings, got %T", app.current)
+	}
+	if _, err := os.Stat(screen.draftPath); !os.IsNotExist(err) {
+		t.Fatal("discarding must remove the draft")
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "kamino", "apps", "codex.toml")); !os.IsNotExist(err) {
+		t.Fatal("nothing must be written before confirming")
+	}
+}
+
+func TestCustomizeSelectorCancelWritesNothing(t *testing.T) {
+	home := t.TempDir()
+	app := NewApp(AppOptions{Home: home, Cwd: home, Now: fixedNow, ThemeName: "ansi-dark", MenuMode: true})
+	app.startMenu()
+	app.startSettings("")
+	app.current.(*settingsScreen).focus = customizeRow
+	send(t, app, execute(t, send(t, app, keyMsg("enter"))))
+	navigate(t, app, keyMsg("esc"))
+	if _, ok := app.current.(*settingsScreen); !ok {
+		t.Fatalf("cancelling must return to settings, got %T", app.current)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "kamino", "apps")); !os.IsNotExist(err) {
+		t.Fatal("cancelling must not create the catalog directory")
+	}
+}
+
+func TestCustomizeEditedDraftSavesAsUserDefinition(t *testing.T) {
+	home := t.TempDir()
+	source, err := catalog.EmbeddedSource("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := strings.Replace(string(source), `name = "`, `name = "Mi `, 1)
+	app := NewApp(AppOptions{
+		Home: home, Cwd: home, Now: fixedNow, ThemeName: "ansi-dark", MenuMode: true,
+		Editor: writeAuthoringEditor(edited),
+	})
+	app.startMenu()
+	app.startSettings("")
+	app.startCustomize("codex")
+	screen := app.current.(*appAuthoringScreen)
+	send(t, app, execute(t, send(t, app, keyMsg("enter"))))
+	if screen.phase != authoringPhaseConfirm {
+		t.Fatalf("an override must ask for confirmation, phase %v", screen.phase)
+	}
+	send(t, app, keyMsg("enter"))
+	if screen.phase != authoringPhaseDone {
+		t.Fatalf("expected the done phase, got %v", screen.phase)
+	}
+	saved, err := os.ReadFile(filepath.Join(home, ".config", "kamino", "apps", "codex.toml"))
+	if err != nil || string(saved) != edited {
+		t.Fatalf("the edited TOML must be saved: %v", err)
+	}
+}

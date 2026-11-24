@@ -119,6 +119,7 @@ type startImplantMsg struct{}
 type startUpdateMsg struct{}
 type startSettingsMsg struct{}
 type startAuthoringMsg struct{}
+type startCustomizeMsg struct{ id string }
 type menuMsg struct{}
 
 type operationStartedMsg struct {
@@ -295,6 +296,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.Init()
 	case startAuthoringMsg:
 		a.startAuthoring()
+		return a, a.Init()
+	case startCustomizeMsg:
+		a.pop()
+		a.startCustomize(value.id)
 		return a, a.Init()
 	case menuMsg:
 		a.resetToMenu()
@@ -521,31 +526,47 @@ func (a *App) startSettings(initialError string) {
 }
 
 func (a *App) startAuthoring() {
+	content, err := catalog.RenderTemplate(catalog.TemplateOptions{Skeleton: true})
+	a.startDraft(content, err)
+}
+
+// startCustomize opens the authoring screen with the built-in definition of id
+// as the draft.
+func (a *App) startCustomize(id string) {
+	source, err := catalog.EmbeddedSource(id)
+	a.startDraft(string(source), err)
+}
+
+func (a *App) startDraft(content string, contentErr error) {
+	fail := func(detail string) {
+		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, detail))
+	}
+	if contentErr != nil {
+		fail(contentErr.Error())
+		return
+	}
 	directory, err := app.CatalogDir(a.home)
 	if err != nil {
-		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
+		fail(err.Error())
 		return
 	}
 	if err := os.MkdirAll(directory, 0o755); err != nil {
-		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
+		fail(err.Error())
 		return
 	}
 	file, err := os.CreateTemp(directory, ".kamino-draft-*.toml.tmp")
 	if err != nil {
-		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, err.Error()))
+		fail(err.Error())
 		return
 	}
 	draft := file.Name()
-	content, renderErr := catalog.RenderTemplate(catalog.TemplateOptions{Skeleton: true})
-	if renderErr == nil {
-		_, renderErr = file.WriteString(content)
+	_, writeErr := file.WriteString(content)
+	if closeErr := file.Close(); writeErr == nil {
+		writeErr = closeErr
 	}
-	if closeErr := file.Close(); renderErr == nil {
-		renderErr = closeErr
-	}
-	if renderErr != nil {
+	if writeErr != nil {
 		_ = os.Remove(draft)
-		a.push(newErrorScreen(a, "no se pudo crear el borrador", texts.ErrorNothingWritten, texts.StatusReviewDefault, renderErr.Error()))
+		fail(writeErr.Error())
 		return
 	}
 	a.push(newAppAuthoringScreen(a, directory, draft))

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Gunmer/kamino/internal/app"
+	"github.com/Gunmer/kamino/internal/catalog"
 )
 
 func TestAppsHelpAndDiscovery(t *testing.T) {
@@ -198,5 +199,47 @@ func TestCompletionIncludesApps(t *testing.T) {
 		if code != 0 || !strings.Contains(stdout, "apps") {
 			t.Fatalf("completion for %s is missing apps: %d %q", shell, code, stdout)
 		}
+	}
+}
+
+func TestAppsCustomizeCommand(t *testing.T) {
+	original := executeAppsCustomize
+	defer func() { executeAppsCustomize = original }()
+	var captured app.AppsCustomizeOptions
+	executeAppsCustomize = func(_ string, options app.AppsCustomizeOptions) (app.AppsNewOutcome, error) {
+		captured = options
+		return app.AppsNewOutcome{Path: "/tmp/codex.toml", Content: "id = \"codex\"\n"}, nil
+	}
+	code, stdout, _ := run("apps", "customize", "codex", "--force")
+	if code != 0 || !captured.Force || captured.ID != "codex" || !strings.Contains(stdout, "creado /tmp/codex.toml") {
+		t.Fatalf("unexpected result: %d %q %#v", code, stdout, captured)
+	}
+	code, stdout, _ = run("apps", "customize", "codex", "--print")
+	if code != 0 || !captured.Print || stdout != "id = \"codex\"\n" {
+		t.Fatalf("--print must write the TOML to stdout only: %d %q", code, stdout)
+	}
+	code, stdout, _ = run("apps", "customize", "-h")
+	if code != 0 || !strings.Contains(stdout, "--force") || !strings.Contains(stdout, "--print") {
+		t.Fatalf("unexpected help: %d %q", code, stdout)
+	}
+}
+
+func TestAppsCustomizeErrors(t *testing.T) {
+	original := executeAppsCustomize
+	defer func() { executeAppsCustomize = original }()
+	if code, _, stderr := run("apps", "customize"); code != 2 || !strings.Contains(stderr, "'ID'") {
+		t.Fatalf("missing id must exit 2: %d %q", code, stderr)
+	}
+	executeAppsCustomize = func(string, app.AppsCustomizeOptions) (app.AppsNewOutcome, error) {
+		return app.AppsNewOutcome{}, &catalog.NotBuiltinError{ID: "x"}
+	}
+	if code, _, stderr := run("apps", "customize", "x"); code != 2 || !strings.Contains(stderr, "no hay una app integrada") {
+		t.Fatalf("unknown id must exit 2: %d %q", code, stderr)
+	}
+	executeAppsCustomize = func(string, app.AppsCustomizeOptions) (app.AppsNewOutcome, error) {
+		return app.AppsNewOutcome{}, errors.New("ya existe")
+	}
+	if code, _, _ := run("apps", "customize", "x"); code != 1 {
+		t.Fatalf("other failures must exit 1, got %d", code)
 	}
 }

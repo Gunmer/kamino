@@ -32,6 +32,13 @@ func TestRecipeValidateRejectsInvalidRecipes(t *testing.T) {
 		"binary con dest absoluto":   {Method: MethodBinary, URL: "https://example.com/b", SHA256: validSHA, Dest: "/usr/local/bin/b"},
 		"binary con dest que escapa": {Method: MethodBinary, URL: "https://example.com/b", SHA256: validSHA, Dest: "../b"},
 		"binary con http":            {Method: MethodBinary, URL: "http://example.com/b", SHA256: validSHA, Dest: ".local/bin/b"},
+		"npm sin package":            {Method: MethodNpm},
+		"npm con metacaracteres":     {Method: MethodNpm, Package: "foo; rm -rf ~"},
+		"npm con guion inicial":      {Method: MethodNpm, Package: "-g"},
+		"npm con formula":            {Method: MethodNpm, Package: "foo", Formula: "foo"},
+		"npm con url":                {Method: MethodNpm, Package: "foo", URL: "https://example.com/x"},
+		"brew con package":           {Method: MethodBrew, Formula: "a", Package: "foo"},
+		"installer con repo":         {Method: MethodInstaller, URL: "https://example.com/i.sh", Repo: "a/b"},
 		"os no reconocido":           {Method: MethodBrew, Formula: "a", OS: "windows"},
 		"arch no reconocida":         {Method: MethodBrew, Formula: "a", Arch: "386"},
 	}
@@ -50,6 +57,8 @@ func TestRecipeValidateAcceptsValidRecipes(t *testing.T) {
 		{Method: MethodBrew, Cask: "ghostty", OS: "darwin", Arch: "arm64"},
 		{Method: MethodInstaller, URL: "https://example.com/install.sh"},
 		{Method: MethodBinary, URL: "https://example.com/tool", SHA256: validSHA, Dest: ".local/bin/tool"},
+		{Method: MethodNpm, Package: "@openai/codex"},
+		{Method: MethodNpm, Package: "opencode-ai"},
 	}
 	for _, recipe := range valid {
 		if err := recipe.Validate(); err != nil {
@@ -58,16 +67,16 @@ func TestRecipeValidateAcceptsValidRecipes(t *testing.T) {
 	}
 }
 
-func TestApplicableFiltersByPlatform(t *testing.T) {
+func TestSelectFiltersByPlatform(t *testing.T) {
 	recipes := []Recipe{
 		{Method: MethodBinary, URL: "https://example.com/b", SHA256: validSHA, Dest: ".local/bin/b", Arch: "amd64"},
-		{Method: MethodBrew, Formula: "b"},
+		{Method: MethodInstaller, URL: "https://example.com/i.sh"},
 	}
-	recipe, err := Applicable(recipes, "darwin", "arm64")
-	if err != nil || recipe.Method != MethodBrew {
-		t.Fatalf("se esperaba la receta brew en arm64, got %+v, %v", recipe, err)
+	recipe, err := Select(recipes, "darwin", "arm64", &fakeRunner{})
+	if err != nil || recipe.Method != MethodInstaller {
+		t.Fatalf("se esperaba la receta installer en arm64, got %+v, %v", recipe, err)
 	}
-	if _, err := Applicable(recipes[:1], "darwin", "arm64"); !errors.Is(err, ErrNoRecipe) {
+	if _, err := Select(recipes[:1], "darwin", "arm64", &fakeRunner{}); !errors.Is(err, ErrNoRecipe) {
 		t.Fatalf("sin receta aplicable se esperaba ErrNoRecipe, got %v", err)
 	}
 }
@@ -79,6 +88,11 @@ type fakeRunner struct {
 	body    []byte
 	curlErr error
 	shErr   error
+	npmErr  error
+	// redirect answers the latest-release lookup; bodies maps a download URL to
+	// its content and, when set, makes any other URL a 404.
+	redirect string
+	bodies   map[string][]byte
 }
 
 func (f *fakeRunner) Lookup(name string) bool { return f.tools[name] }
@@ -90,11 +104,25 @@ func (f *fakeRunner) Run(_ context.Context, name string, args ...string) ([]byte
 		if f.curlErr != nil {
 			return []byte("curl: (22) HTTP 404"), f.curlErr
 		}
-		for index, arg := range args {
-			if arg == "--output" {
-				return nil, os.WriteFile(args[index+1], f.body, 0o600)
+		for _, arg := range args {
+			if arg == "--write-out" {
+				return []byte(f.redirect), nil
 			}
 		}
+		body := f.body
+		if f.bodies != nil {
+			found := false
+			if body, found = f.bodies[args[len(args)-1]]; !found {
+				return []byte("curl: (22) HTTP 404"), errors.New("exit status 22")
+			}
+		}
+		for index, arg := range args {
+			if arg == "--output" {
+				return nil, os.WriteFile(args[index+1], body, 0o600)
+			}
+		}
+	case "npm":
+		return nil, f.npmErr
 	case "sh":
 		return nil, f.shErr
 	}
@@ -257,5 +285,68 @@ func TestBinaryDownloadFailureWritesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, ".local/bin/tool")); !os.IsNotExist(err) {
 		t.Fatalf("una descarga fallida no debe crear el destino: %v", err)
+	}
+}
+
+func TestMethodErrorNamesAllFiveMethods(t *testing.T) {
+	err := Recipe{Method: "script"}.Validate()
+	if err == nil {
+		t.Fatal("un método desconocido debe rechazarse")
+	}
+	for _, method := range []string{"brew", "npm", "installer", "binary", "github-release"} {
+		if !strings.Contains(err.Error(), "'"+method+"'") {
+			t.Fatalf("el error debe nombrar %q: %v", method, err)
+		}
+	}
+}
+
+func TestSelectPrefersCatalogOrderAmongAvailableTools(t *testing.T) {
+	recipes := []Recipe{
+		{Method: MethodBrew, Formula: "demo"},
+		{Method: MethodNpm, Package: "demo"},
+		{Method: MethodInstaller, URL: "https://example.com/i.sh"},
+	}
+	cases := map[string]struct {
+		tools map[string]bool
+		want  string
+	}{
+		"brew y npm": {map[string]bool{"brew": true, "npm": true}, MethodBrew},
+		"solo npm":   {map[string]bool{"npm": true}, MethodNpm},
+		"ninguna":    {nil, MethodInstaller},
+		"solo brew":  {map[string]bool{"brew": true}, MethodBrew},
+	}
+	for name, test := range cases {
+		t.Run(name, func(t *testing.T) {
+			recipe, err := Select(recipes, "darwin", "arm64", &fakeRunner{tools: test.tools})
+			if err != nil || recipe.Method != test.want {
+				t.Fatalf("se esperaba %s, got %+v, %v", test.want, recipe, err)
+			}
+		})
+	}
+	npmOnly := recipes[:2]
+	if _, err := Select(npmOnly, "darwin", "arm64", &fakeRunner{}); !errors.Is(err, ErrNoRecipe) {
+		t.Fatalf("sin brew ni npm debe dar ErrNoRecipe, got %v", err)
+	}
+}
+
+func TestNpmInstallRunsGlobalInstall(t *testing.T) {
+	runner := &fakeRunner{tools: map[string]bool{"npm": true}}
+	installer := &Installer{Runner: runner, Home: t.TempDir()}
+	recipes := []Recipe{{Method: MethodBrew, Formula: "codex"}, {Method: MethodNpm, Package: "@openai/codex"}}
+	if err := installer.Install(context.Background(), recipes, "darwin", "arm64"); err != nil {
+		t.Fatal(err)
+	}
+	want := "npm install --global @openai/codex"
+	if len(runner.calls) != 1 || strings.Join(runner.calls[0], " ") != want {
+		t.Fatalf("comando inesperado: %v", runner.calls)
+	}
+}
+
+func TestNpmFailureIsReported(t *testing.T) {
+	runner := &fakeRunner{tools: map[string]bool{"npm": true}, npmErr: errors.New("exit status 243")}
+	installer := &Installer{Runner: runner, Home: t.TempDir()}
+	err := installer.Install(context.Background(), []Recipe{{Method: MethodNpm, Package: "demo"}}, "darwin", "arm64")
+	if err == nil || !strings.Contains(err.Error(), "npm install") {
+		t.Fatalf("se esperaba un error de npm, got %v", err)
 	}
 }

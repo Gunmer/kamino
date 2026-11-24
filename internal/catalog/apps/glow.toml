@@ -7,3 +7,25 @@ exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/s
 [[install]]
 method = "brew"
 formula = "glow"
+
+[[install]]
+method = "github-release"
+repo = "charmbracelet/glow"
+asset = "glow_{version}_Darwin_arm64.tar.gz"
+format = "tar.gz"
+checksums = "checksums.txt"
+arch = "arm64"
+extract = [
+  { file = "glow_{version}_Darwin_arm64/glow", dest = ".local/bin/glow" },
+]
+
+[[install]]
+method = "github-release"
+repo = "charmbracelet/glow"
+asset = "glow_{version}_Darwin_x86_64.tar.gz"
+format = "tar.gz"
+checksums = "checksums.txt"
+arch = "amd64"
+extract = [
+  { file = "glow_{version}_Darwin_x86_64/glow", dest = ".local/bin/glow" },
+]

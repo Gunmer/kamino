@@ -7,3 +7,25 @@ exclude = ["**/hosts.yml", "**/.env", "**/.env.*", "**/auth.json", "**/.credenti
 [[install]]
 method = "brew"
 formula = "gh"
+
+[[install]]
+method = "github-release"
+repo = "cli/cli"
+asset = "gh_{version}_macOS_arm64.zip"
+format = "zip"
+checksums = "gh_{version}_checksums.txt"
+arch = "arm64"
+extract = [
+  { file = "gh_{version}_macOS_arm64/bin/gh", dest = ".local/bin/gh" },
+]
+
+[[install]]
+method = "github-release"
+repo = "cli/cli"
+asset = "gh_{version}_macOS_amd64.zip"
+format = "zip"
+checksums = "gh_{version}_checksums.txt"
+arch = "amd64"
+extract = [
+  { file = "gh_{version}_macOS_amd64/bin/gh", dest = ".local/bin/gh" },
+]

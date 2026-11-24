@@ -16,7 +16,8 @@
 | D4       | `←→` mover; `Enter` aceptar; `Esc` retroceder |
 | D5       | `c` copiar holocrón; `Enter`/`Esc` continuar |
 | U1       | `Enter` continuar; `Esc` cancelar/salir |
-| Settings | `Tab`/`Shift+Tab` mover; `←→` cursor; `Ctrl+S` guardar; `Enter` abrir «Añadir app»; `Esc` volver; `F1`/`?` ayuda |
+| Settings | `Tab`/`Shift+Tab` mover; `←→` cursor; `Ctrl+S` guardar; `Enter` abrir «Añadir app» o «Personalizar app»; `Esc` volver; `F1`/`?` ayuda |
+| A1b      | `↑`/`↓` mover; `Enter` elegir; `Esc` volver |
 | A1       | `Enter`/`e` editar; `Esc` descartar. Confirmación: `Enter` guardar, `Esc` volver. Final: `Enter`/`Esc` continuar |
 | Help     | `Enter`/`Esc`/`?` cerrar |
 | Error    | `t` detalle; `c` copiar; `Enter` aceptar; `Esc` volver |

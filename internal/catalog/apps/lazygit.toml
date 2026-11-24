@@ -7,3 +7,25 @@ exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/s
 [[install]]
 method = "brew"
 formula = "lazygit"
+
+[[install]]
+method = "github-release"
+repo = "jesseduffield/lazygit"
+asset = "lazygit_{version}_darwin_arm64.tar.gz"
+format = "tar.gz"
+checksums = "checksums.txt"
+arch = "arm64"
+extract = [
+  { file = "lazygit", dest = ".local/bin/lazygit" },
+]
+
+[[install]]
+method = "github-release"
+repo = "jesseduffield/lazygit"
+asset = "lazygit_{version}_darwin_x86_64.tar.gz"
+format = "tar.gz"
+checksums = "checksums.txt"
+arch = "amd64"
+extract = [
+  { file = "lazygit", dest = ".local/bin/lazygit" },
+]

@@ -60,17 +60,23 @@ este Mac” y no alteran el código.
 Si una app del clon no está instalada y su definición del catálogo declara una receta
 `[[install]]` aplicable a este Mac, Kamino puede instalarla antes de aplicar su configuración.
 
-- En la TUI, D1 pregunta por cada app ofrecida (método y, para `installer`, la URL exacta). Nada
-  viene marcado; rechazar no cancela la implantación.
+- En la TUI, D1 lista todas las apps del clon como `Instalada` o `No instalada`. Marcar una no
+  instalada con receta pide confirmar su instalación, listando todas las vías posibles (método y,
+  para `installer` y `github-release`, el origen; sin suma de verificación lo avisa) para que
+  elijas una. Nada viene marcado; desmarcar
+  no cancela la implantación.
 - En la CLI, `--install-missing` activa la instalación. Sin terminal interactiva exige `--yes`:
   `kamino implant clon.tar.gz --yes --install-missing`. Sin el flag no se instala nada.
 - `--dry-run --install-missing` solo muestra qué se instalaría, sin descargar ni ejecutar nada.
 - La instalación ocurre después de verificar el archivo completo y antes de crear la instantánea.
   Si falla, la app queda como omitida, el resto continúa y el código de salida es 3.
-- Los métodos son `brew` (Kamino no instala Homebrew: si falta, se prueba la siguiente receta),
-  `installer` (script HTTPS descargado a un temporal y ejecutado con `sh`) y `binary` (HTTPS con
-  SHA-256 verificado antes de escribir el destino con modo 0755). El clon nunca aporta recetas ni
-  URLs.
+- Los métodos son `brew` y `npm` (Kamino no instala Homebrew ni Node: si la herramienta falta, se
+  prueba la siguiente receta; `npm` instala siempre la última versión con
+  `npm install --global`), `installer` (script HTTPS descargado a un temporal y ejecutado con
+  `sh`), `binary` (HTTPS con SHA-256 verificado antes de escribir el destino con modo 0755) y
+  `github-release` (último release de un repositorio de GitHub, instalado bajo el HOME). Si
+  una receta `github-release` no declara `checksums`, la confirmación y `--dry-run` avisan «sin
+  verificación de suma». El clon nunca aporta recetas ni URLs.
 - El clon nunca guarda ejecutables ni bundles `.app`: se informan como no clonados.
 
 ## Holocrones de seguridad

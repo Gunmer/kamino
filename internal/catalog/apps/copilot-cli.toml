@@ -7,3 +7,29 @@ exclude = ["**/config.json", "**/.env", "**/.env.*", "**/auth.json", "**/.creden
 [[install]]
 method = "brew"
 cask = "copilot-cli"
+
+[[install]]
+method = "npm"
+package = "@github/copilot"
+
+[[install]]
+method = "github-release"
+repo = "github/copilot-cli"
+asset = "copilot-darwin-arm64.tar.gz"
+format = "tar.gz"
+checksums = "SHA256SUMS.txt"
+arch = "arm64"
+extract = [
+  { file = "copilot", dest = ".local/bin/copilot" },
+]
+
+[[install]]
+method = "github-release"
+repo = "github/copilot-cli"
+asset = "copilot-darwin-x64.tar.gz"
+format = "tar.gz"
+checksums = "SHA256SUMS.txt"
+arch = "amd64"
+extract = [
+  { file = "copilot", dest = ".local/bin/copilot" },
+]

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -313,5 +314,77 @@ dest = ".local/bin/bad"
 	}
 	if !strings.Contains(outcome.Entries[0].Err.Error(), "sha256") {
 		t.Fatalf("el error debe nombrar sha256: %v", outcome.Entries[0].Err)
+	}
+}
+
+func TestExecuteAppsCustomizeCopiesBuiltinWithRecipes(t *testing.T) {
+	home := t.TempDir()
+	outcome, err := ExecuteAppsCustomize(home, AppsCustomizeOptions{ID: "codex"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := catalog.EmbeddedSource("codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(outcome.Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) || !strings.Contains(string(got), "[[install]]") {
+		t.Fatalf("the copy must equal the built-in TOML with recipes:\n%s", got)
+	}
+	if outcome.Path != filepath.Join(home, ".config", "kamino", "apps", "codex.toml") {
+		t.Fatalf("unexpected path: %s", outcome.Path)
+	}
+	if !strings.Contains(strings.Join(outcome.Warnings, " "), "reemplaza la definición integrada") {
+		t.Fatalf("missing override warning: %#v", outcome.Warnings)
+	}
+	validated, err := ExecuteAppsValidate(home, "")
+	if err != nil || !validated.Valid {
+		t.Fatalf("the copy must validate: %#v %v", validated, err)
+	}
+}
+
+func TestExecuteAppsCustomizeGuards(t *testing.T) {
+	home := t.TempDir()
+	var missing *catalog.NotBuiltinError
+	if _, err := ExecuteAppsCustomize(home, AppsCustomizeOptions{ID: "noexiste"}); !errors.As(err, &missing) {
+		t.Fatalf("unknown id must return NotBuiltinError, got %v", err)
+	}
+	if _, err := ExecuteAppsCustomize(home, AppsCustomizeOptions{ID: "codex"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ExecuteAppsCustomize(home, AppsCustomizeOptions{ID: "codex"}); err == nil {
+		t.Fatal("an existing file must require force")
+	}
+	if _, err := ExecuteAppsCustomize(home, AppsCustomizeOptions{ID: "codex", Force: true}); err != nil {
+		t.Fatal(err)
+	}
+	other := t.TempDir()
+	dir := filepath.Join(other, ".config", "kamino", "apps")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source, _ := catalog.EmbeddedSource("codex")
+	if err := os.WriteFile(filepath.Join(dir, "otra.toml"), source, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ExecuteAppsCustomize(other, AppsCustomizeOptions{ID: "codex"}); err == nil || !strings.Contains(err.Error(), "otra.toml") {
+		t.Fatalf("a duplicate id in another file must name it: %v", err)
+	}
+}
+
+func TestExecuteAppsCustomizePrintWritesNothing(t *testing.T) {
+	home := t.TempDir()
+	outcome, err := ExecuteAppsCustomize(home, AppsCustomizeOptions{ID: "codex", Print: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outcome.Path != "" || !strings.Contains(outcome.Content, `id = "codex"`) {
+		t.Fatalf("--print must only return content: %#v", outcome)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".config", "kamino", "apps", "codex.toml")); !os.IsNotExist(err) {
+		t.Fatal("--print must not create a file")
 	}
 }

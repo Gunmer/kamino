@@ -254,11 +254,11 @@ func TestInstallCandidatesOnlyListMissingAppsWithRecipes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer session.Close()
-	candidates := session.InstallCandidates("darwin", "arm64")
+	candidates := session.InstallCandidates("darwin", "arm64", &fakeBrew{})
 	if len(candidates) != 1 || candidates[0].AppID != "alpha" {
 		t.Fatalf("alpha debe ofrecerse: %+v", candidates)
 	}
-	if len(session.InstallCandidates("darwin", "amd64")) != 1 {
+	if len(session.InstallCandidates("darwin", "amd64", &fakeBrew{})) != 1 {
 		t.Fatal("la receta sin os/arch aplica en cualquier plataforma")
 	}
 }

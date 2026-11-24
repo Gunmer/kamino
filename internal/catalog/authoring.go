@@ -2,7 +2,9 @@ package catalog
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -59,6 +61,40 @@ func Parse(name string, data []byte) (*AppDefinition, error) {
 // Embedded returns the built-in catalog.
 func Embedded() (Catalog, error) {
 	return loadEmbedded()
+}
+
+// EmbeddedSource returns the raw TOML of the built-in definition with the given
+// id, comments and install recipes included. The lookup uses the declared id,
+// not the file name.
+func EmbeddedSource(id string) ([]byte, error) {
+	entries, err := fs.ReadDir(embeddedFS, "apps")
+	if err != nil {
+		return nil, catalogError("no se pudo leer el catálogo embebido: %v", err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".toml") {
+			continue
+		}
+		data, err := embeddedFS.ReadFile(path.Join("apps", entry.Name()))
+		if err != nil {
+			return nil, catalogError("no se pudo leer %q: %v", entry.Name(), err)
+		}
+		definition, err := parseDefinition(entry.Name(), string(data))
+		if err != nil {
+			return nil, err
+		}
+		if definition.ID == id {
+			return data, nil
+		}
+	}
+	return nil, &NotBuiltinError{ID: id}
+}
+
+// NotBuiltinError means no built-in definition has the requested id.
+type NotBuiltinError struct{ ID string }
+
+func (e *NotBuiltinError) Error() string {
+	return fmt.Sprintf("no hay una app integrada con el id %q", e.ID)
 }
 
 // InspectFile parses one definition and reports its warnings without aborting.

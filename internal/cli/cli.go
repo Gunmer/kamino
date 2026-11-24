@@ -12,6 +12,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/Gunmer/kamino/internal/app"
+	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/clone"
 	kerrors "github.com/Gunmer/kamino/internal/errors"
 	"github.com/Gunmer/kamino/internal/paths"
@@ -22,16 +23,17 @@ import (
 )
 
 var (
-	executeClone        = app.ExecuteClone
-	executeImplant      = app.ExecuteImplant
-	executeUpdate       = app.ExecuteUpdate
-	executeAppsList     = app.ExecuteAppsList
-	executeAppsValidate = app.ExecuteAppsValidate
-	executeAppsNew      = app.ExecuteAppsNew
-	runMenu             = tui.RunMenu
-	runCloneFlow        = tui.RunCloneFlow
-	runImplantFlow      = tui.RunImplantFlow
-	runUpdateFlow       = tui.RunUpdateFlow
+	executeClone         = app.ExecuteClone
+	executeImplant       = app.ExecuteImplant
+	executeUpdate        = app.ExecuteUpdate
+	executeAppsList      = app.ExecuteAppsList
+	executeAppsValidate  = app.ExecuteAppsValidate
+	executeAppsNew       = app.ExecuteAppsNew
+	executeAppsCustomize = app.ExecuteAppsCustomize
+	runMenu              = tui.RunMenu
+	runCloneFlow         = tui.RunCloneFlow
+	runImplantFlow       = tui.RunImplantFlow
+	runUpdateFlow        = tui.RunUpdateFlow
 )
 
 // Options controls one CLI invocation.
@@ -341,6 +343,8 @@ func runAppsCommand(args []string, options Options) int {
 		return runAppsValidateCommand(args[1:], options)
 	case "new":
 		return runAppsNewCommand(args[1:], options)
+	case "customize":
+		return runAppsCustomizeCommand(args[1:], options)
 	default:
 		fmt.Fprintf(options.Stderr, "Error: comando desconocido %q.\n", args[0])
 		printAppsHelp(options.Stderr)
@@ -489,6 +493,47 @@ func runAppsNewCommand(args []string, options Options) int {
 	return 0
 }
 
+func runAppsCustomizeCommand(args []string, options Options) int {
+	flags, err := parseFlags(args, nil, map[string]string{"--force": "force", "--print": "print"})
+	if err != nil {
+		fmt.Fprintln(options.Stderr, "Error: "+err.Error())
+		return 2
+	}
+	if flags.help {
+		printAppsCustomizeHelp(options.Stdout)
+		return 0
+	}
+	if len(flags.positionals) != 1 {
+		fmt.Fprintln(options.Stderr, "Error: falta el argumento 'ID'.")
+		return 2
+	}
+	outcome, err := executeAppsCustomize("", app.AppsCustomizeOptions{
+		ID: flags.positionals[0], Force: flags.booleans["force"], Print: flags.booleans["print"],
+	})
+	if err != nil {
+		var missing *catalog.NotBuiltinError
+		if errors.As(err, &missing) {
+			fmt.Fprintln(options.Stderr, "Error: "+err.Error()+". Consulta 'kamino apps list'.")
+			return 2
+		}
+		fmt.Fprintln(options.Stderr, err.Error())
+		return 1
+	}
+	if flags.booleans["print"] {
+		fmt.Fprint(options.Stdout, outcome.Content)
+		return 0
+	}
+	if outcome.ConfigError != nil {
+		printAppsConfigWarning(outcome.ConfigError, outcome.Directory, options.Stderr)
+	}
+	for _, warning := range outcome.Warnings {
+		fmt.Fprintln(options.Stderr, "aviso: "+warning)
+	}
+	fmt.Fprintf(options.Stdout, "creado %s\n", outcome.Path)
+	fmt.Fprintf(options.Stdout, "siguiente: edita el archivo y ejecuta kamino apps validate %s\n", outcome.Path)
+	return 0
+}
+
 func printAppsConfigWarning(err error, directory string, writer io.Writer) {
 	if err == nil {
 		return
@@ -603,6 +648,7 @@ func printAppsHelp(w io.Writer) {
 	fmt.Fprintln(w, "  list      Muestra el catálogo integrado y el del usuario.")
 	fmt.Fprintln(w, "  validate  Valida un archivo, un directorio o el catálogo del usuario.")
 	fmt.Fprintln(w, "  new       Crea una definición TOML nueva.")
+	fmt.Fprintln(w, "  customize Copia una app integrada al catálogo del usuario para editarla.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Options:")
 	fmt.Fprintln(w, "  --help, -h  Muestra esta ayuda y termina.")
@@ -622,6 +668,7 @@ func printAppsValidateHelp(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "  Valida un archivo, un directorio o el catálogo del usuario.")
 	fmt.Fprintln(w, "  Sale con código 1 si hay errores.")
+	fmt.Fprintln(w, "  Las recetas [[install]] admiten los métodos brew, npm, installer, binary y github-release.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Options:")
 	fmt.Fprintln(w, "  --help, -h  Muestra esta ayuda y termina.")
@@ -642,6 +689,19 @@ func printAppsNewHelp(w io.Writer) {
 	fmt.Fprintln(w, "  --force                Reemplaza <id>.toml si ya existe.")
 	fmt.Fprintln(w, "  --print                Escribe el TOML en stdout sin crear archivos.")
 	fmt.Fprintln(w, "  --help, -h             Muestra esta ayuda y termina.")
+}
+
+func printAppsCustomizeHelp(w io.Writer) {
+	fmt.Fprintln(w, "Usage: kamino apps customize [OPTIONS] ID")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "  Copia la definición integrada de ID al catálogo del usuario como <id>.toml,")
+	fmt.Fprintln(w, "  recetas de instalación incluidas, para que la edites. La copia reemplaza a la")
+	fmt.Fprintln(w, "  integrada y no recibe los cambios futuros del catálogo integrado.")
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "Options:")
+	fmt.Fprintln(w, "  --force      Reemplaza <id>.toml si ya existe.")
+	fmt.Fprintln(w, "  --print      Escribe el TOML en stdout sin crear archivos.")
+	fmt.Fprintln(w, "  --help, -h   Muestra esta ayuda y termina.")
 }
 
 func completionScript(shell string) string {

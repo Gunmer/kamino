@@ -1,16 +1,16 @@
 kamino · Configuración
 [2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 
-                  [1mConfiguración[0m
-                  [2mEl catálogo y el límite de holocrones también los aplica la CLI.[0m
+          [1mConfiguración[0m
+          [2mEl catálogo y el límite de holocrones también los aplica la CLI.[0m
   
-                  [36;100m▌ [0m[1;100mCatálogo  [0m[36;100m  [0m[7;36;100m [0m[36;100mRuta absoluta o que empiece por ~[0m
-                    [2mClones    [0m  [2mRuta absoluta o que empiece por ~[0m
-                    [2mHolocrones[0m  [2mRuta absoluta o que empiece por ~[0m
-                    [2mLímite    [0m  [2m[0m
+          [36;100m▌ [0m[1;100mCatálogo        [0m[36;100m  [0m[7;36;100m [0m[36;100mRuta absoluta o que empiece por ~[0m
+            [2mClones          [0m  [2mRuta absoluta o que empiece por ~[0m
+            [2mHolocrones      [0m  [2mRuta absoluta o que empiece por ~[0m
+            [2mLímite          [0m  [2m[0m
   
-                    Añadir app  [2mCrea una definición TOML en el catálogo del usuario.[0m
-  
+            Añadir app        [2mCrea una definición TOML en el catálogo del usuario.[0m
+            Personalizar app  [2mCopia una app integrada al catálogo del usuario para editarla.[0m
   
   
   

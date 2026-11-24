@@ -86,6 +86,7 @@ kamino · Configuración
     Límite      5
 
     Añadir app  Crea una definición TOML en el catálogo del usuario.
+    Personalizar app  Copia una app integrada al catálogo del usuario para editarla.
 
 --------------------------------------------------------------------------------
 Tab/Mayús+Tab mover  Ctrl+S guardar  Esc volver  ←→ cursor  F1/? ayuda
@@ -110,9 +111,10 @@ Notas:
   defaults, muestra un `ERROR` en la zona de mensajes y marca el campo afectado
   sin desplazar las filas.
 - El aviso «Configuración guardada» va en la zona de mensajes como `INFO`.
-- Después de los cuatro campos hay una acción «Añadir app». `Tab`/`Mayús+Tab` y
-  las flechas verticales la alcanzan; `Enter` abre la pantalla de autoría y `Esc`
-  vuelve al menú. La acción no se edita como un campo y `Enter` no guarda.
+- Después de los cuatro campos hay dos acciones: «Añadir app» y «Personalizar app».
+  `Tab`/`Mayús+Tab` y las flechas verticales las alcanzan; `Enter` abre la pantalla
+  de autoría o el selector (A1b) y `Esc` vuelve al menú. Las acciones no se editan
+  como un campo y `Enter` no guarda.
 - Guardar un `catalog.dir` distinto descarta el catálogo en memoria; el siguiente
   flujo lo carga desde la ruta nueva sin reiniciar.
 - `?` y `F1` abren la ayuda desde un campo sin insertar caracteres.
@@ -247,4 +249,13 @@ Notas:
 - La pantalla de éxito muestra la ruta creada y si la app se detectó. Si no se
   detectó, se avisa de que aparecerá en Clonar cuando esté instalada.
 - `Esc` antes de editar no crea archivos; `Esc` con un borrador lo elimina.
+
+### 4.17b A1b · Personalizar app
+
+Lista las apps integradas (ordenadas por id). `↑`/`↓` mueven el cursor, `Enter`
+elige una y `Esc` vuelve a Configuración sin crear nada. Al elegir, se abre A1 con
+el borrador relleno con el TOML integrado completo (recetas incluidas); el resto
+del flujo (editar, validar, confirmar el reemplazo, guardar o descartar) es el de A1.
+La copia reemplaza a la integrada y no recibe sus cambios futuros, y la pantalla lo
+indica.
 

@@ -18,7 +18,9 @@ const (
 	fieldCount = pathFieldCount + 1
 	// authoringRow is the action row after the editable fields.
 	authoringRow = fieldCount
-	rowCount     = fieldCount + 1
+	// customizeRow follows the authoring row.
+	customizeRow = fieldCount + 1
+	rowCount     = fieldCount + 2
 )
 
 type settingsScreen struct {
@@ -74,7 +76,7 @@ func (s *settingsScreen) Title() string       { return texts.FlowSettings }
 func (s *settingsScreen) Step() (int, int)    { return 0, 0 }
 func (s *settingsScreen) Messages() []Message { return s.messages }
 func (s *settingsScreen) Keys() []key.Binding {
-	if s.focus == authoringRow {
+	if s.focus >= authoringRow {
 		return settingsAuthoringKeys()
 	}
 	return settingsKeys(len([]rune(s.fields[s.focus].Value)))
@@ -95,8 +97,11 @@ func (s *settingsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	case "ctrl+s":
 		s.save()
 	case "enter":
-		if s.focus == authoringRow {
+		switch s.focus {
+		case authoringRow:
 			return s, func() tea.Msg { return startAuthoringMsg{} }
+		case customizeRow:
+			return s, pushScreen(newCustomizeSelectScreen(s.app))
 		}
 	case "left":
 		if s.focus < fieldCount {
@@ -179,11 +184,11 @@ func (s *settingsScreen) View(width, height int) string {
 		"  " + s.app.theme.Styles.Tertiary.Render(texts.SettingsSubtitleTUI),
 		"",
 	}
-	labels := make([]string, 0, fieldCount+1)
+	labels := make([]string, 0, fieldCount+2)
 	for index := range s.fields {
 		labels = append(labels, s.fields[index].Label)
 	}
-	labels = append(labels, texts.SettingsAddApp)
+	labels = append(labels, texts.SettingsAddApp, texts.SettingsCustomizeApp)
 	options := fieldOptions{
 		Width:      max(1, width-2),
 		LabelWidth: fieldLabelWidth(s.app.theme, labels...),
@@ -192,15 +197,17 @@ func (s *settingsScreen) View(width, height int) string {
 		options.Focused = index == s.focus
 		lines = append(lines, "  "+s.fields[index].Render(s.app.theme, options))
 	}
-	lines = append(lines, "", "  "+s.renderAuthoringRow(options))
+	lines = append(lines, "",
+		"  "+s.renderActionRow(authoringRow, texts.SettingsAddApp, texts.SettingsAddAppHelp, options),
+		"  "+s.renderActionRow(customizeRow, texts.SettingsCustomizeApp, texts.SettingsCustomizeHelp, options))
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
 }
 
-func (s *settingsScreen) renderAuthoringRow(options fieldOptions) string {
+func (s *settingsScreen) renderActionRow(row int, labelText, helpText string, options fieldOptions) string {
 	marker := "  "
 	labelStyle := s.app.theme.Styles.Secondary
 	valueStyle := s.app.theme.Styles.Tertiary
-	if s.focus == authoringRow {
+	if s.focus == row {
 		marker = s.app.theme.Symbols.Cursor + " "
 		labelStyle = s.app.theme.Styles.Primary
 		valueStyle = s.app.theme.Styles.Secondary
@@ -212,11 +219,11 @@ func (s *settingsScreen) renderAuthoringRow(options fieldOptions) string {
 	if labelWidth < 0 {
 		labelWidth = 0
 	}
-	label := PadRight(fieldTruncate(texts.SettingsAddApp, labelWidth, s.app.theme.Symbols.Ellipsis), labelWidth)
+	label := PadRight(fieldTruncate(labelText, labelWidth, s.app.theme.Symbols.Ellipsis), labelWidth)
 	valueWidth := options.Width - Width(marker) - labelWidth - Width(fieldGap)
 	if valueWidth < 1 {
 		valueWidth = 1
 	}
-	value := fieldTruncate(texts.SettingsAddAppHelp, valueWidth, s.app.theme.Symbols.Ellipsis)
+	value := fieldTruncate(helpText, valueWidth, s.app.theme.Symbols.Ellipsis)
 	return marker + labelStyle.Render(label) + fieldGap + valueStyle.Render(value)
 }

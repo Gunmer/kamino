@@ -3,17 +3,17 @@ kamino · Implantar · Apps                                                     
 
                       [1mElige las apps que quieres implantar[0m
   
-                      SEL  APP                                          ARCHIVOS
+                      SEL  APP                            ESTADO        ARCHIVOS
                       [2m────────────────────────────────────────────────────────[0m
-                    [1m▌ [ ]  herdr                                              12[0m
-                      [ ]  ghostty                                             8
-                      [ ]  git                                                 4
-                      [ ]  zsh                                                 3
-                      [ ]  vscode                                              0
-                      [ ]  atuin                                               6
-                      [ ]  starship                                            2
-  
-                      Sin base en este Mac: iterm2, yazi
+                    [1m▌ [ ]  herdr                          Instalada           12[0m
+                      [ ]  ghostty                        Instalada            8
+                      [ ]  git                            Instalada            4
+                      [ ]  zsh                            Instalada            3
+                      [ ]  vscode                         Instalada            0
+                      [ ]  atuin                          Instalada            6
+                      [ ]  starship                       Instalada            2
+                      [ ]  iterm2                         No instalada         2
+                      [-]  yazi                           No instalada         1
   
   
   

@@ -42,6 +42,7 @@ a 76; en 140+ sube a 120.
 | U1       | `kamino · Actualización`       | no      | sí     | self-update      |
 | Settings | `kamino · Configuración`       | no      | sí     | user-configuration |
 | A1       | `kamino · Configuración · Añadir app` | no | sí    | app-authoring    |
+| A1b      | `kamino · Configuración · Personalizar app` | no | sí | app-authoring |
 | Help     | `kamino · <Flujo> · Ayuda`     | sí      | no     | tui-navigation   |
 | Error    | `kamino · Error`               | no      | no     | tui-navigation   |
 | Small    | `kamino · Aviso`               | no      | sí     | tui-navigation   |

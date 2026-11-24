@@ -98,11 +98,14 @@ func TestImplantPreparedMessageBuildsApps(t *testing.T) {
 		Warnings:         []string{"aviso"},
 	}
 	send(t, app, implantPreparedMsg{session: session})
-	if screen.preparing || len(screen.apps) != 1 {
+	if screen.preparing || len(screen.apps) != 2 {
 		t.Fatalf("prepared message not applied: %#v", screen)
 	}
 	if !screen.apps[0].Selected || screen.apps[0].Count != 3 {
 		t.Fatalf("requested app must be preselected: %#v", screen.apps[0])
+	}
+	if missing := screen.apps[1]; missing.ID != "yazi" || missing.Detected || missing.Installable || missing.Selected {
+		t.Fatalf("an app without recipe is listed as missing and not selectable: %#v", missing)
 	}
 	if len(screen.messages) == 0 {
 		t.Fatal("close-apps warning missing")

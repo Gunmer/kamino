@@ -10,5 +10,29 @@ method = "brew"
 cask = "codex"
 
 [[install]]
+method = "npm"
+package = "@openai/codex"
+
+[[install]]
 method = "installer"
 url = "https://chatgpt.com/codex/install.sh"
+
+[[install]]
+method = "github-release"
+repo = "openai/codex"
+asset = "codex-aarch64-apple-darwin.tar.gz"
+format = "tar.gz"
+arch = "arm64"
+extract = [
+  { file = "codex-aarch64-apple-darwin", dest = ".local/bin/codex" },
+]
+
+[[install]]
+method = "github-release"
+repo = "openai/codex"
+asset = "codex-x86_64-apple-darwin.tar.gz"
+format = "tar.gz"
+arch = "amd64"
+extract = [
+  { file = "codex-x86_64-apple-darwin", dest = ".local/bin/codex" },
+]

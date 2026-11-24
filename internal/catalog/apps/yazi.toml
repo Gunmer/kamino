@@ -7,3 +7,25 @@ exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/s
 [[install]]
 method = "brew"
 formula = "yazi"
+
+[[install]]
+method = "github-release"
+repo = "sxyazi/yazi"
+asset = "yazi-aarch64-apple-darwin.zip"
+format = "zip"
+arch = "arm64"
+extract = [
+  { file = "yazi-aarch64-apple-darwin/yazi", dest = ".local/bin/yazi" },
+  { file = "yazi-aarch64-apple-darwin/ya", dest = ".local/bin/ya" },
+]
+
+[[install]]
+method = "github-release"
+repo = "sxyazi/yazi"
+asset = "yazi-x86_64-apple-darwin.zip"
+format = "zip"
+arch = "amd64"
+extract = [
+  { file = "yazi-x86_64-apple-darwin/yazi", dest = ".local/bin/yazi" },
+  { file = "yazi-x86_64-apple-darwin/ya", dest = ".local/bin/ya" },
+]

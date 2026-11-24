@@ -64,15 +64,15 @@ kamino · Implantar · Apps                                    Paso 2 de 4   * *
 
   Elige las apps que quieres implantar
 
-  SEL  APP                     ARCHIVOS
+  SEL  APP                     ESTADO        ARCHIVOS
   --------------------------------------------------------------------------
-  > [ ] herdr                       12
-    [ ] ghostty                      8
-    [ ] git                          4
-    [ ] bat                          3
+  > [ ] herdr                  Instalada           12
+    [ ] ghostty                Instalada            8
+    [ ] git                    Instalada            4
+    [ ] claude-code            No instalada         3
+    [-] yazi                   No instalada         1
 
   ^ 0 arriba   v 2 abajo
-  Sin base en este Mac: claude-code, yazi
 
 AVISO  Cierra las apps antes de continuar: pueden sobrescribir los cambios al cerrarse.
 --------------------------------------------------------------------------------
@@ -91,14 +91,15 @@ Variante: preparación.
 Notas:
 
 - Ninguna app empieza marcada.
+- D1 lista todas las apps del clon con su estado: `Instalada` o `No instalada`. Una app no instalada se puede marcar si su definición tiene una receta aplicable a este Mac; marcarla significa «instalar e implantar». Sin receta, la casilla es `[-]` y no se puede marcar.
 - El aviso de cerrar apps va en la zona de mensajes, no en el body.
-- Las apps no instaladas son informativas y no cuentan como omitidas.
+- Las apps no instaladas que no se marcan quedan como «Sin base en este Mac» y no cuentan como omitidas.
 - La preparación es cancelable y limpia el staging si se cancela.
 - Un checksum fallido vuelve a D0 sin escribir.
 
 #### 4.7.1 D1 · Pregunta de instalación
 
-Aparece al pulsar Enter en D1 solo si alguna app ausente tiene una receta aplicable a este Mac. Si no hay ninguna, D1 pasa directamente al plan.
+Aparece al pulsar Enter en D1 solo si hay marcada alguna app no instalada. Es una confirmación: lista únicamente esas apps, marcadas, y bajo cada una todas las vías con las que se puede instalar en este Mac (las recetas cuya herramienta está disponible, en el orden del catálogo). La primera viene elegida. Si no hay ninguna marcada, D1 pasa directamente al plan.
 
 ```text
 kamino · Implantar · Apps                                    Paso 2 de 4   * * o o
@@ -106,21 +107,26 @@ kamino · Implantar · Apps                                    Paso 2 de 4   * *
 
   Elige las apps que quieres implantar
 
-  ¿Instalar las apps ausentes que tienen receta para este Mac?
-  Marca las que quieras instalar. Las no marcadas quedan como «Sin base en este Mac».
+  Estas apps no están instaladas en este Mac. ¿Instalarlas antes de implantar?
+  Desmarca las que no quieras instalar: quedarán como «Sin base en este Mac».
 
-  > [x] iTerm2  brew
-    [ ] yazi  installer · desde https://example.com/yazi.sh
+  > [x] iTerm2
+        (•) brew
+    [x] yazi
+        ( ) brew
+        (•) installer · desde https://example.com/yazi.sh
+        ( ) github-release · desde https://github.com/sxyazi/yazi/releases · sin verificación de suma
 
-AVISO  ¿Instalar las apps ausentes que tienen receta para este Mac?
+AVISO  Estas apps no están instaladas en este Mac. ¿Instalarlas antes de implantar?
 --------------------------------------------------------------------------------
 ^v mover  Espacio marcar  a/n todas/ninguna  Enter continuar  Esc volver  ? ayuda
 ```
 
 Notas:
 
-- Ninguna receta se marca por defecto. Rechazar una o todas no cancela la implantación: las no marcadas quedan como «Sin base en este Mac».
-- El método se muestra siempre. Para `installer`, la URL exacta que se descargará.
+- `Espacio` sobre una app la marca o desmarca; sobre una vía la elige y marca la app. La vía elegida debe pertenecer a la definición del catálogo: el clon nunca aporta recetas.
+- Las apps llegan marcadas desde D1. Desmarcar una o todas no cancela la implantación: las no marcadas quedan como «Sin base en este Mac». Si no queda nada que implantar, vuelve a D1 con el aviso de selección.
+- Cada vía muestra su método. Para `installer` y `github-release`, el origen exacto; sin suma de verificación, también «sin verificación de suma».
 - Esc vuelve a la elección de apps sin perder la selección.
 - Al confirmar, la instalación se ejecuta durante la planificación, después de verificar el archivo y antes de clasificar los archivos y crear la instantánea.
 
