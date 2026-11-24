@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -407,6 +408,15 @@ func (s *implantAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 				Count: len(item.Files),
 			})
 		}
+		installable := map[string]bool{}
+		for _, candidate := range value.session.InstallCandidates(runtime.GOOS, runtime.GOARCH, s.app.installRunner) {
+			installable[candidate.AppID] = true
+		}
+		for _, item := range value.session.NotInstalledApps {
+			s.apps = append(s.apps, appChoice{
+				ID: item.ID, Name: item.Name, Installable: installable[item.ID], Count: len(item.Files),
+			})
+		}
 		s.messages = append(s.messages, Message{Kind: MessageWarning, Text: texts.D1CloseApps})
 		for _, warning := range value.session.Warnings {
 			s.messages = append(s.messages, Message{Kind: MessageWarning, Text: warning})
@@ -417,7 +427,7 @@ func (s *implantAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		if s.skipSelection {
 			selected := make([]string, 0, len(s.apps))
 			for _, choice := range s.apps {
-				if choice.Selected {
+				if choice.Selected && choice.Detected {
 					selected = append(selected, choice.ID)
 				}
 			}
@@ -469,11 +479,12 @@ func (s *implantAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		}
 	case " ":
 		if len(s.apps) > 0 {
-			s.apps[s.index%len(s.apps)].Selected = !s.apps[s.index%len(s.apps)].Selected
+			choice := &s.apps[s.index%len(s.apps)]
+			choice.Selected = choice.selectable() && !choice.Selected
 		}
 	case "a":
 		for index := range s.apps {
-			s.apps[index].Selected = true
+			s.apps[index].Selected = s.apps[index].selectable()
 		}
 	case "n":
 		for index := range s.apps {
@@ -483,19 +494,25 @@ func (s *implantAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		return s, popScreen()
 	case "enter":
 		selected := make([]string, 0)
+		missing := make([]string, 0)
 		for _, choice := range s.apps {
-			if choice.Selected {
+			switch {
+			case !choice.Selected:
+			case choice.Detected:
 				selected = append(selected, choice.ID)
+			default:
+				missing = append(missing, choice.ID)
 			}
 		}
-		if len(selected) == 0 {
+		if len(selected) == 0 && len(missing) == 0 {
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.D1NoneSelected}}
 			return s, nil
 		}
 		if s.app.implantSession == nil {
 			return s, nil
 		}
-		if s.beginInstallQuestion(selected) {
+		// Marked missing apps are confirmed before anything is installed.
+		if s.beginInstallQuestion(selected, missing) {
 			return s, nil
 		}
 		s.planning = true
@@ -560,11 +577,11 @@ func (s *implantAppsScreen) View(width, height int) string {
 	if widthTable > 60 {
 		widthTable = 60
 	}
-	appWidth := widthTable - 17
+	appWidth := widthTable - 17 - stateWidth - 2
 	if appWidth < 10 {
 		appWidth = 10
 	}
-	lines = append(lines, "  "+PadRight(texts.D1ColumnSelect, 3)+"  "+PadRight(texts.D1ColumnApp, appWidth)+"  "+PadLeft(texts.D1ColumnFiles, 8))
+	lines = append(lines, "  "+PadRight(texts.D1ColumnSelect, 3)+"  "+PadRight(texts.D1ColumnApp, appWidth)+"  "+PadRight(texts.D1ColumnState, stateWidth)+"  "+PadLeft(texts.D1ColumnFiles, 8))
 	lines = append(lines, "  "+s.app.theme.Styles.Tertiary.Render(strings.Repeat(s.app.theme.Symbols.Separator, max(0, widthTable-4))))
 	maxRows := height - 7
 	if maxRows < 3 {
@@ -583,10 +600,17 @@ func (s *implantAppsScreen) View(width, height int) string {
 			style = s.app.theme.Styles.Primary
 		}
 		checkbox := "[ ]"
-		if choice.Selected {
+		state := texts.D1StateInstalled
+		switch {
+		case choice.Selected:
 			checkbox = "[x]"
+		case !choice.selectable():
+			checkbox = "[-]"
 		}
-		line := cursor + checkbox + "  " + PadRight(Truncate(choice.Name, appWidth, s.app.theme.Symbols.Ellipsis), appWidth) + "  " + PadLeft(fmt.Sprintf("%d", choice.Count), 8)
+		if !choice.Detected {
+			state = texts.D1StateMissing
+		}
+		line := cursor + checkbox + "  " + PadRight(Truncate(choice.Name, appWidth, s.app.theme.Symbols.Ellipsis), appWidth) + "  " + PadRight(state, stateWidth) + "  " + PadLeft(fmt.Sprintf("%d", choice.Count), 8)
 		lines = append(lines, style.Render(line))
 	}
 	if end < len(s.apps) {
@@ -594,16 +618,6 @@ func (s *implantAppsScreen) View(width, height int) string {
 	}
 	if len(s.apps) == 0 {
 		lines = append(lines, "  "+s.app.theme.Styles.Tertiary.Render(texts.D1NoApps))
-	}
-	var notInstalled []string
-	if s.app.implantSession != nil {
-		for _, item := range s.app.implantSession.NotInstalledApps {
-			notInstalled = append(notInstalled, item.Name)
-		}
-	}
-	lines = append(lines, "")
-	if len(notInstalled) > 0 {
-		lines = append(lines, "  "+strings.ReplaceAll(texts.D1NoBase, "{apps}", strings.Join(notInstalled, ", ")))
 	}
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
 }

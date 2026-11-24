@@ -9,5 +9,31 @@ method = "brew"
 formula = "openspec"
 
 [[install]]
+method = "npm"
+package = "@fission-ai/openspec"
+
+[[install]]
 method = "installer"
 url = "https://openspec.dev/cli/install.sh"
+
+[[install]]
+method = "github-release"
+repo = "Fission-AI/OpenSpec"
+asset = "openspec-darwin-arm64.tar.gz"
+format = "tar.gz"
+checksums = "SHA256SUMS"
+arch = "arm64"
+extract = [
+  { file = "openspec", dest = ".local/bin/openspec" },
+]
+
+[[install]]
+method = "github-release"
+repo = "Fission-AI/OpenSpec"
+asset = "openspec-darwin-x64.tar.gz"
+format = "tar.gz"
+checksums = "SHA256SUMS"
+arch = "amd64"
+extract = [
+  { file = "openspec", dest = ".local/bin/openspec" },
+]

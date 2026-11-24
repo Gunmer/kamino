@@ -120,7 +120,7 @@ func ExecuteImplant(ctx context.Context, cloneFile string, requested *[]string, 
 	}
 	if installMissing {
 		installIDs := make([]string, 0)
-		for _, candidate := range session.InstallCandidates(runtime.GOOS, runtime.GOARCH) {
+		for _, candidate := range session.InstallCandidates(runtime.GOOS, runtime.GOARCH, install.ExecRunner{}) {
 			if requested != nil && !containsID(*requested, candidate.AppID) {
 				continue
 			}

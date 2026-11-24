@@ -160,7 +160,11 @@ func printInstalls(w io.Writer, outcomes []implant.InstallOutcome) {
 			if outcome.URL != "" {
 				url = " desde " + outcome.URL
 			}
-			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method, "{url}", url).Replace(texts.ImplantInstallPlanned))
+			line := strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method, "{url}", url).Replace(texts.ImplantInstallPlanned)
+			if outcome.Unverified {
+				line += texts.ImplantInstallUnverified
+			}
+			fmt.Fprintln(w, "  "+line)
 		case implant.InstallDone:
 			fmt.Fprintln(w, "  "+strings.NewReplacer("{app}", outcome.AppID, "{method}", outcome.Method).Replace(texts.ImplantInstallDone))
 		case implant.InstallFailed:

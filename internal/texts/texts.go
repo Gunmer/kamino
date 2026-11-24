@@ -196,6 +196,7 @@ const (
 	ImplantHybrids           = "Híbridos: {count}"
 	ImplantOmitted           = "Omitidos: {count}"
 	ImplantInstallPlanned    = "Se instalaría: {app} con {method}{url}"
+	ImplantInstallUnverified = " (sin verificación de suma: solo HTTPS y origen GitHub)"
 	ImplantInstallDone       = "Instalada: {app} con {method}"
 	ImplantInstallFailed     = "No instalada: {app} ({reason})"
 	ImplantInstallTitle      = "Instalaciones"

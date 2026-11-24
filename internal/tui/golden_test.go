@@ -301,6 +301,10 @@ func goldenD1() goldenCase {
 			for index := range apps {
 				apps[index].Selected = false
 			}
+			apps = append(apps,
+				appChoice{ID: "iterm2", Name: "iterm2", Installable: true, Count: 2},
+				appChoice{ID: "yazi", Name: "yazi", Count: 1},
+			)
 			return &implantAppsScreen{
 				screenBase: screenBase{app: app}, apps: apps,
 				messages: []Message{{Kind: MessageWarning, Text: texts.D1CloseApps}},
@@ -316,8 +320,14 @@ func goldenD1Install() goldenCase {
 			return &implantAppsScreen{
 				screenBase: screenBase{app: app}, installing: true,
 				installChoices: []installChoice{
-					{AppID: "iterm2", Name: "iTerm2", Recipe: install.Recipe{Method: install.MethodBrew, Cask: "iterm2"}, Selected: true},
-					{AppID: "yazi", Name: "yazi", Recipe: install.Recipe{Method: install.MethodInstaller, URL: "https://example.com/yazi.sh"}},
+					{AppID: "iterm2", Name: "iTerm2", Selected: true, Recipes: []install.Recipe{
+						{Method: install.MethodBrew, Cask: "iterm2"},
+					}},
+					{AppID: "yazi", Name: "yazi", Selected: true, Option: 1, Recipes: []install.Recipe{
+						{Method: install.MethodBrew, Formula: "yazi"},
+						{Method: install.MethodInstaller, URL: "https://example.com/yazi.sh"},
+						{Method: install.MethodGithubRelease, Repo: "sxyazi/yazi"},
+					}},
 				},
 				messages: []Message{{Kind: MessageWarning, Text: texts.D1InstallQ}},
 			}

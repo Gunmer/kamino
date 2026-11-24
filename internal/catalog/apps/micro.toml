@@ -7,3 +7,25 @@ exclude = ["**/backups", "**/backups/**", "**/buffers", "**/buffers/**", "**/.en
 [[install]]
 method = "brew"
 formula = "micro"
+
+[[install]]
+method = "github-release"
+repo = "micro-editor/micro"
+asset = "micro-{version}-macos-arm64.tar.gz"
+format = "tar.gz"
+checksums = "micro-{version}-macos-arm64.tar.gz.sha"
+arch = "arm64"
+extract = [
+  { file = "micro-{version}/micro", dest = ".local/bin/micro" },
+]
+
+[[install]]
+method = "github-release"
+repo = "micro-editor/micro"
+asset = "micro-{version}-osx.tar.gz"
+format = "tar.gz"
+checksums = "micro-{version}-osx.tar.gz.sha"
+arch = "amd64"
+extract = [
+  { file = "micro-{version}/micro", dest = ".local/bin/micro" },
+]

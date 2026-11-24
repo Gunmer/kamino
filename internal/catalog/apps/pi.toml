@@ -5,5 +5,9 @@ optional_paths = [".pi/agent/settings.json", ".pi/agent/keybindings.json", ".pi/
 exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/secrets.yaml", "**/secrets.yml", "**/hosts.yml", "**/*.log", "**/logs", "**/logs/**", "**/sessions", "**/sessions/**", "**/history", "**/history/**", "**/*history*", "**/.cache", "**/.cache/**", "**/.git", "**/.git/**"]
 
 [[install]]
+method = "npm"
+package = "@mariozechner/pi-coding-agent"
+
+[[install]]
 method = "installer"
 url = "https://pi.dev/install.sh"

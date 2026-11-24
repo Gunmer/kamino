@@ -31,6 +31,12 @@ func (r *noToolRunner) Run(context.Context, string, ...string) ([]byte, error) {
 // installableSession prepares a real implant session in which the app "demo" is
 // missing and has an installer recipe from the catalog.
 func installableSession(t *testing.T) (*implant.ImplantSession, string) {
+	return installableSessionWith(t, []install.Recipe{
+		{Method: install.MethodInstaller, URL: "https://example.com/demo-install.sh"},
+	})
+}
+
+func installableSessionWith(t *testing.T, recipes []install.Recipe) (*implant.ImplantSession, string) {
 	t.Helper()
 	sourceHome := t.TempDir()
 	home := t.TempDir()
@@ -56,9 +62,7 @@ func installableSession(t *testing.T) (*implant.ImplantSession, string) {
 	command := "kamino-demo"
 	definitions := catalog.Catalog{"demo": {
 		ID: "demo", Name: "Demo", Command: &command, Paths: []string{".config/demo/config"},
-		Install: []install.Recipe{
-			{Method: install.MethodInstaller, URL: "https://example.com/demo-install.sh"},
-		},
+		Install: recipes,
 	}}
 	session, err := implant.PrepareImplant(cloneFile, implant.Options{Home: home, Catalog: definitions, Path: bin, SnapshotsDir: t.TempDir()})
 	if err != nil {
@@ -75,7 +79,7 @@ func installTestScreen(t *testing.T) (*App, *implantAppsScreen, *noToolRunner) {
 	runner := &noToolRunner{}
 	app.installRunner = runner
 	app.implantSession = session
-	apps := []appChoice{{ID: "demo", Name: "Demo", Selected: true, Count: 1}}
+	apps := []appChoice{{ID: "demo", Name: "Demo", Installable: true, Selected: true, Count: 1}}
 	screen := &implantAppsScreen{screenBase: screenBase{app: app}, apps: apps}
 	app.begin(screen)
 	return app, screen, runner
@@ -95,13 +99,28 @@ func TestInstallQuestionAppearsBeforePlanWhenAppHasRecipe(t *testing.T) {
 
 func TestInstallQuestionDeclineKeepsImplantGoing(t *testing.T) {
 	app, screen, runner := installTestScreen(t)
+	screen.apps = append(screen.apps, appChoice{ID: "other", Name: "Other", Detected: true, Selected: true, Count: 1})
 	send(t, app, keyMsg("enter"))
+	send(t, app, keyMsg("n"))
 	send(t, app, keyMsg("enter"))
 	if screen.installing || !screen.planning {
 		t.Fatalf("rechazar todas las instalaciones debe seguir con el plan: installing=%v planning=%v", screen.installing, screen.planning)
 	}
 	if runner.runs != 0 {
 		t.Fatal("rechazar no debe ejecutar nada")
+	}
+}
+
+func TestInstallQuestionDeclineWithNothingElseWarns(t *testing.T) {
+	app, screen, _ := installTestScreen(t)
+	send(t, app, keyMsg("enter"))
+	send(t, app, keyMsg("n"))
+	send(t, app, keyMsg("enter"))
+	if screen.planning || screen.installing {
+		t.Fatal("sin apps que implantar no debe iniciarse un plan vacío")
+	}
+	if len(screen.messages) == 0 || screen.messages[0].Text != texts.D1NoneSelected {
+		t.Fatalf("debe avisar de que no hay nada seleccionado: %v", screen.messages)
 	}
 }
 
@@ -120,9 +139,13 @@ func TestInstallQuestionEscReturnsWithoutCancelling(t *testing.T) {
 func TestInstallQuestionSpaceMarksAndConfirmStartsPlan(t *testing.T) {
 	app, screen, _ := installTestScreen(t)
 	send(t, app, keyMsg("enter"))
+	if !screen.installChoices[0].Selected {
+		t.Fatal("las apps marcadas en D1 llegan marcadas a la confirmación")
+	}
+	send(t, app, keyMsg(" "))
 	send(t, app, keyMsg(" "))
 	if !screen.installChoices[0].Selected {
-		t.Fatal("espacio debe marcar la app para instalarla")
+		t.Fatal("espacio alterna la marca de la instalación")
 	}
 	send(t, app, keyMsg("enter"))
 	if screen.installing || !screen.planning {
@@ -142,5 +165,101 @@ func TestNoInstallQuestionWithoutRecipes(t *testing.T) {
 	}
 	if !screen.planning {
 		t.Fatal("sin pregunta el plan debe iniciarse")
+	}
+}
+
+func TestInstallQuestionWarnsWhenReleaseHasNoChecksum(t *testing.T) {
+	app, screen, _ := installTestScreen(t)
+	send(t, app, keyMsg("enter"))
+	screen.installChoices[0].Recipes = []install.Recipe{{Method: install.MethodGithubRelease, Repo: "acme/demo"}}
+	view := screen.View(120, 26)
+	if !strings.Contains(view, "https://github.com/acme/demo/releases") || !strings.Contains(view, texts.D1InstallNoSum) {
+		t.Fatalf("debe mostrar el origen y el aviso de sin suma:\n%s", view)
+	}
+	screen.installChoices[0].Recipes[0].Checksums = "sums.txt"
+	if strings.Contains(screen.View(120, 26), texts.D1InstallNoSum) {
+		t.Fatal("con checksums no debe haber aviso")
+	}
+}
+
+func TestAppsScreenListsMissingAppsWithStatusAndAsksBeforeInstalling(t *testing.T) {
+	session, _ := installableSession(t)
+	t.Cleanup(session.Close)
+	app := testApp(false, true)
+	app.installRunner = &noToolRunner{}
+	screen := &implantAppsScreen{screenBase: screenBase{app: app}, preparing: true}
+	app.begin(screen)
+	send(t, app, implantPreparedMsg{session: session})
+	if len(screen.apps) != 1 || screen.apps[0].Detected || !screen.apps[0].Installable {
+		t.Fatalf("la app ausente debe listarse como instalable: %#v", screen.apps)
+	}
+	view := screen.View(100, 26)
+	if !strings.Contains(view, texts.D1ColumnState) || !strings.Contains(view, texts.D1StateMissing) {
+		t.Fatalf("D1 debe mostrar el estado de cada app:\n%s", view)
+	}
+	send(t, app, keyMsg("enter"))
+	if screen.installing || len(screen.messages) == 0 || screen.messages[len(screen.messages)-1].Text != texts.D1NoneSelected {
+		t.Fatalf("sin marcar nada debe avisar: %v", screen.messages)
+	}
+	send(t, app, keyMsg(" "))
+	send(t, app, keyMsg("enter"))
+	if !screen.installing || len(screen.installChoices) != 1 || !screen.installChoices[0].Selected {
+		t.Fatalf("marcar una app ausente debe pedir confirmar su instalación: %+v", screen.installChoices)
+	}
+}
+
+func TestAppsScreenDoesNotLetMarkMissingAppsWithoutRecipe(t *testing.T) {
+	app := testApp(false, true)
+	app.implantSession = &implant.ImplantSession{}
+	screen := &implantAppsScreen{screenBase: screenBase{app: app}, apps: []appChoice{
+		{ID: "ok", Name: "Ok", Detected: true, Count: 1},
+		{ID: "nope", Name: "Nope", Count: 1},
+	}}
+	app.begin(screen)
+	send(t, app, keyMsg("a"))
+	if !screen.apps[0].Selected || screen.apps[1].Selected {
+		t.Fatalf("'a' solo marca lo seleccionable: %+v", screen.apps)
+	}
+	send(t, app, keyMsg("down"))
+	send(t, app, keyMsg(" "))
+	if screen.apps[1].Selected {
+		t.Fatal("una app ausente sin receta no se puede marcar")
+	}
+	if view := screen.View(100, 26); !strings.Contains(view, "[-]") {
+		t.Fatalf("debe mostrarse deshabilitada:\n%s", view)
+	}
+}
+
+type brewRunner struct{ noToolRunner }
+
+func (r *brewRunner) Lookup(name string) bool { return name == "brew" }
+
+func TestInstallConfirmationListsEveryWayAndLetsChooseOne(t *testing.T) {
+	session, _ := installableSessionWith(t, []install.Recipe{
+		{Method: install.MethodBrew, Formula: "demo"},
+		{Method: install.MethodGithubRelease, Repo: "acme/demo", Asset: "demo", Format: install.FormatRaw, Dest: ".local/bin/demo"},
+	})
+	t.Cleanup(session.Close)
+	app := testApp(false, true)
+	app.installRunner = &brewRunner{}
+	app.implantSession = session
+	screen := &implantAppsScreen{screenBase: screenBase{app: app}}
+	app.begin(screen)
+	screen.apps = []appChoice{{ID: "demo", Name: "Demo", Installable: true, Selected: true, Count: 1}}
+	send(t, app, keyMsg("enter"))
+	view := screen.View(120, 26)
+	for _, want := range []string{"brew", "github-release", "https://github.com/acme/demo/releases", texts.D1InstallNoSum} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("la confirmación debe listar todas las vías, falta %q:\n%s", want, view)
+		}
+	}
+	if screen.installChoices[0].Option != 0 {
+		t.Fatal("la vía por defecto es la primera del catálogo")
+	}
+	send(t, app, keyMsg("down"))
+	send(t, app, keyMsg("down"))
+	send(t, app, keyMsg(" "))
+	if screen.installChoices[0].Option != 1 || !screen.installChoices[0].Selected {
+		t.Fatalf("Espacio sobre una vía la elige y marca la app: %+v", screen.installChoices[0])
 	}
 }

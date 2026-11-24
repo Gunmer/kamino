@@ -1,19 +1,17 @@
 kamino · Implantar · Apps                                                      Paso 2 de 4   [36m●[0m [36m●[0m [2m○[0m [2m○[0m
 [2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 
-         [1mElige las apps que quieres implantar[0m
+    [1mElige las apps que quieres implantar[0m
   
-         ¿Instalar las apps ausentes que tienen receta para este Mac?
-         Marca las que quieras instalar. Las no marcadas quedan como «Sin base en este Mac».
+    Estas apps no están instaladas en este Mac. ¿Instalarlas antes de implantar?
+    Elige con Espacio cómo instalar cada app. Las desmarcadas quedan como «Sin base en este Mac».
   
-       [1m▌ [x]  iTerm2  brew[0m
-         [ ]  yazi  installer · desde https://example.com/yazi.sh
-  
-  
-  
-  
-  
-  
+  [1m▌ [x]  iTerm2[0m
+         (•) brew
+    [x]  yazi
+         ( ) brew
+         (•) installer · desde https://example.com/yazi.sh
+         ( ) github-release · desde https://github.com/sxyazi/yazi/releases · sin verific…
   
   
   
@@ -21,6 +19,8 @@ kamino · Implantar · Apps                                                     
   
   
   
-[33m⚠ AVISO[0m  ¿Instalar las apps ausentes que tienen receta para este Mac?
+  
+  
+[33m⚠ AVISO[0m  Estas apps no están instaladas en este Mac. ¿Instalarlas antes de implantar?
 [2m────────────────────────────────────────────────────────────────────────────────────────────────────[0m
 ↑↓ [2mmover[0m[2m   [0mEspacio [2mmarcar[0m[2m   [0ma/n [2mtodas/ninguna[0m[2m   [0mEnter [2mcontinuar[0m[2m   [0mEsc [2mvolver[0m                 ? [2mayuda[0m

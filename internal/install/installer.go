@@ -24,32 +24,42 @@ type Installer struct {
 	curlArgs []string
 }
 
-// Applicable returns the first recipe that matches the platform, without
-// checking tools on the PATH. The TUI and the plan use it to decide whether an
-// app can be offered for installation.
-func Applicable(recipes []Recipe, goos, goarch string) (Recipe, error) {
-	for _, recipe := range recipes {
-		if recipe.Applies(goos, goarch) {
-			return recipe, nil
-		}
-	}
-	return Recipe{}, ErrNoRecipe
-}
-
-// Select returns the first recipe that matches the platform and whose tool is
-// available. A brew recipe without brew on the PATH is skipped in favour of the
-// next recipe, so the app is omitted only when none can run.
-func Select(recipes []Recipe, goos, goarch string, runner Runner) (Recipe, error) {
+// Runnable returns every recipe that matches the platform and whose tool is
+// available, in catalog order. A recipe whose tool (brew, npm) is missing from
+// the PATH is left out, so the app is omitted only when none can run.
+func Runnable(recipes []Recipe, goos, goarch string, runner Runner) []Recipe {
+	var runnable []Recipe
 	for _, recipe := range recipes {
 		if !recipe.Applies(goos, goarch) {
 			continue
 		}
-		if recipe.Method == MethodBrew && !runner.Lookup("brew") {
+		if tool := methodTool(recipe.Method); tool != "" && !runner.Lookup(tool) {
 			continue
 		}
-		return recipe, nil
+		runnable = append(runnable, recipe)
+	}
+	return runnable
+}
+
+// Select returns the first runnable recipe: the catalog order is the default
+// preference.
+func Select(recipes []Recipe, goos, goarch string, runner Runner) (Recipe, error) {
+	if runnable := Runnable(recipes, goos, goarch, runner); len(runnable) > 0 {
+		return runnable[0], nil
 	}
 	return Recipe{}, ErrNoRecipe
+}
+
+// methodTool names the executable a method needs on the PATH, or "" when the
+// method brings its own (downloads go through curl, which macOS always has).
+func methodTool(method string) string {
+	switch method {
+	case MethodBrew:
+		return "brew"
+	case MethodNpm:
+		return "npm"
+	}
+	return ""
 }
 
 // Install runs the first viable recipe for the platform. It returns ErrNoRecipe
@@ -60,11 +70,21 @@ func (i *Installer) Install(ctx context.Context, recipes []Recipe, goos, goarch 
 	if err != nil {
 		return err
 	}
+	return i.InstallRecipe(ctx, recipe)
+}
+
+// InstallRecipe runs one specific recipe. Callers must take it from a catalog
+// definition: this method never looks at where the recipe came from.
+func (i *Installer) InstallRecipe(ctx context.Context, recipe Recipe) error {
 	switch recipe.Method {
 	case MethodBrew:
 		return i.brew(ctx, recipe)
+	case MethodNpm:
+		return i.npm(ctx, recipe)
 	case MethodInstaller:
 		return i.installer(ctx, recipe)
+	case MethodGithubRelease:
+		return i.githubRelease(ctx, recipe)
 	default:
 		return i.binary(ctx, recipe)
 	}
@@ -80,6 +100,16 @@ func (i *Installer) brew(ctx context.Context, recipe Recipe) error {
 	output, err := i.Runner.Run(ctx, "brew", args...)
 	if err != nil {
 		return commandError("brew install", output, err)
+	}
+	return nil
+}
+
+// npm installs the latest published version of a package globally. It never
+// uses sudo and never changes the user's npm prefix.
+func (i *Installer) npm(ctx context.Context, recipe Recipe) error {
+	output, err := i.Runner.Run(ctx, "npm", "install", "--global", recipe.Package)
+	if err != nil {
+		return commandError("npm install", output, err)
 	}
 	return nil
 }

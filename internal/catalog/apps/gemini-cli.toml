@@ -7,3 +7,7 @@ exclude = ["**/.env", "**/.env.*", "**/auth.json", "**/.credentials.json", "**/s
 [[install]]
 method = "brew"
 formula = "gemini-cli"
+
+[[install]]
+method = "npm"
+package = "@google/gemini-cli"

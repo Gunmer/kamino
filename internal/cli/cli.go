@@ -622,6 +622,7 @@ func printAppsValidateHelp(w io.Writer) {
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "  Valida un archivo, un directorio o el catálogo del usuario.")
 	fmt.Fprintln(w, "  Sale con código 1 si hay errores.")
+	fmt.Fprintln(w, "  Las recetas [[install]] admiten los métodos brew, npm, installer, binary y github-release.")
 	fmt.Fprintln(w)
 	fmt.Fprintln(w, "Options:")
 	fmt.Fprintln(w, "  --help, -h  Muestra esta ayuda y termina.")

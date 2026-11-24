@@ -24,7 +24,16 @@ type appChoice struct {
 	Detected bool
 	Selected bool
 	Count    int
+	// Installable marks a missing app (implant) that has a recipe for this Mac.
+	Installable bool
 }
+
+// stateWidth is the width of the ESTADO column of the implant apps screen.
+const stateWidth = 12
+
+// selectable reports whether the row can be marked in the implant apps screen:
+// an installed app, or a missing one that kamino knows how to install.
+func (c appChoice) selectable() bool { return c.Detected || c.Installable }
 
 type appsCountedMsg struct {
 	counts map[string]int

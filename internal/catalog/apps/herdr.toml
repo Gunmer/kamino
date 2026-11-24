@@ -13,3 +13,19 @@ formula = "herdr"
 [[install]]
 method = "installer"
 url = "https://herdr.dev/install.sh"
+
+[[install]]
+method = "github-release"
+repo = "herdrdev/herdr"
+asset = "herdr-macos-aarch64"
+format = "raw"
+dest = ".local/bin/herdr"
+arch = "arm64"
+
+[[install]]
+method = "github-release"
+repo = "herdrdev/herdr"
+asset = "herdr-macos-x86_64"
+format = "raw"
+dest = ".local/bin/herdr"
+arch = "amd64"

@@ -7,3 +7,29 @@ exclude = ["**/.claude.json", "**/projects", "**/projects/**", "**/.env", "**/.e
 [[install]]
 method = "brew"
 cask = "claude-code"
+
+[[install]]
+method = "npm"
+package = "@anthropic-ai/claude-code"
+
+[[install]]
+method = "github-release"
+repo = "anthropics/claude-code"
+asset = "claude-darwin-arm64.tar.gz"
+format = "tar.gz"
+checksums = "SHASUMS256.txt"
+arch = "arm64"
+extract = [
+  { file = "claude", dest = ".local/bin/claude" },
+]
+
+[[install]]
+method = "github-release"
+repo = "anthropics/claude-code"
+asset = "claude-darwin-x64.tar.gz"
+format = "tar.gz"
+checksums = "SHASUMS256.txt"
+arch = "amd64"
+extract = [
+  { file = "claude", dest = ".local/bin/claude" },
+]

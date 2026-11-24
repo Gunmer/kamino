@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 
 	"github.com/Gunmer/kamino/internal/archive"
+	"github.com/Gunmer/kamino/internal/catalog"
 	"github.com/Gunmer/kamino/internal/install"
 	"github.com/Gunmer/kamino/internal/progress"
 )
@@ -24,10 +26,12 @@ const (
 type InstallOutcome struct {
 	AppID  string
 	Method string
-	// URL is the exact address shown before an installer runs.
-	URL    string
-	Status string
-	Reason string
+	// URL is the address shown before the recipe downloads anything.
+	URL string
+	// Unverified is true when the download has no checksum to verify it.
+	Unverified bool
+	Status     string
+	Reason     string
 }
 
 // InstallSettings selects the missing apps to install during Plan, and the
@@ -37,30 +41,38 @@ type InstallSettings struct {
 	Installer *install.Installer
 	OS        string
 	Arch      string
+	// Chosen overrides the default recipe of an app with another runnable
+	// recipe of its catalog definition. Anything else is rejected.
+	Chosen map[string]install.Recipe
 }
 
 // InstallCandidate is a missing app that has a recipe for this platform.
 type InstallCandidate struct {
-	AppID  string
-	Name   string
+	AppID string
+	Name  string
+	// Recipe is the default one: the first runnable recipe of the definition.
 	Recipe install.Recipe
+	// Recipes lists every runnable recipe in catalog order, the default first.
+	Recipes []install.Recipe
 }
 
 // InstallCandidates lists the missing apps that may be offered for installation
 // on the given platform, in manifest order. Clone data never adds a recipe: the
-// recipe always comes from the catalog definition.
-func (s *ImplantSession) InstallCandidates(goos, goarch string) []InstallCandidate {
+// recipe always comes from the catalog definition. The recipe is the one that
+// would run: the first whose tool (brew, npm) is on the PATH, so an app with no
+// runnable recipe is not offered.
+func (s *ImplantSession) InstallCandidates(goos, goarch string, runner install.Runner) []InstallCandidate {
 	candidates := make([]InstallCandidate, 0)
 	for _, app := range s.NotInstalledApps {
 		definition := s.definitions[app.ID]
 		if definition == nil || len(definition.Install) == 0 {
 			continue
 		}
-		recipe, err := install.Applicable(definition.Install, goos, goarch)
-		if err != nil {
+		recipes := install.Runnable(definition.Install, goos, goarch, runner)
+		if len(recipes) == 0 {
 			continue
 		}
-		candidates = append(candidates, InstallCandidate{AppID: app.ID, Name: definition.Name, Recipe: recipe})
+		candidates = append(candidates, InstallCandidate{AppID: app.ID, Name: definition.Name, Recipe: recipes[0], Recipes: recipes})
 	}
 	return candidates
 }
@@ -114,22 +126,25 @@ func (s *ImplantSession) installApp(ctx context.Context, app archive.AppEntry, d
 		outcome.Status, outcome.Reason = InstallFailed, "sin receta de instalación"
 		return outcome, false, nil
 	}
+	var runner install.Runner = install.ExecRunner{}
+	if s.install.Installer != nil {
+		runner = s.install.Installer.Runner
+	}
+	recipe, err := s.recipeFor(app.ID, definition, runner)
 	if dryRun {
-		recipe, err := install.Applicable(definition.Install, s.install.OS, s.install.Arch)
 		if err != nil {
 			outcome.Status, outcome.Reason = InstallFailed, "ninguna receta aplicable a este Mac"
 			return outcome, false, nil
 		}
-		outcome.Method, outcome.URL, outcome.Status = recipe.Method, recipe.URL, InstallPlanned
+		outcome.Method, outcome.URL, outcome.Unverified, outcome.Status = recipe.Method, recipe.Source(), recipe.Unverified(), InstallPlanned
 		return outcome, false, nil
 	}
-	if err := progress.EnsureNotCancelled(ctx); err != nil {
-		return outcome, false, err
+	if ctxErr := progress.EnsureNotCancelled(ctx); ctxErr != nil {
+		return outcome, false, ctxErr
 	}
-	recipe, err := install.Select(definition.Install, s.install.OS, s.install.Arch, s.install.Installer.Runner)
 	if err == nil {
-		outcome.Method, outcome.URL = recipe.Method, recipe.URL
-		err = s.install.Installer.Install(ctx, definition.Install, s.install.OS, s.install.Arch)
+		outcome.Method, outcome.URL, outcome.Unverified = recipe.Method, recipe.Source(), recipe.Unverified()
+		err = s.install.Installer.InstallRecipe(ctx, recipe)
 	}
 	if err != nil {
 		if ctxErr := progress.EnsureNotCancelled(ctx); ctxErr != nil {
@@ -144,6 +159,26 @@ func (s *ImplantSession) installApp(ctx context.Context, app archive.AppEntry, d
 	}
 	outcome.Status = InstallDone
 	return outcome, true, nil
+}
+
+// recipeFor returns the recipe to run for an app: the user's choice when it is
+// one of the definition's runnable recipes, otherwise the default. A choice that
+// is not in the catalog definition is an error, never a recipe to run.
+func (s *ImplantSession) recipeFor(id string, definition *catalog.AppDefinition, runner install.Runner) (install.Recipe, error) {
+	runnable := install.Runnable(definition.Install, s.install.OS, s.install.Arch, runner)
+	if len(runnable) == 0 {
+		return install.Recipe{}, install.ErrNoRecipe
+	}
+	chosen, ok := s.install.Chosen[id]
+	if !ok {
+		return runnable[0], nil
+	}
+	for _, recipe := range runnable {
+		if reflect.DeepEqual(recipe, chosen) {
+			return recipe, nil
+		}
+	}
+	return install.Recipe{}, fmt.Errorf("la receta elegida no pertenece a la definición del catálogo")
 }
 
 func installReason(err error) string {

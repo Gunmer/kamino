@@ -8,6 +8,25 @@ el identificador de la aplicación; nunca ejecuta la herramienta.
 | Agentes y asistentes | `opencode`, `claude-code`, `codex`, `gemini-cli`, `copilot-cli`, `pi`, `gentle-shell`, `openspec` |
 | Terminales y utilidades | `lazygit`, `micro`, `glow`, `bat`, `github-cli`, `git`, `herdr`, `yazi`, `ghostty`, `oh-my-zsh` |
 
+Métodos de instalación de cada app (en orden de preferencia; ver «Añadir tus propias apps»):
+
+| App | Métodos |
+| --- | --- |
+| `opencode`, `claude-code`, `copilot-cli` | `brew`, `npm`, `github-release` |
+| `codex`, `openspec` | `brew`, `npm`, `installer`, `github-release` |
+| `gemini-cli` | `brew`, `npm` |
+| `pi` | `npm`, `installer` |
+| `lazygit`, `micro`, `glow`, `bat`, `github-cli`, `yazi` | `brew`, `github-release` |
+| `herdr` | `brew`, `installer`, `github-release` |
+| `git`, `ghostty` | `brew` |
+| `oh-my-zsh` | `installer` |
+| `gentle-shell` | ninguno |
+
+`github-release` se verifica con el fichero de sumas del release salvo en `bat`, `yazi`,
+`opencode`, `herdr` y `codex`, que no publican uno que cubra el binario descargado: para esas la
+confirmación y `--dry-run` avisan «sin verificación de suma». `gemini-cli` no publica binarios de
+macOS y el archivo de `pi` necesita ficheros auxiliares, por lo que no tienen esa receta.
+
 Ejemplo:
 
 ```bash
@@ -54,9 +73,23 @@ kamino apps list
   Termina con código 0 si todo es válido y 1 si hay errores. Avisa, sin fallar, cuando una
   definición no declara `exclude` o su id no coincide con el nombre del archivo.
 - Las recetas `[[install]]` se validan con las mismas reglas al cargar el catálogo y en
-  `apps validate`: `brew`, `installer` o `binary`; `https` obligatorio; `sha256` de 64 caracteres
-  en `binary`. Una receta inválida se muestra con su número y su motivo. Ver `docs/tecnico/formatos.md`
+  `apps validate`: `brew`, `npm`, `installer`, `binary` o `github-release`; `https` obligatorio;
+  `sha256` de 64 caracteres en `binary`. Una receta inválida se muestra con su número y su motivo. Ver `docs/tecnico/formatos.md`
   (sección 4.1.1).
+- El orden de las `[[install]]` es la preferencia: se usa la primera aplicable cuya herramienta
+  (`brew`, `npm`) esté en el `PATH`. El catálogo integrado las ordena `brew`, `npm`, `installer`,
+  `github-release`.
+- `npm` (`package = "@openai/codex"`) ejecuta `npm install --global <package>`: siempre la última
+  versión, sin `sudo` y respetando el `prefix` de npm del usuario. Si `npm` no está, se omite la
+  receta; Kamino no instala Node.
+- `github-release` descarga el asset del último release de `repo` (`propietario/nombre`) solo desde
+  `https://github.com/<repo>/releases/`. `asset` puede llevar `{version}` (el tag sin `v`) y
+  `format` es `raw` (con `dest`), `zip` o `tar.gz` (con una lista `extract` de `file` y `dest`).
+  Solo se extraen esos ficheros regulares, con modo 0755. Con `checksums` (nombre del fichero de
+  sumas del mismo release) se verifica el SHA-256 antes de escribir y, si falta, no lista el asset
+  o no coincide, no se instala nada. Sin `checksums` solo hay HTTPS y el origen GitHub, y la
+  confirmación y `--dry-run` lo avisan. El fichero de sumas viene del mismo origen: detecta
+  corrupción, no un release comprometido.
 - `apps list` muestra el catálogo fusionado con el origen (`integrado` o `usuario`) y el estado de
   cada archivo. Un archivo inválido se muestra con `ERROR` y no impide listar el resto.
 - `apps new` usa el código 2 para uso incorrecto (`ID` ausente, falta de detección o de rutas) y el
