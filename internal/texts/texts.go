@@ -383,7 +383,7 @@ const (
 
 var (
 	HelpSettings = [][2]string{{"Tab", "siguiente campo"}, {"Mayús+Tab", "campo anterior"}, {"Enter", "siguiente campo"}, {"Ctrl+S", "guardar la configuración"}, {"F1", "abrir esta ayuda"}, {"Esc", "volver o salir sin guardar"}}
-	HelpC1       = [][2]string{{"↑↓", "recorrer apps"}, {"Espacio", "marcar o desmarcar sin perder el foco"}, {"a", "seleccionar todas las visibles"}, {"n", "quitar todas las visibles"}, {"/", "filtrar"}, {"Enter", "continuar con la selección"}, {"Esc", "volver o cancelar"}}
+	HelpC1       = [][2]string{{"↑↓", "recorrer apps y archivos"}, {"→ ←", "expandir o colapsar los archivos de la app"}, {"Espacio", "marcar o desmarcar la app o el archivo sin perder el foco"}, {"a", "seleccionar todas las apps visibles o todos los archivos de la app"}, {"n", "quitar todas las apps visibles o todos los archivos de la app"}, {"/", "filtrar"}, {"Enter", "continuar con la selección"}, {"Esc", "volver o cancelar"}}
 	HelpC2       = [][2]string{{"Enter", "continuar con el destino"}, {"F2", "usar el directorio actual"}, {"F3", "usar Descargas"}, {"F4", "usar Escritorio"}, {"F1", "abrir esta ayuda"}, {"Esc", "volver a C1 sin perder la selección"}}
 	HelpC3       = [][2]string{{"d", "rutas omitidas y su motivo"}, {"f", "archivos incluidos por app"}, {"Enter", "clonar cuando el plan esté listo"}, {"Ctrl+C", "cancelar antes del renombrado"}, {"Esc", "volver"}}
 	HelpC4       = [][2]string{{"d", "rutas omitidas"}, {"c", "copiar la ruta con OSC 52"}, {"Enter/Esc", "continuar"}}
@@ -433,7 +433,7 @@ const (
 )
 
 var (
-	ShortcutsC1            = ShortcutLine([2]string{"↑↓", "mover"}, [2]string{"Espacio", "marcar"}, [2]string{"a/n", "todas/ninguna"}, [2]string{"/", "filtrar"}, [2]string{"Enter", "continuar"}, [2]string{"Esc", "volver o cerrar filtro"}, [2]string{"?", "ayuda"})
+	ShortcutsC1            = ShortcutLine([2]string{"↑↓", "mover"}, [2]string{"→←", "archivos"}, [2]string{"Espacio", "marcar"}, [2]string{"a/n", "todas/ninguna"}, [2]string{"/", "filtrar"}, [2]string{"Enter", "continuar"}, [2]string{"Esc", "volver o cerrar filtro"}, [2]string{"?", "ayuda"})
 	ShortcutsC2            = ShortcutLine([2]string{"Enter", "continuar"}, [2]string{"Esc", "volver"}, [2]string{"F2", "directorio actual"}, [2]string{"F3", "descargas"}, [2]string{"F4", "escritorio"}, [2]string{"?", "ayuda"})
 	ShortcutsC3            = ShortcutLine([2]string{"d", "omitidos"}, [2]string{"f", "archivos"}, [2]string{"Enter", "clonar"}, [2]string{"Esc", "volver"}, [2]string{"Ctrl+C", "cancelar"}, [2]string{"?", "ayuda"})
 	ShortcutsC4            = ShortcutLine([2]string{"d", "omitidos"}, [2]string{"c", "copiar ruta"}, [2]string{"Enter/Esc", "continuar"}, [2]string{"?", "ayuda"})

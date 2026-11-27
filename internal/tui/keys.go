@@ -52,6 +52,7 @@ func cloneAppsKeys(filtering bool, valueLength int) []key.Binding {
 	}
 	return []key.Binding{
 		bind([]string{"up", "k"}, "↑↓", texts.KeyMove),
+		bind([]string{"right", "left", "l", "h"}, "→←", texts.KeyExpand),
 		bind([]string{" "}, "Espacio", texts.KeyMark),
 		bind([]string{"a", "n"}, "a/n", texts.KeyAllNone),
 		bind([]string{"/"}, "/", texts.KeyFilter),

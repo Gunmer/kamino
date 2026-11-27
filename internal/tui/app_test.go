@@ -207,10 +207,10 @@ func TestC1SelectionFilterAndWarnings(t *testing.T) {
 	if len(screen.messages) == 0 || screen.messages[0].Kind != MessageWarning {
 		t.Fatal("enter without selection must warn")
 	}
-	screen.index = 4
-	send(t, app, keyMsg(" "))
-	if app.cloneApps[4].Selected {
-		t.Fatal("an app with zero files must not be selectable")
+	for _, row := range screen.rows() {
+		if app.cloneApps[row.app].Count == 0 {
+			t.Fatal("an app with zero files must not be listed")
+		}
 	}
 	screen.filtering = false
 	send(t, app, keyMsg("/"))

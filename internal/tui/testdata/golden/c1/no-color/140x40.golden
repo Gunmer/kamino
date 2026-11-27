@@ -1,7 +1,7 @@
 kamino · Clonar · Apps                                                                                                   Paso 1 de 3   ● ○ ○
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-                                          [1mElige las apps que quieres clonar[0m    2 de 7 marcadas
+                                          [1mElige las apps que quieres clonar[0m    2 de 6 marcadas
           
                                           SEL  APP                                          ARCHIVOS
                                           ────────────────────────────────────────────────────────
@@ -9,11 +9,11 @@ kamino · Clonar · Apps                                                        
                                           [x]  ghostty                                             8
                                           [ ]  git                                                 4
                                           [ ]  zsh                                                 3
-                                          [-]  vscode                                              0
                                           [ ]  atuin                                               6
                                           [ ]  starship                                            2
           
                                           No detectadas: iterm2, yazi
+                                          Sin archivos: vscode
           
           
           
@@ -37,4 +37,4 @@ kamino · Clonar · Apps                                                        
           
           
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-↑↓ mover   Espacio marcar   a/n todas/ninguna   / filtrar   Enter continuar   Esc volver                                             ? ayuda
+↑↓ mover   →← expandir   Espacio marcar   a/n todas/ninguna   / filtrar   Enter continuar   Esc volver                               ? ayuda

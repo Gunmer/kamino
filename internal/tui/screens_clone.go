@@ -24,8 +24,86 @@ type appChoice struct {
 	Detected bool
 	Selected bool
 	Count    int
+	// Files lists the files the clone flow can include for the app; empty until
+	// the count finishes.
+	Files []fileChoice
 	// Installable marks a missing app (implant) that has a recipe for this Mac.
 	Installable bool
+}
+
+// fileChoice is one file of an app in the clone flow and whether it is included.
+type fileChoice struct {
+	Path     string
+	Size     int64
+	Link     bool
+	Included bool
+}
+
+type checkState int
+
+const (
+	checkNone checkState = iota
+	checkPartial
+	checkAll
+)
+
+// includedCount returns how many files of the app are marked.
+func (c appChoice) includedCount() int {
+	total := 0
+	for _, file := range c.Files {
+		if file.Included {
+			total++
+		}
+	}
+	return total
+}
+
+// checkState derives the checkbox from the files. Without file detail (the
+// count has not finished) it falls back to Selected.
+func (c appChoice) checkState() checkState {
+	if len(c.Files) == 0 {
+		if c.Selected {
+			return checkAll
+		}
+		return checkNone
+	}
+	switch included := c.includedCount(); {
+	case included == 0:
+		return checkNone
+	case included == len(c.Files):
+		return checkAll
+	default:
+		return checkPartial
+	}
+}
+
+// setAll marks or unmarks every file and keeps Selected in sync.
+func (c *appChoice) setAll(included bool) {
+	for index := range c.Files {
+		c.Files[index].Included = included
+	}
+	c.Selected = included
+}
+
+// setFile marks or unmarks one file; the app counts as selected while any file
+// remains included.
+func (c *appChoice) setFile(index int, included bool) {
+	c.Files[index].Included = included
+	c.Selected = c.includedCount() > 0
+}
+
+// includedPaths returns the marked paths, or nil when there is no file detail.
+func (c appChoice) includedPaths() []string {
+	if len(c.Files) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(c.Files))
+	for _, file := range c.Files {
+		if file.Included {
+			result = append(result, file.Path)
+		}
+	}
+	return result
 }
 
 // stateWidth is the width of the ESTADO column of the implant apps screen.
@@ -37,7 +115,15 @@ func (c appChoice) selectable() bool { return c.Detected || c.Installable }
 
 type appsCountedMsg struct {
 	counts map[string]int
+	files  map[string][]plan.FileInfo
 	err    error
+}
+
+// cloneRow is one line of the C1 tree: an app (file == -1) or one of its files.
+// app indexes App.cloneApps.
+type cloneRow struct {
+	app  int
+	file int
 }
 
 type cloneAppsScreen struct {
@@ -46,12 +132,13 @@ type cloneAppsScreen struct {
 	filter    field
 	filtering bool
 	counting  bool
+	expanded  map[string]bool
 	messages  []Message
 }
 
 func newCloneAppsScreen(app *App, destinationError string) *cloneAppsScreen {
 	screen := &cloneAppsScreen{
-		screenBase: screenBase{app: app}, counting: true,
+		screenBase: screenBase{app: app}, counting: true, expanded: map[string]bool{},
 		filter: field{Label: texts.FieldFilter, Placeholder: texts.FieldFilterPlaceholder},
 	}
 	if destinationError != "" {
@@ -100,7 +187,7 @@ func countAppsCmd(app *App) tea.Cmd {
 		if err != nil {
 			return appsCountedMsg{err: err}
 		}
-		return appsCountedMsg{counts: counted.Counts}
+		return appsCountedMsg{counts: counted.Counts, files: counted.Files}
 	}
 }
 
@@ -113,13 +200,21 @@ func (s *cloneAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 			return s, nil
 		}
 		for index := range s.app.cloneApps {
-			if count, ok := value.counts[s.app.cloneApps[index].ID]; ok {
-				s.app.cloneApps[index].Count = count
-				if count == 0 {
-					s.app.cloneApps[index].Selected = false
-				}
+			choice := &s.app.cloneApps[index]
+			count, ok := value.counts[choice.ID]
+			if !ok {
+				continue
+			}
+			choice.Count = count
+			choice.Files = make([]fileChoice, 0, len(value.files[choice.ID]))
+			for _, file := range value.files[choice.ID] {
+				choice.Files = append(choice.Files, fileChoice{Path: file.Path, Size: file.Size, Link: file.Link, Included: choice.Selected})
+			}
+			if count == 0 {
+				choice.Selected = false
 			}
 		}
+		s.clampIndex()
 		return s, nil
 	}
 	keyMessage, ok := msg.(tea.KeyMsg)
@@ -146,35 +241,29 @@ func (s *cloneAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 		}
 		return s, nil
 	}
-	visible := s.visibleApps()
+	rows := s.rows()
 	switch keyMessage.String() {
 	case "up", "k":
-		if len(visible) > 0 {
-			s.index = (s.index + len(visible) - 1) % len(visible)
+		if len(rows) > 0 {
+			s.index = (s.index + len(rows) - 1) % len(rows)
 		}
 	case "down", "j":
-		if len(visible) > 0 {
-			s.index = (s.index + 1) % len(visible)
+		if len(rows) > 0 {
+			s.index = (s.index + 1) % len(rows)
 		}
+	case "right", "l":
+		s.expand(rows, true)
+	case "left", "h":
+		s.expand(rows, false)
 	case "/":
 		s.filtering = true
 		s.filter.Cursor = len([]rune(s.filter.Value))
 	case " ":
-		s.toggle(visible)
+		s.toggle(rows)
 	case "a":
-		for index := range s.app.cloneApps {
-			choice := &s.app.cloneApps[index]
-			if s.matches(*choice) && choice.Detected && choice.Count > 0 {
-				choice.Selected = true
-			}
-		}
+		s.setScope(rows, true)
 	case "n":
-		for index := range s.app.cloneApps {
-			choice := &s.app.cloneApps[index]
-			if s.matches(*choice) {
-				choice.Selected = false
-			}
-		}
+		s.setScope(rows, false)
 	case "enter":
 		if len(s.selectedIDs()) == 0 {
 			s.messages = []Message{{Kind: MessageWarning, Text: texts.CloneNoSelection}}
@@ -190,10 +279,12 @@ func (s *cloneAppsScreen) Update(msg tea.Msg) (Screen, tea.Cmd) {
 	return s, nil
 }
 
+// visibleApps lists the detected apps that match the filter. Once the count has
+// finished, apps without files are left out (the view reports them in a note).
 func (s *cloneAppsScreen) visibleApps() []appChoice {
 	result := make([]appChoice, 0)
 	for _, choice := range s.app.cloneApps {
-		if choice.Detected && s.matches(choice) {
+		if choice.Detected && s.matches(choice) && (s.counting || choice.Count > 0) {
 			result = append(result, choice)
 		}
 	}
@@ -208,40 +299,104 @@ func (s *cloneAppsScreen) matches(choice appChoice) bool {
 	return strings.Contains(strings.ToLower(choice.ID), query) || strings.Contains(strings.ToLower(choice.Name), query)
 }
 
-func (s *cloneAppsScreen) toggle(visible []appChoice) {
-	if len(visible) == 0 {
-		return
-	}
-	target := visible[s.index%len(visible)]
-	for index := range s.app.cloneApps {
-		choice := &s.app.cloneApps[index]
-		if choice.ID != target.ID {
+// rows flattens the visible apps and the files of the expanded ones.
+func (s *cloneAppsScreen) rows() []cloneRow {
+	rows := make([]cloneRow, 0, len(s.app.cloneApps))
+	for index, choice := range s.app.cloneApps {
+		if !choice.Detected || !s.matches(choice) || (!s.counting && choice.Count == 0) {
 			continue
 		}
-		if choice.Count == 0 {
-			s.messages = []Message{{Kind: MessageWarning, Text: texts.C1NoFiles}}
+		rows = append(rows, cloneRow{app: index, file: -1})
+		if s.expanded[choice.ID] {
+			for file := range choice.Files {
+				rows = append(rows, cloneRow{app: index, file: file})
+			}
+		}
+	}
+	return rows
+}
+
+// clampIndex keeps the cursor on a valid row after the list changes.
+func (s *cloneAppsScreen) clampIndex() {
+	if rows := len(s.rows()); s.index >= rows {
+		s.index = max(0, rows-1)
+	}
+}
+
+// expand opens or closes the focused app; on a file row, closing returns the
+// cursor to its app.
+func (s *cloneAppsScreen) expand(rows []cloneRow, open bool) {
+	if len(rows) == 0 {
+		return
+	}
+	row := rows[s.index%len(rows)]
+	id := s.app.cloneApps[row.app].ID
+	if open {
+		if row.file == -1 && len(s.app.cloneApps[row.app].Files) > 0 {
+			s.expanded[id] = true
+		}
+		return
+	}
+	delete(s.expanded, id)
+	for position, candidate := range rows {
+		if candidate.app == row.app && candidate.file == -1 {
+			s.index = position
 			return
 		}
-		choice.Selected = !choice.Selected
+	}
+}
+
+// toggle flips the focused file, or every file of the focused app.
+func (s *cloneAppsScreen) toggle(rows []cloneRow) {
+	if len(rows) == 0 {
 		return
+	}
+	row := rows[s.index%len(rows)]
+	choice := &s.app.cloneApps[row.app]
+	switch {
+	case row.file >= 0:
+		choice.setFile(row.file, !choice.Files[row.file].Included)
+	case len(choice.Files) == 0:
+		choice.Selected = !choice.Selected
+	default:
+		choice.setAll(choice.checkState() != checkAll)
+	}
+}
+
+// setScope marks or unmarks the visible apps, or, with the cursor on a file,
+// the files of that app.
+func (s *cloneAppsScreen) setScope(rows []cloneRow, included bool) {
+	if len(rows) == 0 {
+		return
+	}
+	row := rows[s.index%len(rows)]
+	if row.file >= 0 {
+		s.app.cloneApps[row.app].setAll(included)
+		return
+	}
+	for _, candidate := range rows {
+		if candidate.file != -1 {
+			continue
+		}
+		choice := &s.app.cloneApps[candidate.app]
+		if len(choice.Files) == 0 {
+			choice.Selected = included
+			continue
+		}
+		choice.setAll(included)
 	}
 }
 
 func (s *cloneAppsScreen) selectedIDs() []string {
-	result := make([]string, 0)
-	for _, choice := range s.app.cloneApps {
-		if choice.Selected && choice.Detected {
-			result = append(result, choice.ID)
-		}
-	}
-	return result
+	return s.app.selectedCloneIDs()
 }
 
 func (s *cloneAppsScreen) View(width, height int) string {
 	visible := s.visibleApps()
+	rows := s.rows()
 	selected := 0
-	for _, choice := range s.app.cloneApps {
-		if choice.Selected && choice.Detected && choice.Count > 0 {
+	for _, choice := range visible {
+		if choice.Selected && choice.Count > 0 {
 			selected++
 		}
 	}
@@ -275,56 +430,83 @@ func (s *cloneAppsScreen) View(width, height int) string {
 	}
 	lines = append(lines, "  "+PadRight(texts.C1ColumnSelect, 3)+"  "+PadRight(texts.C1ColumnApp, appWidth)+"  "+PadLeft(texts.C1ColumnFiles, 8))
 	lines = append(lines, "  "+s.app.theme.Styles.Tertiary.Render(strings.Repeat(s.app.theme.Symbols.Separator, max(0, tableWidth-4))))
+	notDetected := make([]string, 0)
+	noFiles := make([]string, 0)
+	for _, choice := range s.app.cloneApps {
+		switch {
+		case !choice.Detected:
+			notDetected = append(notDetected, choice.Name)
+		case !s.counting && choice.Count == 0:
+			noFiles = append(noFiles, choice.Name)
+		}
+	}
 	maxRows := height - 7
+	if len(noFiles) > 0 {
+		maxRows--
+	}
 	if maxRows < 3 {
 		maxRows = 3
 	}
-	start, end := window(s.index, len(visible), maxRows)
+	start, end := window(s.index, len(rows), maxRows)
 	if start > 0 {
 		lines = append(lines, "  "+strings.ReplaceAll(texts.C1ScrollUp, "{count}", fmt.Sprintf("%d", start)))
 	}
 	for index := start; index < end; index++ {
-		choice := visible[index]
-		cursor := "  "
-		if index == s.index {
-			cursor = s.app.theme.Symbols.Cursor + " "
-		}
-		checkbox := "[ ]"
-		style := s.app.theme.Styles.Secondary
-		switch {
-		case choice.Count == 0:
-			checkbox = "[-]"
-			style = s.app.theme.Styles.Tertiary
-		case choice.Selected:
-			checkbox = "[x]"
-		}
-		count := fmt.Sprintf("%d", choice.Count)
-		if s.counting {
-			count = s.app.theme.Symbols.Ellipsis
-		}
-		line := cursor + checkbox + "  " + PadRight(Truncate(choice.Name, appWidth, s.app.theme.Symbols.Ellipsis), appWidth) + "  " + PadLeft(count, 8)
-		if index == s.index {
-			style = s.app.theme.Styles.Primary
-		}
-		lines = append(lines, style.Render(line))
+		lines = append(lines, s.renderRow(rows[index], index == s.index, appWidth))
 	}
-	if end < len(visible) {
-		lines = append(lines, "  "+strings.ReplaceAll(texts.C1ScrollDown, "{count}", fmt.Sprintf("%d", len(visible)-end)))
-	}
-	notDetected := make([]string, 0)
-	for _, choice := range s.app.cloneApps {
-		if !choice.Detected {
-			notDetected = append(notDetected, choice.Name)
-		}
+	if end < len(rows) {
+		lines = append(lines, "  "+strings.ReplaceAll(texts.C1ScrollDown, "{count}", fmt.Sprintf("%d", len(rows)-end)))
 	}
 	lines = append(lines, "")
 	if len(notDetected) > 0 {
 		lines = append(lines, "  "+strings.ReplaceAll(texts.C1NotDetected, "{apps}", strings.Join(notDetected, ", ")))
 	}
+	if len(noFiles) > 0 {
+		lines = append(lines, "  "+strings.ReplaceAll(texts.C1NoFilesNote, "{apps}", strings.Join(noFiles, ", ")))
+	}
 	if len(visible) == 0 && !s.counting {
 		lines = append(lines, "  "+s.app.theme.Styles.Tertiary.Render(texts.C1NoApps))
 	}
 	return Fit(lines, width, height, s.app.theme.Symbols.Ellipsis)
+}
+
+// renderRow draws an app row or, indented under it, one of its files.
+func (s *cloneAppsScreen) renderRow(row cloneRow, focused bool, appWidth int) string {
+	choice := s.app.cloneApps[row.app]
+	cursor := "  "
+	if focused {
+		cursor = s.app.theme.Symbols.Cursor + " "
+	}
+	style := s.app.theme.Styles.Secondary
+	if focused {
+		style = s.app.theme.Styles.Primary
+	}
+	ellipsis := s.app.theme.Symbols.Ellipsis
+	if row.file >= 0 {
+		file := choice.Files[row.file]
+		checkbox := "[ ]"
+		if file.Included {
+			checkbox = "[x]"
+		}
+		path := TruncatePath(file.Path, "", appWidth-2, ellipsis)
+		return style.Render(cursor + "  " + checkbox + "  " + PadRight(path, appWidth-2) + "  " + PadLeft(texts.SizeLabel(file.Size), 8))
+	}
+	checkbox := "[ ]"
+	state := choice.checkState()
+	switch state {
+	case checkAll:
+		checkbox = "[x]"
+	case checkPartial:
+		checkbox = "[~]"
+	}
+	count := fmt.Sprintf("%d", choice.Count)
+	switch {
+	case s.counting:
+		count = ellipsis
+	case state == checkPartial:
+		count = fmt.Sprintf("%d/%d", choice.includedCount(), len(choice.Files))
+	}
+	return style.Render(cursor + checkbox + "  " + PadRight(Truncate(choice.Name, appWidth, ellipsis), appWidth) + "  " + PadLeft(count, 8))
 }
 
 type cloneDestinationScreen struct {
@@ -725,7 +907,7 @@ func (s *cloneReviewScreen) Init() tea.Cmd {
 func planCloneCmd(app *App) tea.Cmd {
 	selected := app.selectedCloneIDs()
 	options := clone.PlanOptions{
-		Home: app.home, Selected: &selected, Output: app.cloneOutput, Catalog: app.catalog,
+		Home: app.home, Selected: &selected, Files: app.selectedCloneFiles(), Output: app.cloneOutput, Catalog: app.catalog,
 		ApplicationDirs: app.applicationDirs, Path: app.pathValue, Now: app.now(),
 	}
 	ctx, done := app.beginOperation()
@@ -1052,6 +1234,18 @@ func (a *App) selectedCloneIDs() []string {
 	for _, choice := range a.cloneApps {
 		if choice.Selected && choice.Detected {
 			result = append(result, choice.ID)
+		}
+	}
+	return result
+}
+
+// selectedCloneFiles maps each selected app that has file detail to its marked
+// paths. Apps without detail (a clone started with --apps) include every file.
+func (a *App) selectedCloneFiles() map[string][]string {
+	result := map[string][]string{}
+	for _, choice := range a.cloneApps {
+		if choice.Selected && choice.Detected && len(choice.Files) > 0 {
+			result[choice.ID] = choice.includedPaths()
 		}
 	}
 	return result
