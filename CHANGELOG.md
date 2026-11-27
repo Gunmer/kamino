@@ -2,6 +2,12 @@
 
 <!-- version list -->
 
+## v0.18.0 (2026-11-27)
+
+### Funcionalidades
+
+- select files per app in the C1 tree ([`9602055`](https://github.com/Gunmer/kamino/commit/9602055a948ae82f2c560724a3125f6409d75e24))
+
 ## v0.17.0 (2026-11-24)
 
 ### Funcionalidades
@@ -277,6 +283,7 @@
 ## v0.1.0 (2026-10-31)
 
 - Versión inicial
+
 
 
 
