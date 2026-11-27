@@ -28,6 +28,13 @@ Con terminal interactiva, `clone` abre la TUI si no se definió `KAMINO_PLAIN`. 
 `--output` omite C2 y ambos juntos pasan directamente a la revisión C3. Un valor inválido abre la
 pantalla correspondiente precargada con el error. `--dry-run` termina en C3 sin acción de clonar.
 
+En C1 cada app sale colapsada: `→` muestra sus archivos con ruta y tamaño y `←` los oculta.
+`Espacio` marca o desmarca la app entera o un archivo concreto, y `a`/`n` actúan sobre las apps
+visibles o, con el cursor en un archivo, sobre los de esa app. Una app con selección parcial se
+muestra como `[~]` y `9/12`; el clon incluye solo los archivos marcados. Las apps instaladas sin
+archivos para clonar no se listan y se anotan como «Sin archivos». `--apps` clona todos los
+archivos de esas apps.
+
 ## Implantar
 
 En `implant`, `-a` equivale a `--apps`, `-n` a `--dry-run`, `-y` a `--yes`

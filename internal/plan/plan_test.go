@@ -185,3 +185,38 @@ func TestGhosttyReferencesAndCycles(t *testing.T) {
 }
 
 func ptr(value string) *string { return &value }
+
+func TestCountFilesListsSamePathsAsBuildPlan(t *testing.T) {
+	home := t.TempDir()
+	writeFile(t, home, ".config/app/config", "one")
+	writeFile(t, home, ".config/app/dir/a", "abc")
+	writeFile(t, home, ".config/app/ignored.log", "log")
+	if err := os.Symlink("config", filepath.Join(home, ".config/app/safe-link")); err != nil {
+		t.Fatal(err)
+	}
+	app := &catalog.AppDefinition{
+		ID: "app", Name: "App", Command: ptr("app"), Paths: []string{".config/app"},
+		Exclude: []string{"**/*.log"},
+	}
+	apps := []*catalog.AppDefinition{app, {ID: "empty", Name: "Empty", Command: ptr("empty"), OptionalPaths: []string{".config/none"}}}
+	built, err := BuildPlan(context.Background(), apps, home, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	counted, err := CountFiles(context.Background(), apps, home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(counted.Files["app"]) != len(built.Operations) || counted.Counts["app"] != len(built.Operations) {
+		t.Fatalf("count mismatch: %#v vs %#v", counted, built.Operations)
+	}
+	for index, operation := range built.Operations {
+		got := counted.Files["app"][index]
+		if got.Path != operation.Path || got.Size != operation.Size || got.Link != (operation.Link != nil) {
+			t.Fatalf("file %d = %#v, want %#v", index, got, operation)
+		}
+	}
+	if counted.Counts["empty"] != 0 || len(counted.Files["empty"]) != 0 {
+		t.Fatalf("empty app should have no files: %#v", counted)
+	}
+}

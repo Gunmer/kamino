@@ -59,8 +59,10 @@ Menú -> U1 actualización
 ```
 
 - **C1:** tabla `SEL`/`APP`/`ARCHIVOS`, contador de selección, filtro `/` como campo de una fila,
-  `a`/`n` sobre visibles, casillas `[x]`/`[ ]`/`[-]`, `Espacio` sin perder el foco, `Enter`, línea
-  de no detectadas y recuento en segundo plano.
+  `a`/`n` según el ámbito (apps visibles o archivos de la app), árbol de archivos con `→`/`←`,
+  casillas `[x]`/`[~]`/`[ ]`, `Espacio` sin perder el foco, `Enter`, notas de no detectadas y sin
+  archivos, y recuento en segundo plano. La selección por archivo viaja en `PlanOptions.Files` y
+  `clone.PlanClone` filtra las operaciones antes de construir el manifiesto.
 - **C2:** tres opciones de carpeta, campos «Destino» y «Nombre», placeholder y scroll con `…`,
   validación en vivo y diálogo Sobrescribir/Cambiar nombre/Volver con Volver preseleccionada. Los antiguos atajos de directorio no existen.
 - **C3:** tabla única con Apps, Archivos, Tamaño, Ruta y Estado; planificando, revisión, escritura,

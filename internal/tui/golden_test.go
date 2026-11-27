@@ -132,6 +132,27 @@ func goldenC1() goldenCase {
 	}
 }
 
+func goldenC1Tree() goldenCase {
+	return goldenCase{
+		name: "c1-tree", sizes: [][2]int{{80, 24}, {100, 26}}, variants: true,
+		build: func(app *App) Screen {
+			app.cloneApps = fixtureApps()
+			files := make([]fileChoice, 0, 12)
+			for index := 0; index < 12; index++ {
+				files = append(files, fileChoice{
+					Path: fmt.Sprintf(".config/herdr/themes/a-rather-long-theme-name-%02d.conf", index), Size: 62914, Included: index >= 3,
+				})
+			}
+			app.cloneApps[0].Files = files
+			screen := newCloneAppsScreen(app, "")
+			screen.counting = false
+			screen.expanded["herdr"] = true
+			screen.index = 6
+			return screen
+		},
+	}
+}
+
 func goldenC1Filter() goldenCase {
 	return goldenCase{
 		name: "c1-filter", sizes: [][2]int{{100, 26}}, variants: true,
@@ -613,6 +634,7 @@ func goldenMessages() goldenCase {
 func TestGoldenMenu(t *testing.T) { runGolden(t, goldenMenu()) }
 func TestGoldenC1(t *testing.T) {
 	runGolden(t, goldenC1())
+	runGolden(t, goldenC1Tree())
 	runGolden(t, goldenC1Filter())
 }
 func TestGoldenC2(t *testing.T) {
@@ -664,7 +686,7 @@ func TestGoldenMessages(t *testing.T) { runGolden(t, goldenMessages()) }
 
 func TestContract(t *testing.T) {
 	cases := []goldenCase{
-		goldenMenu(), goldenC1(), goldenC1Filter(), goldenC2(), goldenC2Name(), goldenC2Manual(), goldenC2Dialog(),
+		goldenMenu(), goldenC1(), goldenC1Tree(), goldenC1Filter(), goldenC2(), goldenC2Name(), goldenC2Manual(), goldenC2Dialog(),
 		goldenC3Review(), goldenC3Writing(), goldenC3Done(), goldenD3(), goldenD4(),
 		goldenD5(), goldenSettings(), goldenSettingsEmpty(), goldenSettingsFocusOne(), goldenSettingsFocusTwo(), goldenSettingsFocusThree(),
 		goldenD0(), goldenD0Filter(), goldenD0Manual(), goldenD1(), goldenD2(),

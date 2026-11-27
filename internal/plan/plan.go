@@ -80,9 +80,18 @@ type Plan struct {
 	Notices    []string
 }
 
-// CountResult counts files per app without reading their contents.
+// FileInfo describes one file or symlink that a plan would include.
+type FileInfo struct {
+	Path string
+	Size int64
+	Link bool
+}
+
+// CountResult lists the files per app without reading their contents. Counts
+// is derived from Files.
 type CountResult struct {
 	Counts  map[string]int
+	Files   map[string][]FileInfo
 	Skipped []SkippedPath
 	Notices []string
 }
@@ -156,16 +165,6 @@ func (b *builder) notice(message string) {
 	b.notices = append(b.notices, message)
 }
 
-func (b *builder) count(appID string) int {
-	total := 0
-	for _, operation := range b.operations {
-		if operation.AppID == appID {
-			total++
-		}
-	}
-	return total
-}
-
 func (b *builder) regularFile(appID, rel string) *Operation {
 	for index := range b.operations {
 		operation := &b.operations[index]
@@ -204,7 +203,7 @@ func BuildPlan(ctx context.Context, apps []*catalog.AppDefinition, home string, 
 	return Plan{Operations: b.operations, Skipped: b.skipped, Notices: b.notices}, nil
 }
 
-// CountFiles counts files per app without hashing their contents.
+// CountFiles lists the files per app without hashing their contents.
 func CountFiles(ctx context.Context, apps []*catalog.AppDefinition, home string) (CountResult, error) {
 	root := home
 	if root == "" {
@@ -227,11 +226,18 @@ func CountFiles(ctx context.Context, apps []*catalog.AppDefinition, home string)
 		}
 		expandApp(app, b)
 	}
-	counts := make(map[string]int, len(apps))
+	files := make(map[string][]FileInfo, len(apps))
 	for _, app := range apps {
-		counts[app.ID] = b.count(app.ID)
+		files[app.ID] = nil
 	}
-	return CountResult{Counts: counts, Skipped: b.skipped, Notices: b.notices}, nil
+	for _, operation := range b.operations {
+		files[operation.AppID] = append(files[operation.AppID], FileInfo{Path: operation.Path, Size: operation.Size, Link: operation.Link != nil})
+	}
+	counts := make(map[string]int, len(files))
+	for id, list := range files {
+		counts[id] = len(list)
+	}
+	return CountResult{Counts: counts, Files: files, Skipped: b.skipped, Notices: b.notices}, nil
 }
 
 func expandApp(app *catalog.AppDefinition, b *builder) {

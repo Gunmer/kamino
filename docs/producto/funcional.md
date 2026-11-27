@@ -59,12 +59,15 @@ Una herramienta de línea de comandos para macOS que guarda las configuraciones 
 
 - Detecta las aplicaciones soportadas que están instaladas en el Mac.
 - C1 muestra solo las apps instaladas en una tabla `SEL | APP | ARCHIVOS`, con el contador
-  `N de M marcadas`, casillas `[x]`, `[ ]` y `[-]` y cursor `▌`. El recuento se calcula en segundo
+  `N de M marcadas`, casillas `[x]`, `[~]` y `[ ]` y cursor `▌`. Cada app se puede expandir con `→` y `←` para ver la ruta
+  y el tamaño de sus archivos y marcarlos uno a uno: `[~]` indica selección parcial y la columna
+  ARCHIVOS muestra `marcados/total`; el clon incluye solo los archivos marcados. El recuento se calcula en segundo
   plano con las mismas exclusiones y el mismo confinamiento que el plan. El filtro `/` es un campo
   de una fila con etiqueta «Filtro»: al abrirlo el cursor queda al final, escribir edita en esa
   posición y `Enter` aplica el filtro y devuelve el foco a la tabla; `Esc` lo limpia y lo cierra.
-  Permite seleccionar todas o ninguna con `a` y `n` sobre las filas visibles, y deshabilita las apps
-  sin archivos. Las flechas recorren las apps, `Espacio` marca o desmarca sin perder el foco y
+  Permite seleccionar todas o ninguna con `a` y `n` sobre el ámbito enfocado (las apps visibles o
+  los archivos de la app), y deja fuera de la tabla las apps sin archivos, que se informan en la
+  nota «Sin archivos: …». Las flechas recorren las apps, `Espacio` marca o desmarca sin perder el foco y
   `Enter` continúa; sin selección, la zona de mensajes muestra un `AVISO`. Las apps no detectadas se
   informan en una línea aparte.
 - C2 ofrece tres opciones de carpeta: vault por defecto (o `clone.output_dir`), carpeta actual

@@ -8,6 +8,7 @@
 | `*`         | `●` / `◉`  | elegido, cápsula original                |
 | `o`         | `○`        | no elegido, cápsula vacía                |
 | `[x]` `[ ]` | `[x]` `[ ]`| casilla marcada / vacía                  |
+| `[~]`       | `[~]`      | casilla parcial (algunos archivos)       |
 | `[-]`       | `[–]`      | casilla deshabilitada                    |
 | `-`         | `─`        | separador                                |
 | `...`       | `…`        | truncado                                 |

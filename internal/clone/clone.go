@@ -23,8 +23,11 @@ import (
 
 // PlanOptions controls PlanClone.
 type PlanOptions struct {
-	Home            string
-	Selected        *[]string
+	Home     string
+	Selected *[]string
+	// Files maps an app id to the only paths to include for it. An app absent
+	// from the map includes every file the plan resolves.
+	Files           map[string][]string
 	Output          string
 	OutputDir       string
 	Catalog         catalog.Catalog
@@ -100,6 +103,7 @@ func PlanClone(ctx context.Context, options PlanOptions) (*ClonePlan, error) {
 	if err != nil {
 		return nil, err
 	}
+	built.Operations = filterOperations(built.Operations, options.Files)
 	manifest := buildManifest(apps, built, options.ApplicationDirs, options.Metadata, root)
 	target, err := destination(options.Output, options.OutputDir, root, options.Now)
 	if err != nil {
@@ -169,6 +173,29 @@ func selectInstalled(definitions catalog.Catalog, selected *[]string, applicatio
 		}
 	}
 	return apps
+}
+
+// filterOperations keeps, for each app listed in files, only the listed paths.
+func filterOperations(operations []plan.Operation, files map[string][]string) []plan.Operation {
+	if len(files) == 0 {
+		return operations
+	}
+	allowed := make(map[string]map[string]bool, len(files))
+	for id, list := range files {
+		set := make(map[string]bool, len(list))
+		for _, path := range list {
+			set[path] = true
+		}
+		allowed[id] = set
+	}
+	kept := make([]plan.Operation, 0, len(operations))
+	for _, operation := range operations {
+		if set, ok := allowed[operation.AppID]; ok && !set[operation.Path] {
+			continue
+		}
+		kept = append(kept, operation)
+	}
+	return kept
 }
 
 func buildManifest(apps []*catalog.AppDefinition, built plan.Plan, applicationDirs []string, metadata map[string]string, home string) *archive.Manifest {

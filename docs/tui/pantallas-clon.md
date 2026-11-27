@@ -10,31 +10,45 @@ kamino · Clonar · Apps                                       Paso 1 de 3   * o
 
   SEL  APP                     ARCHIVOS
   --------------------------------------------------------------------------
-  > [x] herdr                       12
+  > [~] herdr                     9/12
+        [ ] ...themes/solarized-dark.conf         61.4 KB
+        [x] ...themes/tokyo-night.conf            61.4 KB
+        [x] .config/herdr/config.toml              1.2 KB
     [x] ghostty                      8
     [ ] git                          4
     [ ] bat                          3
-    [-] glow                         0
     [ ] codex                        6
 
-  ^ 0 arriba   v 3 abajo
+  ^ 0 arriba   v 2 abajo
   No detectadas: claude-code, yazi
+  Sin archivos: glow
 
 --------------------------------------------------------------------------------
-^v mover  Espacio marcar  a/n todas/ninguna  / filtrar  Enter continuar  Esc volver  ? ayuda
+^v mover  <> expandir  Espacio marcar  a/n todas/ninguna  / filtrar  Enter continuar  ? ayuda
 ```
 
 Notas:
 
-- Solo aparecen apps instaladas. Las no detectadas van en una línea aparte y no
-  son seleccionables.
-- `glow` está instalada pero no tiene archivos: casilla `[-]` deshabilitada.
+- Solo aparecen las apps instaladas con archivos para clonar. Las no detectadas y las
+  instaladas sin archivos (`glow`) van cada una en una línea de nota aparte y no son
+  seleccionables; el contador `N de M marcadas` solo cuenta las apps listadas.
+- Las apps salen colapsadas y la lista se ve igual mientras no se expanda ninguna. `→` expande y
+  `←` colapsa la app enfocada (desde un archivo, `←` colapsa y vuelve a la app) sin tocar la
+  selección. Cada archivo muestra su ruta relativa al HOME, truncada por el inicio, y su tamaño.
+- La casilla de la app tiene tres estados: `[x]` todos los archivos, `[~]` solo algunos y `[ ]`
+  ninguno. Con selección parcial la columna ARCHIVOS muestra `marcados/total` (`9/12`). Una app
+  con todos los archivos desmarcados queda desmarcada y no entra en el clon.
+- `Espacio` marca sin mover el cursor ni sacar el foco: sobre una app marca o desmarca todos sus
+  archivos (una app parcial pasa a `[x]`); sobre un archivo, solo ese archivo.
+- `a`/`n` actúan según el ámbito: con el cursor en una app, sobre las apps visibles del filtro;
+  con el cursor en un archivo, sobre todos los archivos de esa app.
+- El filtro `/` busca solo por id y nombre de app, no por ruta de archivo.
 - El contador es de selección total, no de filas visibles.
-- `Espacio` marca sin mover el cursor ni sacar el foco.
-- `a`/`n` actúan solo sobre las filas visibles del filtro.
+- El clon (C3, `--dry-run` y escritura) incluye solo los archivos marcados. Un archivo nuevo que
+  aparezca entre C1 y C3 no se incluye.
 - Enter sin selección muestra un `AVISO` en la zona de mensajes y no avanza.
-- Variantes: filtro activo, lista vacía (`No hay apps instaladas con archivos`) y
-  lista desplazada con indicador. El filtro es una fila de campo, no texto suelto.
+- Variantes: filtro activo, lista vacía (`No hay apps instaladas con archivos`), árbol
+  desplazado con indicadores de filas arriba y abajo. El filtro es una fila de campo, no texto suelto.
 
 Variante: filtro con foco.
 
